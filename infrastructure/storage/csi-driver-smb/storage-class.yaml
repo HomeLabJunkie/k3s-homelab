@@ -1,0 +1,20 @@
+---
+# Example class for SMB storage
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: smb
+provisioner: smb.csi.k8s.io
+parameters:
+  # Point directly to the desired subfolder on the SMB share
+  source: //192.168.1.250/k3s/smbshare
+  csi.storage.k8s.io/node-stage-secret-name: smbcreds
+  csi.storage.k8s.io/node-stage-secret-namespace: csi-driver-smb
+mountOptions:
+    - dir_mode=0770
+    - file_mode=0660
+    - vers=3.0
+    - noserverino # Recommended for stability
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true

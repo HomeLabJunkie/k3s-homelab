@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skynetlabs-nexterm
+  namespace: nexterm
+  labels:
+    app: skynetlabs-nexterm
+  annotations: {}
+spec:
+  selector:
+    matchLabels:
+      app: skynetlabs-nexterm
+  template:
+    metadata:
+      labels:
+        app: skynetlabs-nexterm
+    spec:
+      containers:
+        - name: skynetlabs-nexterm
+          image: germannewsmaker/nexterm:1.0.5-OPEN-PREVIEW
+          volumeMounts:
+            - name: skynetlabs-nexterm-data
+              mountPath: /app/data
+          ports:
+            - containerPort: 6989
+              protocol: TCP
+          env:
+            - name: ENCRYPTION_KEY
+              value: 210A6168A207CAD37571FA9471A3EE6759C2D2BBC3115E8C068B04A74B9207EA
+      volumes:
+        - name: skynetlabs-nexterm-data
+          emptyDir: {}
+  replicas: 1

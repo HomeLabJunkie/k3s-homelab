@@ -1,0 +1,20 @@
+
+driver:
+  name: nfs.csi.k8s.io
+  replicas: 1
+
+storageClasses:
+- name: nfs-csi
+  defaultClass: false
+  parameters:
+    server: 192.168.1.5
+    share: /nfs/jeff/
+  mountOptions:
+    - nfsvers=3
+
+csiDriver:
+  name: nfs.csi.k8s.io
+  attachRequired: false
+  fsGroupPolicy: File
+
+kubeletDir: /var/lib/kubelet

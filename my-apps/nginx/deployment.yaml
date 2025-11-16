@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-example
+  namespace: nginx-example
+  annotations: 
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      initContainers:
+      - name: sync-website
+        image: alpine/git:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Cloning website content..."
+          git clone -b main --depth 1 https://github.com/homelabjunkie/nginx-website.git /tmp/website 
+          echo "Website content cloning completed."
+          echo "Contents of cloned repository:"
+          ls -la /tmp/website/
+          echo "Copying files to Nginx directory..."
+          cp -r /tmp/website/* /usr/share/nginx/html/
+          echo "Website content copied to Nginx directory."
+          echo "Final contents:"
+          ls -la /usr/share/nginx/html/
+        volumeMounts:
+        - name: nginx-storage
+          mountPath: /usr/share/nginx/html
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        volumeMounts:
+        - name: nginx-storage
+          mountPath: /usr/share/nginx/html
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        ports:
+        - name: http
+          containerPort: 80
+        - name: https
+          containerPort: 443
+      volumes:
+      - name: nginx-storage
+        emptyDir: {}

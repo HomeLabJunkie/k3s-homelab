@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: nexterm
+  name: nexterm
+  labels:
+    app: skynetlabs-nexterm
+spec:
+  ports:
+    - appProtocol: TCP
+      targetPort: 6989
+      port: 6989
+  selector:
+    app: skynetlabs-nexterm

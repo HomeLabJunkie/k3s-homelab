@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxitok-redis
+  namespace: proxitok
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxitok-redis
+  template:
+    metadata:
+      labels:
+        app: proxitok-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.4-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        securityContext:
+          readOnlyRootFilesystem: true
+          runAsUser: 65534  # nobody user
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
