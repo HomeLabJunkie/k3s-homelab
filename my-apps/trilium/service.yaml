@@ -22,4 +22,4 @@ spec:
       port: 8080
       targetPort: 8080
 
-# End of file: k3s-argocd-starter/my-apps/trilium/service.yaml
+# End of file: k3s-homelab/my-apps/trilium/service.yaml
