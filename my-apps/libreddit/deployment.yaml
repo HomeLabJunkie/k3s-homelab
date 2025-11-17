@@ -17,8 +17,8 @@ spec:
       labels:
         app.kubernetes.io/name: libreddit
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: ultrabook
+      # nodeSelector:
+      #   kubernetes.io/hostname: ultrabook
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
