@@ -18,6 +18,11 @@ spec:
       containers:
       - name: trilium
         image: triliumnext/trilium:latest
+        env:
+        - name: TRILIUM_PORT
+          value: "8080"
+        - name: TZ
+          value: "America/Chicago"
         volumeMounts:
         - name: trilium-storage
           mountPath: /trilium-data
