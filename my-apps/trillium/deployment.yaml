@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trilium
+  namespace: trilium
+  annotations: 
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: trilium
+  template:
+    metadata:
+      labels:
+        app: trilium
+    spec:
+      # initContainers:
+      # - name: sync-website
+      #   image: alpine/git:latest
+      #   command:
+      #   - /bin/sh
+      #   - -c
+      #   - |
+      #     echo "Cloning website content..."
+      #     git clone -b main --depth 1 https://github.com/homelabjunkie/nginx-website.git /tmp/website 
+      #     echo "Website content cloning completed."
+      #     echo "Contents of cloned repository:"
+      #     ls -la /tmp/website/
+      #     echo "Copying files to Nginx directory..."
+      #     cp -r /tmp/website/* /usr/share/nginx/html/
+      #     echo "Website content copied to Nginx directory."
+      #     echo "Final contents:"
+      #     ls -la /usr/share/nginx/html/
+      #   volumeMounts:
+      #   - name: nginx-storage
+      #     mountPath: /usr/share/nginx/html
+      containers:
+      - name: trilium
+        image: triliumnext/trilium:latest
+        volumeMounts:
+        - name: trilium-storage
+          mountPath: /trilium-data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        ports:
+        - name: http
+          containerPort: 8080
+        # - name: https
+        #   containerPort: 443
+      volumes:
+      - name: trilium-storage
+        # emptyDir: {}
