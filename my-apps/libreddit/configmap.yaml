@@ -30,4 +30,4 @@ data:
   REDLIB_DEFAULT_FIXED_NAVBAR: "on"
   
   # System settings
-  TZ: "America/Detroit"
+  TZ: "America/Chicago"
