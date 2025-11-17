@@ -4,16 +4,24 @@ kind: Kustomization
 namespace: trilium
 
 resources:
-- github.com/TriliumNext/Trilium/trilium-server?ref=master
+- https://github.com/TriliumNext/Trilium/raw/main/trilium-server/deployment.yaml
+- https://github.com/TriliumNext/Trilium/raw/main/trilium-server/service.yaml
 - pvc.yaml
 - httproute.yaml
 
-patchesStrategicMerge:
-- deployment-patch.yaml
-- service-patch.yaml
+patches:
+- path: deployment-patch.yaml
+  target:
+    kind: Deployment
+    name: trilium-server
+- path: service-patch.yaml
+  target:
+    kind: Service
+    name: trilium-server
 
-commonLabels:
-  app: trilium
+labels:
+- pairs:
+    app: trilium
 
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
