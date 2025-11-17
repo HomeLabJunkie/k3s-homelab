@@ -36,8 +36,8 @@ spec:
         ports:
         - name: http
           containerPort: 8080
-        # - name: https
-        #   containerPort: 443
+        - name: https
+          containerPort: 8080
       volumes:
       - name: trilium-storage
         # emptyDir: {}
