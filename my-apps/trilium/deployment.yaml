@@ -21,9 +21,9 @@ spec:
         env:
         - name: TRILIUM_PORT
           value: "8080"
-        - name: USER_ID # optional
+        - name: USER_UID
           value: "1000"
-        - name: GROUP_ID # optional
+        - name: USER_GID
           value: "1000"
         - name: TZ
           value: "America/Chicago"
