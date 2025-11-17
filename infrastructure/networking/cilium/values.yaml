@@ -1,5 +1,5 @@
 cluster:
-  name: ultrabook
+  name: k3s-homelab
   id: 1
 kubeProxyReplacement: true
 k8sServiceHost: 192.168.1.40
