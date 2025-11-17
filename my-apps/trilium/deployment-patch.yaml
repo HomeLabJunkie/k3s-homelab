@@ -4,10 +4,17 @@ metadata:
   name: trilium-server
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: trilium
   template:
+    metadata:
+      labels:
+        app: trilium
     spec:
       containers:
       - name: trilium-server
+        image: zadam/trilium:latest
         env:
         - name: TRILIUM_DATA_DIR
           value: "/home/node/trilium-data"
@@ -23,6 +30,8 @@ spec:
         volumeMounts:
         - name: trilium-data
           mountPath: /home/node/trilium-data
+        ports:
+        - containerPort: 8080
       volumes:
       - name: trilium-data
         persistentVolumeClaim:
