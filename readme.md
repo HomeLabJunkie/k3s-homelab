@@ -64,10 +64,10 @@ graph TD
         P --> SearXNG
         P --> LibReddit
         
-        Web --> Nginx for Website
+        Web --> Nginx
         Web --> Dashboard
         
-        Other --> HelloWorld test application
+        Other --> HelloWorld
     end
 
     style IP fill:#f9f,stroke:#333,stroke-width:2px
