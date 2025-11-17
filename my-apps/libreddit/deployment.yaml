@@ -41,11 +41,11 @@ spec:
               drop: ["ALL"]
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 2000m
-              memory: 1Gi
+              cpu: 50m
+              memory: 512Mi
           livenessProbe:
             httpGet:
               path: /
