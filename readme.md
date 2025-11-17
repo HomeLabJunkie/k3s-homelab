@@ -4,11 +4,10 @@
 
 > Modern GitOps deployment structure using Argo CD on Kubernetes
 
-This starter kit provides a production-ready foundation for deploying applications and infrastructure components using GitOps principles. Compatible with both Raspberry Pi and x86 systems.
+This repo provides a production-ready kubernetes cluster for deploying my applications and infrastructure components using GitOps principles. 
 
 ## 📋 Table of Contents
 
-- [Prerequisites](#-prerequisites)
 - [Architecture](#-architecture)
 - [Quick Start](#-quick-start)
   - [System Setup](#1-system-setup)
@@ -23,18 +22,6 @@ This starter kit provides a production-ready foundation for deploying applicatio
 - [License](#-license)
 - [Troubleshooting](#-troubleshooting)
 
-## 📋 Prerequisites
-
-- Kubernetes cluster (tested with K3s v1.32.0+k3s1)
-- Linux host (ARM or x86) with:
-  - Storage support (OpenEBS works with ZFS or standard directories)
-  - NFS and CIFS support (optional)
-  - Open-iSCSI
-- Cloudflare account (for DNS and Tunnel)
-- Local DNS setup (one of the following):
-  - Local DNS server ([AdGuard Home setup guide](docs/adguard-home-setup.md))
-  - Router with custom DNS capabilities (e.g., Firewalla)
-  - Ability to modify hosts file on all devices
 
 ## 🏗️ Architecture
 
@@ -55,7 +42,7 @@ graph TD
         N --> Cloudflared
         N --> Gateway
         
-        S --> OpenEBS
+        S --> Longhorn
         
         C --> CertManager
     end
@@ -65,7 +52,6 @@ graph TD
         MAS --> Grafana
         MAS --> AlertManager
         MAS --> NodeExporter
-        MAS --> Loki
         MAS --> Promtail
     end
     
@@ -78,10 +64,10 @@ graph TD
         P --> SearXNG
         P --> LibReddit
         
-        Web --> Nginx
+        Web --> Nginx for Website
         Web --> Dashboard
         
-        Other --> HelloWorld
+        Other --> HelloWorld test application
     end
 
     style IP fill:#f9f,stroke:#333,stroke-width:2px
