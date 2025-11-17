@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: trilium-server
+  labels:
+    app: trilium
 spec:
   replicas: 1
   selector:
@@ -12,14 +14,20 @@ spec:
       labels:
         app: trilium
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - name: trilium-server
-        image: zadam/trilium:latest
+        image: triliumnext/trilium:latest
+        imagePullPolicy: Always
         env:
         - name: TRILIUM_DATA_DIR
           value: "/home/node/trilium-data"
-        - name: TRILIUM_DB_MODE
-          value: "image"
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             memory: "256Mi"
@@ -30,8 +38,18 @@ spec:
         volumeMounts:
         - name: trilium-data
           mountPath: /home/node/trilium-data
-        ports:
-        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
       volumes:
       - name: trilium-data
         persistentVolumeClaim:

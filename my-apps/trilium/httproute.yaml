@@ -3,12 +3,14 @@ kind: HTTPRoute
 metadata:
   name: trilium-external
   namespace: trilium
+  labels:
+    app: trilium
 spec:
   parentRefs:
   - name: gateway-external
-    namespace: gateway 
+    namespace: gateway
   hostnames:
-  - "trilium.homelabjunkie.com"
+  - "trilium.homelabjunkie" 
   rules:
   - matches:
     - path:

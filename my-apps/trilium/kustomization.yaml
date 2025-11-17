@@ -4,20 +4,10 @@ kind: Kustomization
 namespace: trilium
 
 resources:
-- https://github.com/TriliumNext/Trilium/raw/main/trilium-server/deployment.yaml
-- https://github.com/TriliumNext/Trilium/raw/main/trilium-server/service.yaml
+- deployment.yaml
+- service.yaml
 - pvc.yaml
 - httproute.yaml
-
-patches:
-- path: deployment-patch.yaml
-  target:
-    kind: Deployment
-    name: trilium-server
-- path: service-patch.yaml
-  target:
-    kind: Service
-    name: trilium-server
 
 labels:
 - pairs:
