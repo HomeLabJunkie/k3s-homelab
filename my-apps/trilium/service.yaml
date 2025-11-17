@@ -1,25 +1,12 @@
-# trilium-service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: trilium
-  # annotations:
-  #   # Request a specific IP from the Cilium IPAM pool
-  #   #this is only required if you want to request a specific IP from the Cilium IPAM pool
-  #   #ie you want a static IP for the service
-  #   #Optional: if you want to use L2 announcements for the LoadBalancer
-  #   lbipam.cilium.io/ips: "192.168.0.199"
+  namespace: trilium
 spec:
-  type: LoadBalancer
-  # Use L2 announcements for the LoadBalancer
-  #See comment above about lbipam.cilium.io/ips
-  #OPTIONAL: if you want to use L2 announcements for the LoadBalancer
-  loadBalancerClass: io.cilium/l2-announcer
-  selector:
-    app: trilium
   ports:
-    - protocol: TCP
-      port: 8080
+    - port: 8080
       targetPort: 8080
-
-# End of file: k3s-homelab/my-apps/trilium/service.yaml
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: trilium
