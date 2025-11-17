@@ -15,26 +15,6 @@ spec:
       labels:
         app: trilium
     spec:
-      # initContainers:
-      # - name: sync-website
-      #   image: alpine/git:latest
-      #   command:
-      #   - /bin/sh
-      #   - -c
-      #   - |
-      #     echo "Cloning website content..."
-      #     git clone -b main --depth 1 https://github.com/homelabjunkie/nginx-website.git /tmp/website 
-      #     echo "Website content cloning completed."
-      #     echo "Contents of cloned repository:"
-      #     ls -la /tmp/website/
-      #     echo "Copying files to Nginx directory..."
-      #     cp -r /tmp/website/* /usr/share/nginx/html/
-      #     echo "Website content copied to Nginx directory."
-      #     echo "Final contents:"
-      #     ls -la /usr/share/nginx/html/
-      #   volumeMounts:
-      #   - name: nginx-storage
-      #     mountPath: /usr/share/nginx/html
       containers:
       - name: trilium
         image: triliumnext/trilium:latest
