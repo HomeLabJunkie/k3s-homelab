@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: trilium
+
+resources:
+- github.com/TriliumNext/Trilium/trilium-server?ref=master
+- pvc.yaml
+- httproute.yaml
+
+patchesStrategicMerge:
+- deployment-patch.yaml
+- service-patch.yaml
+
+commonLabels:
+  app: trilium
+
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"

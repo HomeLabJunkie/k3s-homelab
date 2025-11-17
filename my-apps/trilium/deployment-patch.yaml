@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trilium-server
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: trilium-server
+        env:
+        - name: TRILIUM_DATA_DIR
+          value: "/home/node/trilium-data"
+        - name: TRILIUM_DB_MODE
+          value: "image"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: trilium-data
+          mountPath: /home/node/trilium-data
+      volumes:
+      - name: trilium-data
+        persistentVolumeClaim:
+          claimName: trilium-data
