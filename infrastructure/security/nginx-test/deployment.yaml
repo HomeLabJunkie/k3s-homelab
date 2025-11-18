@@ -35,4 +35,4 @@ spec:
           containerPort: 443
       volumes:
       - name: nginx-storage-test
-#        emptyDir: {}
+        emptyDir: {}
