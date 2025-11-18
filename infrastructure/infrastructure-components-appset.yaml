@@ -48,3 +48,5 @@ spec:
         - ApplyOutOfSyncOnly=true
         - Replace=false
         - IgnoreMissingTemplate=true
+
+        # end of file
