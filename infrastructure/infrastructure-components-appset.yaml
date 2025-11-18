@@ -13,7 +13,7 @@ spec:
       - path: infrastructure/networking/*
       - path: infrastructure/storage/*
       - path: infrastructure/controllers/*
-      - path: infrastructure/security/oauth2-proxy  # Add OAuth2 proxy
+      - path: infrastructure/security/*  # added security path after initial creation
             
   template:
     metadata:
