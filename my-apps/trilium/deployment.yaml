@@ -14,13 +14,19 @@ spec:
       labels:
         app: trilium
     spec:
+      initContainers:
+      - name: fix-permissions
+        image: busybox:latest
+        command: ['sh', '-c', 'chown -R 1000:1000 /data && chmod -R 755 /data']
+        volumeMounts:
+        - name: trilium-data
+          mountPath: /data
       containers:
       - name: trilium-server
         image: triliumnext/trilium:latest
-        imagePullPolicy: Always
         env:
         - name: TRILIUM_DATA_DIR
-          value: "/trilium-data"
+          value: "/data"
         ports:
         - containerPort: 8080
           name: http
@@ -33,33 +39,23 @@ spec:
             cpu: "500m"
         volumeMounts:
         - name: trilium-data
-          mountPath: /trilium-data
+          mountPath: /data
         livenessProbe:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 30
-          timeoutSeconds: 10
         readinessProbe:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 20
-          timeoutSeconds: 10
         securityContext:
-          runAsNonRoot: true
           runAsUser: 1000
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
+          runAsGroup: 1000
       volumes:
       - name: trilium-data
         persistentVolumeClaim:
           claimName: trilium-data
-      securityContext:
-        fsGroup: 1000
-        runAsNonRoot: true
-        runAsUser: 1000
