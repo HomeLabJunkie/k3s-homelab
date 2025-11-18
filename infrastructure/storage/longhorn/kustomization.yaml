@@ -5,6 +5,7 @@ resources:
   - namespace.yaml
   - httproute.yaml
   - longhorn-minio.yaml
+  - backup-target.yaml
 helmCharts:
   - name: longhorn
     repo: https://charts.longhorn.io
