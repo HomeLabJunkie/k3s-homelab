@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: longhorn-minio-credentials
+  namespace: longhorn-system
+type: Opaque
+data:
+  AWS_ACCESS_KEY_ID: bjBnMWlCQ0pyaWRTV3A4Q01rVFA=
+  AWS_SECRET_ACCESS_KEY: a2pGUTM1UVhwSkl6ejQ5a1dKenIyWG8wRVBSRUtOc2ZLTzlKcFhKcA==
+  AWS_ENDPOINTS: aHR0cDovLzE5Mi4xNjguMS4yNTA6OTAwMC8=
