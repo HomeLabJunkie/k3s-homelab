@@ -5,7 +5,7 @@ metadata:
   namespace: kube-prometheus-stack
 spec:
   parentRefs:
-  - name: gateway-external # Must match your Gateway's metadata.name
+  - name: gateway-internal # Must match your Gateway's metadata.name
     namespace: gateway
     sectionName: https # Must match your Gateway's listeners[].name
   hostnames:
