@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-config
+  namespace: oauth2-proxy
+data:
+  oauth2-proxy.cfg: |
+    http_address = "0.0.0.0:4180"
+    email_domains = [ "*" ]
+    provider = "github"
+    cookie_secure = false
+    whitelist_domains = ".homelabjunkie.com"
+    skip_provider_button = true
+    scope = "user:email"
+    reverse_proxy = true
+    pass_host_header = true
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-proxy-secrets
+  namespace: oauth2-proxy
+type: Opaque
+stringData:
+  client-id: "your-github-client-id"  # Replace with actual values
+  client-secret: "your-github-client-secret" # Replace with actual values
+  cookie-secret: "generated-cookie-secret" # Replace with actual values
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+  labels:
+    app: oauth2-proxy
+    type: infrastructure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
+    spec:
+      containers:
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.5.0
+        ports:
+        - containerPort: 4180
+        args:
+          - --config
+          - /etc/oauth2-proxy/oauth2-proxy.cfg
+        env:
+        - name: OAUTH2_PROXY_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secrets
+              key: client-id
+        - name: OAUTH2_PROXY_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secrets
+              key: client-secret
+        - name: OAUTH2_PROXY_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secrets
+              key: cookie-secret
+        volumeMounts:
+        - name: config
+          mountPath: /etc/oauth2-proxy/
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: oauth2-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+  labels:
+    app: oauth2-proxy
+    type: infrastructure
+spec:
+  ports:
+  - port: 4180
+    targetPort: 4180
+    protocol: TCP
+  selector:
+    app: oauth2-proxy
