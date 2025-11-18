@@ -14,13 +14,6 @@ spec:
       labels:
         app: trilium
     spec:
-      initContainers:
-      - name: init-data-dir
-        image: busybox:latest
-        command: ['sh', '-c', 'mkdir -p /data && chown -R 1000:1000 /data']
-        volumeMounts:
-        - name: trilium-data
-          mountPath: /data
       containers:
       - name: trilium-server
         image: triliumnext/trilium:latest
@@ -28,11 +21,9 @@ spec:
         - name: TRILIUM_DATA_DIR
           value: "/data"
         - name: USER_UID
-          value: "1000"
+          value: "0"  # Run as root initially
         - name: USER_GID
-          value: "1000"
-        - name: SKIP_USER_MOD
-          value: "true"
+          value: "0"
         ports:
         - containerPort: 8080
           name: http
@@ -50,20 +41,17 @@ spec:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 120  # Give it more time to start
+          initialDelaySeconds: 120
           periodSeconds: 30
-          timeoutSeconds: 10
         readinessProbe:
           httpGet:
             path: /
             port: 8080
           initialDelaySeconds: 60
           periodSeconds: 20
-          timeoutSeconds: 10
         securityContext:
-          runAsUser: 1000
-          runAsGroup: 1000
-          allowPrivilegeEscalation: false
+          runAsUser: 0
+          runAsGroup: 0
       volumes:
       - name: trilium-data
         persistentVolumeClaim:
