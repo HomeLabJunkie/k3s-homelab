@@ -50,7 +50,7 @@ spec:
             port: 80
           initialDelaySeconds: 15
           periodSeconds: 20
-      volumes:
-      - name: nginx-storage-test
-        persistentVolumeClaim:
-          claimName: nginx-storage-test-pvc
+      # volumes:
+      # - name: nginx-storage-test
+      #   persistentVolumeClaim:
+      #     claimName: nginx-storage-test-pvc
