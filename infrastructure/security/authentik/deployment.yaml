@@ -12,40 +12,22 @@ spec:
       labels:
         app: authentik
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       initContainers:
-      - name: migrations
-        image: ghcr.io/goauthentik/server:2024.6.2
-        command: ["ak"]
-        args: ["migrate"]
-        env:
-        - name: AUTHENTIK_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: authentik-secret-key
-              key: secret-key
-        - name: AUTHENTIK_POSTGRESQL__HOST
-          value: "authentik-postgresql"
-        - name: AUTHENTIK_POSTGRESQL__USER
-          value: "authentik"
-        - name: AUTHENTIK_POSTGRESQL__NAME
-          value: "authentik"
-        - name: AUTHENTIK_POSTGRESQL__PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: authentik-postgresql-password
-              key: password
-        - name: AUTHENTIK_REDIS__HOST
-          value: "authentik-redis"
-        - name: AUTHENTIK_ERROR_REPORTING__ENABLED
-          value: "false"
+      - name: fix-media-permissions
+        image: busybox:1.35
+        command: ['sh', '-c', 'chown -R 1000:1000 /media && chmod -R 755 /media']
+        volumeMounts:
+        - name: media
+          mountPath: /media
       containers:
       - name: server
         image: ghcr.io/goauthentik/server:2024.6.2
         ports:
         - containerPort: 9000
-          name: http
-        - containerPort: 9443
-          name: https
         env:
         - name: AUTHENTIK_SECRET_KEY
           valueFrom:
@@ -65,10 +47,15 @@ spec:
               key: password
         - name: AUTHENTIK_REDIS__HOST
           value: "authentik-redis"
+        - name: AUTHENTIK_REDIS__PASSWORD
+          value: ""
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        command: ["ak"]
-        args: ["server"]
+        - name: AUTHENTIK_LOG_LEVEL
+          value: "debug"
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
         volumeMounts:
         - name: media
           mountPath: /media
@@ -76,13 +63,13 @@ spec:
           httpGet:
             path: /api/v3/core/version/
             port: 9000
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /api/v3/core/version/
             port: 9000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 30
       - name: worker
         image: ghcr.io/goauthentik/server:2024.6.2
@@ -105,10 +92,15 @@ spec:
               key: password
         - name: AUTHENTIK_REDIS__HOST
           value: "authentik-redis"
+        - name: AUTHENTIK_REDIS__PASSWORD
+          value: ""
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        command: ["ak"]
-        args: ["worker"]
+        - name: AUTHENTIK_LOG_LEVEL
+          value: "debug"
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
         volumeMounts:
         - name: media
           mountPath: /media
@@ -148,7 +140,6 @@ spec:
           value: /var/lib/postgresql/data/pgdata
         ports:
         - containerPort: 5432
-          name: postgresql
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
@@ -177,7 +168,6 @@ spec:
         command: ["redis-server", "--appendonly", "yes"]
         ports:
         - containerPort: 6379
-          name: redis
         volumeMounts:
         - name: data
           mountPath: /data
