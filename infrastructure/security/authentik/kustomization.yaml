@@ -15,4 +15,4 @@ commonLabels:
 
 images:
   - name: ghcr.io/goauthentik/server
-    newTag: 2023.8.4
+    newTag: 2024.6.2

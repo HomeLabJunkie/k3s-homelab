@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: server
-        image: ghcr.io/goauthentik/server:2023.8.4
+        image: ghcr.io/goauthentik/server:2024.6.2
         ports:
         - containerPort: 9000
           name: http
@@ -50,7 +50,6 @@ spec:
             port: 9000
           initialDelaySeconds: 60
           periodSeconds: 10
-          failureThreshold: 10
         livenessProbe:
           httpGet:
             path: /api/v3/core/version/
@@ -58,7 +57,7 @@ spec:
           initialDelaySeconds: 90
           periodSeconds: 30
       - name: worker
-        image: ghcr.io/goauthentik/server:2023.8.4
+        image: ghcr.io/goauthentik/server:2024.6.2
         env:
         - name: AUTHENTIK_SECRET_KEY
           valueFrom:
@@ -80,10 +79,6 @@ spec:
           value: "authentik-redis"
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        command: 
-        - /authentik/bin/python
-        - -m
-        - authentik.root.worker
         volumeMounts:
         - name: media
           mountPath: /media
@@ -127,14 +122,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
-        readinessProbe:
-          exec:
-            command:
-            - sh
-            - -c
-            - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-          initialDelaySeconds: 5
-          periodSeconds: 5
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -164,11 +151,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
-        readinessProbe:
-          exec:
-            command: ["redis-cli", "ping"]
-          initialDelaySeconds: 5
-          periodSeconds: 5
       volumes:
       - name: data
         persistentVolumeClaim:
