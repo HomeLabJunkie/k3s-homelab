@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: authentik
+  namespace: argocd
+  labels:
+    type: infrastructure
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://charts.goauthentik.io/
+    chart: authentik
+    targetRevision: 2.0.0
+    helm:
+      releaseName: authentik
+      values: |
+        secretKey: "change-me-generate-with-openssl-rand-base64-64"
+        postgresql:
+          enabled: true
+          auth:
+            username: authentik
+            password: "change-me-generate-with-openssl-rand-base64-32"
+            database: authentik
+        redis:
+          enabled: true
+          auth:
+            password: "change-me-generate-with-openssl-rand-base64-32"
+        server:
+          replicas: 1
+        worker:
+          replicas: 1
+        ingress:
+          enabled: false
+        service:
+          type: ClusterIP
+          ports:
+            http: 9000
+            https: 9443
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: authentik
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
