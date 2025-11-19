@@ -33,6 +33,20 @@ spec:
           containerPort: 80
         - name: https
           containerPort: 443
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          
       volumes:
       - name: nginx-storage-test
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: nginx-storage-test-pvc

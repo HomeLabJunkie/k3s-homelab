@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: nginx-storage-test
+  name: nginx-storage-test-pvc
   namespace: nginx-test 
 spec:
   storageClassName: longhorn
