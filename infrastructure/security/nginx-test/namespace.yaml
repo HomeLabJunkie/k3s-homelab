@@ -1,4 +1,4 @@
-# File: nginx/namespace.yaml
+# File: infrastructure/security/nginx-test/namespace.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
