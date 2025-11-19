@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authentik
+  template:
+    metadata:
+      labels:
+        app: authentik
+    spec:
+      containers:
+      - name: server
+        image: ghcr.io/goauthentik/server:2023.8.4
+        ports:
+        - containerPort: 9000
+          name: http
+        - containerPort: 9443
+          name: https
+        env:
+        - name: AUTHENTIK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secret-key
+              key: secret-key
+        - name: AUTHENTIK_POSTGRESQL__HOST
+          value: "postgresql"
+        - name: AUTHENTIK_POSTGRESQL__USER
+          value: "authentik"
+        - name: AUTHENTIK_POSTGRESQL__NAME
+          value: "authentik"
+        - name: AUTHENTIK_POSTGRESQL__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-postgresql-password
+              key: password
+        - name: AUTHENTIK_REDIS__HOST
+          value: "redis"
+        - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+          value: "false"
+        volumeMounts:
+        - name: media
+          mountPath: /media
+      - name: worker
+        image: ghcr.io/goauthentik/server:2023.8.4
+        command: ["/authentik/worker"]
+        env:
+        - name: AUTHENTIK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secret-key
+              key: secret-key
+        - name: AUTHENTIK_POSTGRESQL__HOST
+          value: "postgresql"
+        - name: AUTHENTIK_POSTGRESQL__USER
+          value: "authentik"
+        - name: AUTHENTIK_POSTGRESQL__NAME
+          value: "authentik"
+        - name: AUTHENTIK_POSTGRESQL__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-postgresql-password
+              key: password
+        - name: AUTHENTIK_REDIS__HOST
+          value: "redis"
+        - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+          value: "false"
+        volumeMounts:
+        - name: media
+          mountPath: /media
+      initContainers:
+      - name: migrate-database
+        image: ghcr.io/goauthentik/server:2023.8.4
+        command: ["/authentik/bootstrap/migrate.sh"]
+        env:
+        - name: AUTHENTIK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secret-key
+              key: secret-key
+        - name: AUTHENTIK_POSTGRESQL__HOST
+          value: "postgresql"
+        - name: AUTHENTIK_POSTGRESQL__USER
+          value: "authentik"
+        - name: AUTHENTIK_POSTGRESQL__NAME
+          value: "authentik"
+        - name: AUTHENTIK_POSTGRESQL__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-postgresql-password
+              key: password
+      volumes:
+      - name: media
+        persistentVolumeClaim:
+          claimName: authentik-media
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authentik-postgresql
+  template:
+    metadata:
+      labels:
+        app: authentik-postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:13-alpine
+        env:
+        - name: POSTGRES_USER
+          value: "authentik"
+        - name: POSTGRES_DB
+          value: "authentik"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-postgresql-password
+              key: password
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: authentik-postgres-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authentik-redis
+  template:
+    metadata:
+      labels:
+        app: authentik-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command: ["redis-server", "--appendonly", "yes"]
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: authentik-redis-data
