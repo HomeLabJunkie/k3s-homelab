@@ -1,3 +1,4 @@
+# File: infrastructure/security/nginx-test/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,9 +21,17 @@ spec:
         runAsUser: 101  # nginx user ID
         runAsGroup: 101 # nginx group ID
         fsGroup: 101
+      # ADD INIT CONTAINER HERE
+      initContainers:
+      - name: setup-content
+        image: busybox
+        command: ['sh', '-c', 'echo "<html><body><h1>Nginx Test is Working!</h1></body></html>" > /usr/share/nginx/html/index.html']
+        volumeMounts:
+        - name: nginx-storage-test
+          mountPath: /usr/share/nginx/html
       containers:
       - name: nginx-test
-        image: nginxinc/nginx-unprivileged:alpine  # Use unprivileged image
+        image: nginxinc/nginx-unprivileged:alpine
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
