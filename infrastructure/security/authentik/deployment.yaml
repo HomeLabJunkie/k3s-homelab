@@ -22,13 +22,7 @@ spec:
         command: 
         - sh
         - -c
-        - |
-          echo "Creating media directories..."
-          mkdir -p /media/public /media/private
-          echo "Setting permissions on created directories..."
-          chown -R 1000:1000 /media/public /media/private
-          chmod -R 755 /media/public /media/private
-          echo "Permission fix completed"
+        - "mkdir -p /media/public /media/private && chown -R 1000:1000 /media/public /media/private && chmod -R 755 /media/public /media/private"
         
         volumeMounts:
         - name: media
