@@ -13,9 +13,23 @@ spec:
         app: authentik
     spec:
       initContainers:
-      - name: wait-for-dependencies
-        image: busybox:1.35
-        command: ['sh', '-c', 'until nslookup authentik-postgresql; do echo waiting for postgresql; sleep 2; done; until nslookup authentik-redis; do echo waiting for redis; sleep 2; done']
+      - name: wait-for-db
+        image: postgres:13-alpine
+        command: 
+        - sh
+        - -c
+        - |
+          until pg_isready -h authentik-postgresql -p 5432 -U authentik; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-postgresql-password
+              key: password
       containers:
       - name: server
         image: ghcr.io/goauthentik/server:2023.8.4
@@ -45,18 +59,30 @@ spec:
           value: "authentik-redis"
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        command: ["/bin/bash"]
-        args: 
-        - "-c"
+        command: 
+        - /bin/bash
+        - -c
         - |
+          set -e
           echo "Running database migrations..."
           /authentik/bin/python -m authentik.root.migrate
           echo "Starting server..."
-          /authentik/bin/python -m lifecycle.migrate
-          /authentik/bin/python -m authentik.root.server
+          exec /authentik/bin/python -m authentik.root.server
         volumeMounts:
         - name: media
           mountPath: /media
+        readinessProbe:
+          httpGet:
+            path: /api/v3/core/version/
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/v3/core/version/
+            port: 9000
+          initialDelaySeconds: 60
+          periodSeconds: 30
       - name: worker
         image: ghcr.io/goauthentik/server:2023.8.4
         env:
@@ -80,8 +106,10 @@ spec:
           value: "authentik-redis"
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        command: ["/authentik/bin/python"]
-        args: ["-m", "authentik.root.worker"]
+        command: 
+        - /authentik/bin/python
+        - -m
+        - authentik.root.worker
         volumeMounts:
         - name: media
           mountPath: /media
@@ -125,6 +153,26 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -h
+            - localhost
+            - -U
+            - authentik
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -h
+            - localhost
+            - -U
+            - authentik
+          initialDelaySeconds: 10
+          periodSeconds: 10
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -154,6 +202,16 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
       volumes:
       - name: data
         persistentVolumeClaim:
