@@ -17,13 +17,18 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        runAsUser: 101  # nginx user ID
+        runAsGroup: 101 # nginx group ID
+        fsGroup: 101
       containers:
       - name: nginx-test
-        image: nginx:alpine
+        image: nginxinc/nginx-unprivileged:alpine  # Use unprivileged image
         imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
         volumeMounts:
         - name: nginx-storage-test
           mountPath: /usr/share/nginx/html
