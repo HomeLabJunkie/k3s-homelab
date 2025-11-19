@@ -28,6 +28,9 @@ spec:
         image: ghcr.io/goauthentik/server:2024.6.2
         ports:
         - containerPort: 9000
+          name: http
+        - containerPort: 9443
+          name: https
         env:
         - name: AUTHENTIK_SECRET_KEY
           valueFrom:
@@ -47,12 +50,8 @@ spec:
               key: password
         - name: AUTHENTIK_REDIS__HOST
           value: "authentik-redis"
-        - name: AUTHENTIK_REDIS__PASSWORD
-          value: ""
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        - name: AUTHENTIK_LOG_LEVEL
-          value: "debug"
         securityContext:
           runAsUser: 1000
           runAsGroup: 1000
@@ -92,12 +91,8 @@ spec:
               key: password
         - name: AUTHENTIK_REDIS__HOST
           value: "authentik-redis"
-        - name: AUTHENTIK_REDIS__PASSWORD
-          value: ""
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "false"
-        - name: AUTHENTIK_LOG_LEVEL
-          value: "debug"
         securityContext:
           runAsUser: 1000
           runAsGroup: 1000
@@ -140,9 +135,18 @@ spec:
           value: /var/lib/postgresql/data/pgdata
         ports:
         - containerPort: 5432
+          name: postgresql
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -168,9 +172,15 @@ spec:
         command: ["redis-server", "--appendonly", "yes"]
         ports:
         - containerPort: 6379
+          name: redis
         volumeMounts:
         - name: data
           mountPath: /data
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: data
         persistentVolumeClaim:
