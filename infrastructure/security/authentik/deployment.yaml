@@ -19,14 +19,17 @@ spec:
       initContainers:
       - name: fix-media-permissions
         image: busybox:1.35
-        command: ['sh', '-c', |
+        command: 
+        - sh
+        - -c
+        - |
           echo "Creating media directories..."
           mkdir -p /media/public /media/private
           echo "Setting permissions on created directories..."
           chown -R 1000:1000 /media/public /media/private
           chmod -R 755 /media/public /media/private
           echo "Permission fix completed"
-        ]
+        
         volumeMounts:
         - name: media
           mountPath: /media
