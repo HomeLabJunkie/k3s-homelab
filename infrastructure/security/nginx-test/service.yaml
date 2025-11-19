@@ -1,4 +1,4 @@
-# File: infrastructure/security/nginx-test/service.yaml
+#File: infrastructure/security/nginx-test/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,12 +8,11 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   type: LoadBalancer
-  #OPTIONAL: if you want to use L2 announcements for the LoadBalancer
   loadBalancerClass: io.cilium/l2-announcer
   selector:
     app: nginx-test
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
       targetPort: 80
-

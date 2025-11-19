@@ -19,6 +19,7 @@ spec:
       containers:
       - name: nginx-test
         image: nginx:alpine
+        imagePullPolicy: IfNotPresent
         volumeMounts:
         - name: nginx-storage-test
           mountPath: /usr/share/nginx/html

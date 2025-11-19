@@ -1,4 +1,4 @@
-# File: infrastructure/security/nginx-test/httproute.yaml
+#File: infrastructure/security/nginx-test/httproute.yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -17,4 +17,6 @@ spec:
             value: /
       backendRefs:
         - name: nginx-test
+          kind: Service  # ADD THIS
           port: 80
+          namespace: nginx-test  # ADD THIS - CRITICAL!
