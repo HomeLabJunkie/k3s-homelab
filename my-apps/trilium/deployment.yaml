@@ -21,9 +21,9 @@ spec:
         - name: TRILIUM_DATA_DIR
           value: "/data"
         - name: USER_UID
-          value: "0"  # Run as root initially
+          value: "1000"  # Run as root initially
         - name: USER_GID
-          value: "0"
+          value: "1000"
         ports:
         - containerPort: 8080
           name: http
