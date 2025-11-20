@@ -45,6 +45,8 @@ redis:
       memory: 128Mi
 
 server:
+  config:
+    url: "<ARGO_URL>"
   resources:
     requests:
       cpu: 50m
