@@ -10,6 +10,7 @@ resources:
   - httproute.yaml
   - serviceaccount.yaml
   - token-secret.yaml
+  - rbac.yaml
 helmCharts:
   - name: headlamp
     repo: https://kubernetes-sigs.github.io/headlamp/
