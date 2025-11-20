@@ -1,0 +1,45 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: headlamp-admin
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/instance: headlamp
+    app.kubernetes.io/managed-by: argocd
+rules:
+- apiGroups: ["", "apps", "batch", "extensions"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["", "apps", "batch", "extensions"] 
+  resources: ["pods/exec", "pods/log"]
+  verbs: ["create", "get"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses", "csidrivers", "csinodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  resources: ["podsecuritypolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-admin
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/instance: headlamp
+    app.kubernetes.io/managed-by: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: headlamp-admin
+subjects:
+- kind: ServiceAccount
+  name: headlamp-admin
+  namespace: kube-system
