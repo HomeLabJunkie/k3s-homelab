@@ -28,7 +28,7 @@ spec:
         - name: GET_HOSTS_FROM
           value: "env"
         - name: REDIS_MASTER_SERVICE_HOST
-          value: "redis.guestbook-test.svc.cluster.local"
+          value: "redis"
         resources:
           requests:
             memory: "64Mi"
