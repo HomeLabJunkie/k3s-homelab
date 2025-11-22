@@ -9,6 +9,7 @@ spec:
     kind: Gateway
     name: gateway-external
     namespace: gateway
+    sectionName: https
   hostnames:
   - "guestbook.homelabjunkie.com"
   rules:
