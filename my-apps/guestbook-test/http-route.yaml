@@ -5,9 +5,9 @@ metadata:
   namespace: guestbook-test
 spec:
   parentRefs:
-  - name: gateway-external
-    namespace: gateway
-  - name: gateway-internal
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway-external
     namespace: gateway
   hostnames:
   - "guestbook.homelabjunkie.com"
