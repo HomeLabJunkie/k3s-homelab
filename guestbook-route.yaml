@@ -1,0 +1,33 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: guestbook-test:gateway.networking.k8s.io/HTTPRoute:guestbook-test/guestbook
+  creationTimestamp: "2025-11-22T16:25:07Z"
+  generation: 1
+  labels:
+    argocd.argoproj.io/instance: guestbook-test
+  name: guestbook
+  namespace: guestbook-test
+  resourceVersion: "574761"
+  uid: f29bbcaf-0f77-4d21-900c-70a46711bc60
+spec:
+  hostnames:
+  - guestbook.homelabjunkie.com
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway-external
+    namespace: gateway
+    sectionName: https
+  rules:
+  - backendRefs:
+    - group: ""
+      kind: Service
+      name: guestbook-frontend
+      port: 80
+      weight: 1
+    matches:
+    - path:
+        type: PathPrefix
+        value: /

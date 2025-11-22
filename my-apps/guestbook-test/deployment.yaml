@@ -26,8 +26,8 @@ spec:
           name: http
         env:
         - name: GET_HOSTS_FROM
-          value: "env"
-        - name: REDIS_MASTER_SERVICE_HOST
+          value: "dns"
+        - name: REDIS_SLAVE_SERVICE_HOST
           value: "redis"
         resources:
           requests:
