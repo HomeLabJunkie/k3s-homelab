@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guestbook-frontend
+  namespace: guestbook-test
+  labels:
+    app: guestbook
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: guestbook
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: guestbook
+        tier: frontend
+    spec:
+      containers:
+      - name: guestbook
+        image: gcr.io/google-samples/gb-frontend:v5
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: GET_HOSTS_FROM
+          value: "env"
+        - name: REDIS_MASTER_SERVICE_HOST
+          value: "redis.guestbook-test.svc.cluster.local"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

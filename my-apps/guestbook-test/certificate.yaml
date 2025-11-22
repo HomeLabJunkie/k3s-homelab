@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: guestbook-cert
+  namespace: guestbook-test
+spec:
+  secretName: guestbook-tls
+  issuerRef:
+    name: cloudflare-cluster-issuer
+    kind: ClusterIssuer
+  dnsNames:
+  - "guestbook.homelabjunkie.com"

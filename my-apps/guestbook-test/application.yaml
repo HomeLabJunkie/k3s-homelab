@@ -1,0 +1,45 @@
+# ===========================================
+# Argo CD Application for Guestbook Test
+# ===========================================
+# Place this in: my-apps/guestbook-test/application.yaml
+# 
+# This defines the application to be managed by Argo CD
+# Compatible with your ApplicationSet pattern
+# ===========================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: guestbook-test
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: applications  # Uses your applications project
+  
+  source:
+    repoURL: https://github.com/homelabjunkie/k3s-homelab
+    targetRevision: main
+    path: my-apps/guestbook-test
+    kustomize:
+      version: v5.0.0
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: guestbook-test
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - RespectIgnoreDifferences=true
+    - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
