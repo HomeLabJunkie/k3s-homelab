@@ -1,4 +1,3 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,10 +27,10 @@ spec:
         env:
         - name: GET_HOSTS_FROM
           value: "env"
-        - name: REDIS_MASTER_SERVICE_HOST
-          value: "10.43.224.136"
-        - name: REDIS_MASTER_SERVICE_PORT
-          value: "6379"
+        - name: REDIS_LEADER_SERVICE_HOST
+          value: "redis"
+        - name: REDIS_FOLLOWER_SERVICE_HOST
+          value: "redis"
         resources:
           requests:
             memory: "64Mi"
