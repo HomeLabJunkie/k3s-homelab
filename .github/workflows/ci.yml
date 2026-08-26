@@ -1,0 +1,26 @@
+---
+name: "CI"
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths-ignore:
+      - '**/.gitignore'
+      - '**/FUNDING.yml'
+      - '**/host.ini'
+      - '**/*.md'
+      - '**/.editorconfig'
+      - '**/ansible.example.cfg'
+      - '**/deploy.sh'
+      - '**/LICENSE'
+      - '**/reboot.sh'
+      - '**/reset.sh'
+permissions:
+  contents: read
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml

@@ -1,0 +1,56 @@
+---
+- name: Safely reconcile one existing K3s agent
+  hosts: "{{ target }}"
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Require target variable
+      ansible.builtin.assert:
+        that:
+          - target is defined
+          - target | trim | length > 0
+        fail_msg: >-
+          Specify exactly one agent with:
+          -e target=192.168.1.213
+
+    - name: Require exactly one target host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+        fail_msg: >-
+          This maintenance playbook must target exactly one K3s agent.
+
+    - name: Verify target belongs to node inventory group
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in groups['node']
+          - inventory_hostname not in groups['master']
+        fail_msg: >-
+          Refusing agent reconciliation because the target is not an
+          agent-only member of the node inventory group.
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Verify existing K3s agent service
+      ansible.builtin.assert:
+        that:
+          - "'k3s-node.service' in ansible_facts.services"
+        fail_msg: >-
+          Target does not have an existing k3s-node.service.
+          Refusing to use the maintenance reconciliation path.
+
+    - name: Show reconciliation target
+      ansible.builtin.debug:
+        msg:
+          - "target={{ inventory_hostname }}"
+          - "node_ip={{ k3s_node_ip }}"
+          - "api_vip={{ apiserver_endpoint }}"
+          - "mode=existing-agent-reconciliation"
+
+  tasks:
+    - name: Reconcile K3s agent service
+      ansible.builtin.include_role:
+        name: k3s_agent

@@ -1,0 +1,53 @@
+# Traefik Helm values
+#
+# This file is compatible with the current Traefik Helm chart structure.
+# Logging changed from the old top-level "logs:" key to "log:".
+
+deployment:
+  replicas: 2
+
+service:
+  type: LoadBalancer
+  annotations: {}
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+providers:
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: true
+  kubernetesIngress:
+    enabled: true
+
+# Current Traefik chart uses "log", not "logs".
+log:
+  level: INFO
+
+ports:
+  web:
+    # Internal Traefik entrypoint port.
+    port: 8000
+    expose:
+      default: true
+    exposedPort: 80
+
+  websecure:
+    # Internal Traefik entrypoint port.
+    port: 8443
+    expose:
+      default: true
+    exposedPort: 443
+
+  traefik:
+    # Keep the management/dashboard entrypoint private.
+    port: 9000
+    expose:
+      default: false
+    exposedPort: 9000
+
+# Preserve the existing behavior for the Rancher backend.
+# NOTE: This is a broad TLS verification bypass for upstream connections.
+additionalArguments:
+  - "--serversTransport.insecureSkipVerify=true"

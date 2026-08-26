@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily K3s disaster-recovery verification
+
+[Timer]
+OnCalendar=*-*-* 05:15:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

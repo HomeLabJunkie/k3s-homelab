@@ -1,0 +1,10 @@
+[Unit]
+OnFailure=k3s-dr-monitor.service
+Description=K3s disaster-recovery cluster backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+WorkingDirectory=%h/k3s
+ExecStart=%h/k3s/backup/backup.sh

@@ -1,0 +1,77 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: longhorn-prometheus-servicemonitor
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  serviceDiscoveryRole: EndpointSlice
+  selector:
+    matchLabels:
+      app: longhorn-manager
+  namespaceSelector:
+    matchNames:
+      - longhorn-system
+  endpoints:
+    - port: manager
+      interval: 30s
+      scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-baseline-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: homelab.node.rules
+      rules:
+        - alert: NodeDown
+          expr: up{job=~".*node-exporter.*"} == 0
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Node exporter target is down
+        - alert: NodeFilesystemNearlyFull
+          expr: 100 * (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"})) > 85
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Filesystem usage above 85%
+        - alert: NodeMemoryPressure
+          expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Node memory usage above 90%
+    - name: homelab.workload.rules
+      rules:
+        - alert: KubernetesPodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Pod is repeatedly restarting
+        - alert: KubernetesDeploymentUnavailable
+          expr: kube_deployment_status_replicas_unavailable > 0
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Deployment has unavailable replicas
+        - alert: PersistentVolumeUsageHigh
+          expr: 100 * (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 85
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Persistent volume usage above 85%
+    - name: homelab.longhorn.rules
+      rules:
+        - alert: LonghornVolumeUsageCritical
+          expr: 100 * (longhorn_volume_usage_bytes / longhorn_volume_capacity_bytes) > 90
+          for: 10m
+          labels: {severity: critical}
+          annotations:
+            summary: Longhorn volume usage above 90%

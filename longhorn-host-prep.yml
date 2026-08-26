@@ -1,0 +1,103 @@
+---
+- name: Prepare all k3s nodes for Longhorn V1 storage
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    longhorn_storage_mount: /var/lib/storage
+    longhorn_data_path: /var/lib/storage/longhorn
+
+  tasks:
+    - name: Require Debian-family hosts
+      ansible.builtin.assert:
+        that:
+          - ansible_facts["os_family"] == "Debian"
+        fail_msg: "This Longhorn host-prep playbook currently expects Debian/Ubuntu nodes."
+
+    - name: Verify dedicated storage mount exists
+      ansible.builtin.command:
+        cmd: findmnt -n -o SOURCE,FSTYPE,TARGET {{ longhorn_storage_mount }}
+      register: longhorn_mount
+      changed_when: false
+
+    - name: Verify /var/lib/storage is the dedicated /dev/sda1 ext4 filesystem
+      ansible.builtin.assert:
+        that:
+          - longhorn_mount.stdout is search('/dev/sda1')
+          - longhorn_mount.stdout is search('ext4')
+          - longhorn_mount.stdout is search(longhorn_storage_mount)
+        fail_msg: >-
+          {{ longhorn_storage_mount }} is not the expected /dev/sda1 ext4 mount.
+          Refusing to prepare Longhorn storage on this node.
+
+    - name: Verify root filesystem is not the Longhorn storage device
+      ansible.builtin.shell: |
+        set -e
+        root_src="$(findmnt -n -o SOURCE /)"
+        storage_src="$(findmnt -n -o SOURCE {{ longhorn_storage_mount }})"
+        test "$root_src" != "$storage_src"
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Install Longhorn V1 host prerequisites
+      ansible.builtin.apt:
+        name:
+          - open-iscsi
+          - nfs-common
+          - cryptsetup
+          - dmsetup
+        state: present
+        update_cache: true
+
+    - name: Load iscsi_tcp kernel module
+      ansible.builtin.command:
+        cmd: modprobe iscsi_tcp
+      changed_when: false
+
+    - name: Enable and start iscsid
+      ansible.builtin.service:
+        name: iscsid
+        state: started
+        enabled: true
+
+    - name: Create dedicated Longhorn data directory
+      ansible.builtin.file:
+        path: "{{ longhorn_data_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Verify Longhorn data directory is on the dedicated storage filesystem
+      ansible.builtin.shell: |
+        set -e
+        storage_source="$(findmnt -n -o SOURCE --target {{ longhorn_storage_mount }})"
+        data_source="$(findmnt -n -o SOURCE --target {{ longhorn_data_path }})"
+
+        echo "Storage source: $storage_source"
+        echo "Longhorn source: $data_source"
+
+        test -n "$storage_source"
+        test -n "$data_source"
+        test "$storage_source" = "$data_source"
+      args:
+        executable: /bin/bash
+      register: longhorn_data_mount_check
+      changed_when: false
+
+    - name: Show verified Longhorn storage filesystem
+      ansible.builtin.debug:
+        var: longhorn_data_mount_check.stdout_lines
+    - name: Verify iscsid is active # noqa command-instead-of-module
+      ansible.builtin.command:
+        cmd: systemctl is-active iscsid
+      register: iscsid_status
+      changed_when: false
+      failed_when: iscsid_status.stdout.strip() != "active"
+
+    - name: Verify iscsiadm is available
+      ansible.builtin.command:
+        cmd: iscsiadm --version
+      changed_when: false

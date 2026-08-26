@@ -1,0 +1,38 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-grafana-ingress
+  namespace: monitoring
+spec:
+  secretName: tls-grafana-ingress
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - grafana.${BASE_DOMAIN}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - grafana.${BASE_DOMAIN}
+      secretName: tls-grafana-ingress
+  rules:
+    - host: grafana.${BASE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: monitoring-grafana
+                port:
+                  number: 80

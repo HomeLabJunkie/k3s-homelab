@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-cluster-overview
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    cluster-overview.json: '{"title": "Homelab - Cluster Overview", "uid": "homelab-cluster",
+      "schemaVersion": 39, "version": 1, "time": {"from": "now-6h", "to": "now"},
+      "timezone": "browser", "tags": ["homelab", "k3s"], "templating": {"list": []},
+      "panels": [{"id": 1, "title": "Node CPU Usage %", "type": "timeseries", "gridPos":
+      {"h": 8, "w": 12, "x": 0, "y": 0}, "datasource": {"type": "prometheus", "uid":
+      "prometheus"}, "targets": [{"expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))
+      * 100)", "legendFormat": "{{instance}}", "refId": "A"}], "fieldConfig": {"defaults":
+      {"unit": "percent"}, "overrides": []}, "options": {"legend": {"displayMode":
+      "list", "placement": "bottom"}}}, {"id": 2, "title": "Node Memory Usage %",
+      "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "datasource":
+      {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "100 * (1
+      - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "legendFormat":
+      "{{instance}}", "refId": "A"}], "fieldConfig": {"defaults": {"unit": "percent"},
+      "overrides": []}, "options": {"legend": {"displayMode": "list", "placement":
+      "bottom"}}}, {"id": 3, "title": "Root Filesystem Usage %", "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "datasource": {"type": "prometheus",
+      "uid": "prometheus"}, "targets": [{"expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}
+      / node_filesystem_size_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"})",
+      "legendFormat": "{{instance}}", "refId": "A"}], "fieldConfig": {"defaults":
+      {"unit": "percent"}, "overrides": []}, "options": {"legend": {"displayMode":
+      "list", "placement": "bottom"}}}, {"id": 4, "title": "Running Pods by Namespace",
+      "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "datasource":
+      {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum(kube_pod_status_phase{phase=\"Running\"})
+      by (namespace)", "legendFormat": "{{namespace}}", "refId": "A"}], "fieldConfig":
+      {"defaults": {"unit": "short"}, "overrides": []}, "options": {"legend": {"displayMode":
+      "list", "placement": "bottom"}}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-longhorn-storage
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    longhorn-storage.json: '{"title": "Homelab - Longhorn Storage", "uid": "homelab-longhorn",
+      "schemaVersion": 39, "version": 1, "time": {"from": "now-6h", "to": "now"},
+      "timezone": "browser", "tags": ["homelab", "k3s"], "templating": {"list": []},
+      "panels": [{"id": 1, "title": "Volume Capacity", "type": "timeseries", "gridPos":
+      {"h": 8, "w": 12, "x": 0, "y": 0}, "datasource": {"type": "prometheus", "uid":
+      "prometheus"}, "targets": [{"expr": "longhorn_volume_capacity_bytes", "legendFormat":
+      "{{volume}}", "refId": "A"}], "fieldConfig": {"defaults": {"unit": "bytes"},
+      "overrides": []}, "options": {"legend": {"displayMode": "list", "placement":
+      "bottom"}}}, {"id": 2, "title": "Volume Usage", "type": "timeseries", "gridPos":
+      {"h": 8, "w": 12, "x": 12, "y": 0}, "datasource": {"type": "prometheus", "uid":
+      "prometheus"}, "targets": [{"expr": "longhorn_volume_usage_bytes", "legendFormat":
+      "{{volume}}", "refId": "A"}], "fieldConfig": {"defaults": {"unit": "bytes"},
+      "overrides": []}, "options": {"legend": {"displayMode": "list", "placement":
+      "bottom"}}}, {"id": 3, "title": "Volume Usage %", "type": "timeseries", "gridPos":
+      {"h": 8, "w": 12, "x": 0, "y": 8}, "datasource": {"type": "prometheus", "uid":
+      "prometheus"}, "targets": [{"expr": "100 * longhorn_volume_usage_bytes / longhorn_volume_capacity_bytes",
+      "legendFormat": "{{volume}}", "refId": "A"}], "fieldConfig": {"defaults": {"unit":
+      "percent"}, "overrides": []}, "options": {"legend": {"displayMode": "list",
+      "placement": "bottom"}}}, {"id": 4, "title": "Node Storage Usage %", "type":
+      "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "datasource": {"type":
+      "prometheus", "uid": "prometheus"}, "targets": [{"expr": "100 * longhorn_node_storage_usage_bytes
+      / longhorn_node_storage_capacity_bytes", "legendFormat": "{{node}}", "refId":
+      "A"}], "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []}, "options":
+      {"legend": {"displayMode": "list", "placement": "bottom"}}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-workload-health
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    workload-health.json: '{"title": "Homelab - Workload Health", "uid": "homelab-workloads",
+      "schemaVersion": 39, "version": 1, "time": {"from": "now-6h", "to": "now"},
+      "timezone": "browser", "tags": ["homelab", "k3s"], "templating": {"list": []},
+      "panels": [{"id": 1, "title": "Unavailable Deployment Replicas", "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "datasource": {"type": "prometheus",
+      "uid": "prometheus"}, "targets": [{"expr": "sum by (namespace,deployment) (kube_deployment_status_replicas_unavailable)",
+      "legendFormat": "{{namespace}}/{{deployment}}", "refId": "A"}], "fieldConfig":
+      {"defaults": {"unit": "short"}, "overrides": []}, "options": {"legend": {"displayMode":
+      "list", "placement": "bottom"}}}, {"id": 2, "title": "Container Restarts (30m)",
+      "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "datasource":
+      {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum by (namespace,pod)
+      (increase(kube_pod_container_status_restarts_total[30m]))", "legendFormat":
+      "{{namespace}}/{{pod}}", "refId": "A"}], "fieldConfig": {"defaults": {"unit":
+      "short"}, "overrides": []}, "options": {"legend": {"displayMode": "list", "placement":
+      "bottom"}}}, {"id": 3, "title": "PVC Usage %", "type": "timeseries", "gridPos":
+      {"h": 8, "w": 12, "x": 0, "y": 8}, "datasource": {"type": "prometheus", "uid":
+      "prometheus"}, "targets": [{"expr": "100 * kubelet_volume_stats_used_bytes /
+      kubelet_volume_stats_capacity_bytes", "legendFormat": "{{namespace}}/{{persistentvolumeclaim}}",
+      "refId": "A"}], "fieldConfig": {"defaults": {"unit": "percent"}, "overrides":
+      []}, "options": {"legend": {"displayMode": "list", "placement": "bottom"}}},
+      {"id": 4, "title": "Ready Pods by Namespace", "type": "timeseries", "gridPos":
+      {"h": 8, "w": 12, "x": 12, "y": 8}, "datasource": {"type": "prometheus", "uid":
+      "prometheus"}, "targets": [{"expr": "sum by (namespace) (kube_pod_status_ready{condition=\"true\"})",
+      "legendFormat": "{{namespace}}", "refId": "A"}], "fieldConfig": {"defaults":
+      {"unit": "short"}, "overrides": []}, "options": {"legend": {"displayMode": "list",
+      "placement": "bottom"}}}]}'

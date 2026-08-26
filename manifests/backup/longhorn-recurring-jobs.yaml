@@ -1,0 +1,40 @@
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: snapshot-6hour
+  namespace: longhorn-system
+spec:
+  cron: "17 */6 * * *"
+  task: snapshot
+  retain: 12
+  concurrency: 2
+  groups:
+    - default
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backup-nightly
+  namespace: longhorn-system
+spec:
+  cron: "37 2 * * *"
+  task: backup
+  retain: 14
+  concurrency: 2
+  groups:
+    - default
+  parameters:
+    full-backup-interval: "7"
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: system-backup-nightly
+  namespace: longhorn-system
+spec:
+  cron: "20 4 * * *"
+  task: system-backup
+  retain: 7
+  concurrency: 1
+  parameters:
+    volume-backup-policy: if-not-present

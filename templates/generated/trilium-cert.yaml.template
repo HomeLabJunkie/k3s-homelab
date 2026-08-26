@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-trilium
+  namespace: trilium
+spec:
+  secretName: tls-trilium
+  dnsNames:
+  - trilium.${BASE_DOMAIN}
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

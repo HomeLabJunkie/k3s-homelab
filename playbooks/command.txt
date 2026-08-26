@@ -1,0 +1,1 @@
+ansible-playbook playbooks/apt-update.yaml --user jeff --ask-pass --ask-become-pass -i inventory/k3s-ansible/hosts.ini

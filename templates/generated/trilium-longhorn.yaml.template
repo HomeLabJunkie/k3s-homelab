@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trilium
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trilium-data
+  namespace: trilium
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trilium
+  namespace: trilium
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: trilium
+  template:
+    metadata:
+      labels:
+        app: trilium
+    spec:
+      containers:
+        - name: trilium
+          image: triliumnext/trilium:v0.104.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: USER_UID
+              value: "1000"
+            - name: USER_GID
+              value: "1000"
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/trilium-data
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: trilium-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trilium
+  namespace: trilium
+spec:
+  selector:
+    app: trilium
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-trilium-ingress
+  namespace: trilium
+spec:
+  secretName: tls-trilium-ingress
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - trilium.${BASE_DOMAIN}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trilium
+  namespace: trilium
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - trilium.${BASE_DOMAIN}
+      secretName: tls-trilium-ingress
+  rules:
+    - host: trilium.${BASE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: trilium
+                port:
+                  number: 8080

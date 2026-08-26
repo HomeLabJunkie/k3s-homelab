@@ -1,0 +1,23 @@
+name: repo-safety
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Shell syntax
+        run: find . -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+      - name: Maintenance safety tests
+        run: |
+          ./tests/test-maintain-node-validation.sh
+          ./tests/test-maintain-cluster.sh
+      - name: Secret/config scan
+        run: ./scripts/scan-secrets.sh

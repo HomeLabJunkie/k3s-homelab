@@ -1,0 +1,58 @@
+---
+- name: Safely reconcile one existing K3s server
+  hosts: "{{ target }}"
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Require target variable
+      ansible.builtin.assert:
+        that:
+          - target is defined
+          - target | trim | length > 0
+        fail_msg: >-
+          Specify exactly one server with:
+          -e target=192.168.1.210
+
+    - name: Require exactly one target host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+        fail_msg: >-
+          This maintenance playbook must target exactly one K3s server.
+
+    - name: Verify target belongs to master inventory group
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in groups['master']
+        fail_msg: >-
+          Refusing reconciliation because the target is not a member
+          of the master inventory group.
+
+    - name: Verify target is an existing embedded-etcd member
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/db/etcd/member
+      register: etcd_member
+
+    - name: Refuse bootstrap through maintenance path
+      ansible.builtin.assert:
+        that:
+          - etcd_member.stat.exists
+        fail_msg: >-
+          Target is not an existing embedded-etcd member.
+          Refusing to use maintenance reconciliation.
+
+    - name: Show reconciliation target
+      ansible.builtin.debug:
+        msg:
+          - "target={{ inventory_hostname }}"
+          - "node_ip={{ k3s_node_ip }}"
+          - "api_vip={{ apiserver_endpoint }}"
+          - "mode=existing-etcd-reconciliation"
+
+  tasks:
+    - name: Run service-only K3s reconciliation
+      ansible.builtin.include_role:
+        name: k3s_server
+        tasks_from: reconcile.yml

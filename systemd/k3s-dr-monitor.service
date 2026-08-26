@@ -1,0 +1,9 @@
+[Unit]
+Description=K3s disaster-recovery health monitor
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+WorkingDirectory=%h/k3s-git
+ExecStart=%h/k3s-git/monitoring/dr-monitor.sh

@@ -1,0 +1,17 @@
+# Longhorn 1.12.0 - six-node K3s storage configuration
+# Dedicated storage disks are supplied via node annotations before install.
+
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 3
+
+defaultSettings:
+  createDefaultDiskLabeledNodes: "true"
+  defaultReplicaCount: "3"
+  replicaAutoBalance: "best-effort"
+  storageMinimalAvailablePercentage: "10"
+  storageOverProvisioningPercentage: "100"
+  defaultDataPath: "/var/lib/longhorn"
+
+ingress:
+  enabled: false

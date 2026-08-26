@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly K3s disaster-recovery backup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

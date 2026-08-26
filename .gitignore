@@ -1,0 +1,88 @@
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+config/cluster.env
+config/*.local
+secrets/
+private/
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.kubeconfig
+kubeconfig
+k3s.yaml
+*.token
+*.password
+*.secret
+*.credentials
+recovery/state/
+backup/output/
+rendered/
+dist/
+tmp/
+.cache/
+*.log
+logs/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+
+# Homeland k3s repository protections
+.secrets
+.secrets.*
+!.secrets.example
+*.backup
+deploy-final-v*.sh
+
+# Kubernetes/generated credentials
+.kube/
+admin.conf
+node-token
+server-token
+
+# Recovery runtime state
+recovery/state/
+
+# Generated environment-specific cluster files
+inventory/k3s-ansible/hosts.ini
+cloudflared-config.yaml
+cloudflared.yaml
+
+# Generated environment-specific manifests
+apps/longhorn/longhorn-ingress.yaml
+apps/vaultwarden/values.yaml
+trilium-longhorn-v2.yaml
+trilium-ingress.yaml
+monitoring-ingress.yaml
+vaultwarden-cert.yaml
+vaultwarden-longhorn-v2.yaml
+traefik-dashboard.yaml
+vaultwarden-longhorn.yaml
+portainer-ingress.yaml
+longhorn-ingress.yaml
+trilium-cert.yaml
+website.yaml
+clusterissuer-letsencrypt.yaml
+traefik-dashboard-cert.yaml
+trilium-longhorn.yaml
+
+.ansible/
+
+*.orig
+
+# Personal website content is not part of cluster DR source
+apps/website/
+
+# Local SMTP credentials
+config/email.env
+monitoring/state/
+
+# Local K3s backup verification artifacts
+k3s-server-token.sha256
+
+# Generated DR restore manifests
+recovery/generated-*.yaml

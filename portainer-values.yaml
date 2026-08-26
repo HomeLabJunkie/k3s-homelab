@@ -1,0 +1,30 @@
+# Portainer CE 2.39.5 / Helm chart 239.5.0
+replicaCount: 1
+
+image:
+  repository: portainer/portainer-ce
+  tag: 2.39.5-alpine
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  httpPort: 9000
+
+tls:
+  force: false
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  accessMode: ReadWriteOnce
+  size: 20Gi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 1Gi

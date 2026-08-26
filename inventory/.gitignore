@@ -1,0 +1,7 @@
+# Ignore only the generated/local inventory.
+k3s-ansible/hosts.ini
+
+# Keep the sanitized inventory source in Git.
+!k3s-ansible/hosts.ini.template
+!k3s-ansible/group_vars/
+!k3s-ansible/group_vars/**

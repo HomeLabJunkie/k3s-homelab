@@ -1,0 +1,1 @@
+helm upgrade --create-namespace --namespace trilium trilium trilium/trilium -f values.yaml

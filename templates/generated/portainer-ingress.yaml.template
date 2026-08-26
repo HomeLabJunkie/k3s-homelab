@@ -1,0 +1,38 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-portainer-ingress
+  namespace: portainer
+spec:
+  secretName: tls-portainer-ingress
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - portainer.${BASE_DOMAIN}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portainer
+  namespace: portainer
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - portainer.${BASE_DOMAIN}
+      secretName: tls-portainer-ingress
+  rules:
+    - host: portainer.${BASE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portainer
+                port:
+                  number: 9000

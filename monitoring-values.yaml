@@ -1,0 +1,72 @@
+grafana:
+  enabled: true
+  defaultDashboardsEnabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: longhorn
+    accessModes: [ReadWriteOnce]
+    size: 10Gi
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+      labelValue: "1"
+    datasources:
+      enabled: true
+  service:
+    type: ClusterIP
+
+prometheus:
+  enabled: true
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 45GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 50Gi
+
+alertmanager:
+  enabled: true
+  service:
+    type: ClusterIP
+  alertmanagerSpec:
+    replicas: 1
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 5Gi
+
+kubeStateMetrics:
+  enabled: true
+nodeExporter:
+  enabled: true
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+prometheusOperator:
+  enabled: true

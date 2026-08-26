@@ -1,0 +1,39 @@
+---
+- name: Safely reconcile existing K3s control-plane servers
+  hosts: master
+  gather_facts: true
+  become: true
+  serial: 1
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Verify existing embedded-etcd member
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/db/etcd/member
+      register: existing_etcd
+
+    - name: Refuse to use reconciliation for a new server
+      ansible.builtin.assert:
+        that:
+          - existing_etcd.stat.exists
+        fail_msg: >-
+          This server is not an existing embedded-etcd member.
+          Refusing existing-cluster reconciliation.
+
+  tasks:
+    - name: Reconcile K3s server service
+      ansible.builtin.include_role:
+        name: k3s_server
+        tasks_from: reconcile.yml
+
+- name: Safely reconcile existing K3s agents
+  hosts: node
+  gather_facts: true
+  become: true
+  serial: 1
+  any_errors_fatal: true
+
+  tasks:
+    - name: Reconcile K3s agent service
+      ansible.builtin.include_role:
+        name: k3s_agent

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run K3s disaster-recovery health monitor
+
+[Timer]
+OnCalendar=*-*-* 05:30:00
+Persistent=true
+RandomizedDelaySec=3m
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-executive-overview
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    executive-overview.json: '{"title":"Homelab - Executive Overview","uid":"homelab-exec","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Ready
+      Nodes","type":"stat","gridPos":{"h":5,"w":4,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":2,"title":"Running
+      Pods","type":"stat","gridPos":{"h":5,"w":4,"x":4,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_pod_status_phase{phase=\"Running\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":3,"title":"Unavailable
+      Deployments","type":"stat","gridPos":{"h":5,"w":4,"x":8,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_deployment_status_replicas_unavailable)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":4,"title":"Active
+      Alerts","type":"stat","gridPos":{"h":5,"w":4,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(ALERTS{alertstate=\"firing\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":5,"title":"Longhorn
+      Volumes","type":"stat","gridPos":{"h":5,"w":4,"x":16,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"count(longhorn_volume_capacity_bytes)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":6,"title":"PVCs","type":"stat","gridPos":{"h":5,"w":4,"x":20,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"count(kube_persistentvolumeclaim_info)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":7,"title":"Cluster
+      CPU %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":5},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100
+      - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100","legendFormat":"CPU","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":8,"title":"Cluster
+      Memory %","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":5},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100
+      * (1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))","legendFormat":"Memory","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":9,"title":"Recent
+      Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":13},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}
+      |~ \"(?i)error|fatal|panic\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-node-details
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    node-details.json: '{"title":"Homelab - Node Details","uid":"homelab-nodes","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"CPU
+      by Node","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100
+      - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))*100)","legendFormat":"{{instance}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":2,"title":"Memory
+      by Node","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*(1-node_memory_MemAvailable_bytes/node_memory_MemTotal_bytes)","legendFormat":"{{instance}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":3,"title":"Filesystem
+      Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*(1-node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"}/node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"})","legendFormat":"{{instance}}
+      {{mountpoint}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":4,"title":"Disk
+      Writes","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
+      by(instance)(rate(node_disk_written_bytes_total[5m]))","legendFormat":"{{instance}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"Bps"},"overrides":[]}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-kubernetes-workloads
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    kubernetes-workloads.json: '{"title":"Homelab - Kubernetes Workloads","uid":"homelab-workloads-v2","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Unavailable
+      Replicas","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
+      by(namespace,deployment)(kube_deployment_status_replicas_unavailable)","legendFormat":"{{namespace}}/{{deployment}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":2,"title":"Restarts
+      30m","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
+      by(namespace,pod)(increase(kube_pod_container_status_restarts_total[30m]))","legendFormat":"{{namespace}}/{{pod}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":3,"title":"PVC
+      Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*kubelet_volume_stats_used_bytes/kubelet_volume_stats_capacity_bytes","legendFormat":"{{namespace}}/{{persistentvolumeclaim}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":4,"title":"Workload
+      Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":16},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}
+      |~ \"(?i)error|exception|fatal|panic\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-longhorn-advanced
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    longhorn-advanced.json: '{"title":"Homelab - Longhorn Advanced","uid":"homelab-longhorn-v2","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Volume
+      Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*longhorn_volume_usage_bytes/longhorn_volume_capacity_bytes","legendFormat":"{{volume}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":2,"title":"Node
+      Storage Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*longhorn_node_storage_usage_bytes/longhorn_node_storage_capacity_bytes","legendFormat":"{{node}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":3,"title":"Longhorn
+      Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":8},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"longhorn-system\"}
+      |~ \"(?i)error|failed|degraded\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-traefik
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    traefik.json: '{"title":"Homelab - Traefik","uid":"homelab-traefik","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Requests/sec","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(traefik_service_requests_total[5m]))","legendFormat":"all","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},{"id":2,"title":"Status
+      Codes","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
+      by(code)(rate(traefik_service_requests_total[5m]))","legendFormat":"{{code}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},{"id":3,"title":"Traefik
+      Logs","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":8},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"traefik\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-certificates
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    certificates.json: '{"title":"Homelab - Certificates","uid":"homelab-certs","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Certificate
+      Time Remaining","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"certmanager_certificate_expiration_timestamp_seconds-time()","legendFormat":"{{namespace}}/{{name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}},{"id":2,"title":"cert-manager
+      Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":8},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"cert-manager\"}
+      |~ \"(?i)error|failed|warning\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-logs-events
+    namespace: monitoring
+    labels:
+      grafana_dashboard: '1'
+  data:
+    logs-events.json: '{"title":"Homelab - Logs & Events","uid":"homelab-logs","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"All
+      Cluster Logs","type":"logs","gridPos":{"h":14,"w":24,"x":0,"y":0},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":2,"title":"Errors
+      / Fatal / Panic","type":"logs","gridPos":{"h":12,"w":24,"x":0,"y":14},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}
+      |~ \"(?i)error|fatal|panic|exception\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":3,"title":"Storage
+      Logs","type":"logs","gridPos":{"h":10,"w":12,"x":0,"y":26},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"longhorn-system\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":4,"title":"Ingress
+      Logs","type":"logs","gridPos":{"h":10,"w":12,"x":12,"y":26},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"traefik\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'

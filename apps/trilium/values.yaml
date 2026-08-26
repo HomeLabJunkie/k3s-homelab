@@ -1,0 +1,27 @@
+configini:
+  general:
+    instanceName: ""
+    noAuthentication: false
+    noBackup: false
+  network:
+    certPath: ""
+    host: 0.0.0.0
+    https: false
+    keyPath: ""
+    port: 8080
+    trustedReverseProxy: true
+controllers:
+  main:
+    containers:
+      trilium:
+        env:
+          key: value
+        image:
+          pullPolicy: IfNotPresent
+          repository: triliumnext/trilium
+          tag: v0.102.1
+persistence:
+  data:
+    enabled: true
+    existingClaim: cloned-trilium-data-pvc
+    type: persistentVolumeClaim
