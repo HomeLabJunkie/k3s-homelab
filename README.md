@@ -879,6 +879,40 @@ Exit codes are `0` for healthy, `1` when attention is required, and `2` for
 healthy with warnings. The command is read-only and never reconciles,
 bootstraps, restores, or restarts the cluster.
 
+## Operator Workstation Readiness
+
+Before retiring or replacing an operator workstation or DR host, run the
+complete ThinkPad/operator handoff check:
+
+```bash
+cd ~/Work/k3s-homelab
+./workstation-readiness.sh
+```
+
+It runs, in order:
+
+- the quick repository doctor
+- deployment preflight
+- rolling cluster maintenance in check mode
+- production backup verification
+- the DR readiness dashboard
+- a plan-only DR rehearsal against the `k3s-dr` SSH alias
+
+The wrapper never passes `--apply`, `--bootstrap`, or `--execute`. Backup
+verification may temporarily mount the configured NFS export, and the DR
+plan-only rehearsal writes generated manifests and copies validation input to
+the DR host, but neither operation changes production workloads or restores
+data. The wrapper requests sudo authentication once before backup verification
+instead of allowing an unexpected password prompt in the middle of the run.
+
+Successful handoff ends with `RESULT: WORKSTATION READY`. Exit code `1` means
+the workstation or DR path is not ready; exit code `2` means ready with
+warnings. Logs are stored under `logs/readiness/`.
+
+When intentionally testing without the replacement DR host, use `--no-dr` and
+treat the resulting report only as operator-workstation validation—not as
+complete retirement approval.
+
 ## Canonical Operating Model
 
 Use these entry points consistently:
@@ -886,6 +920,9 @@ Use these entry points consistently:
 ```bash
 # 1. Routine health check
 ./repo-doctor.sh
+
+# Complete operator-workstation / DR handoff validation
+./workstation-readiness.sh
 
 # 2. Validate all lifecycle entry points without changing the cluster
 ./workflow-check.sh

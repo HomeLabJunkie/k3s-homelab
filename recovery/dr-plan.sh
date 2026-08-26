@@ -9,7 +9,7 @@ INVENTORY="${INVENTORY:-$SCRIPT_DIR/dr-find-backups.sh}"
 GENERATOR="${GENERATOR:-$SCRIPT_DIR/dr-generate-restore.sh}"
 VALIDATOR="${VALIDATOR:-$SCRIPT_DIR/dr-validate-generated.sh}"
 
-DR_HOST="${DR_HOST:-192.168.1.126}"
+DR_HOST="${DR_HOST:-k3s-dr}"
 DR_USER="${DR_USER:-jeff}"
 REMOTE_TMP_DIR="${REMOTE_TMP_DIR:-/tmp}"
 
@@ -28,7 +28,7 @@ Usage:
 Options:
   -o, --output FILE     Generated restore manifest path.
                         Default: recovery/generated-latest-restore.yaml
-  --dr-host HOST        DR host/IP. Default: 192.168.1.126
+  --dr-host HOST        DR host/IP or SSH alias. Default: k3s-dr
   --dr-user USER        DR SSH user. Default: jeff
   -h, --help            Show this help.
 

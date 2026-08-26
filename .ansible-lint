@@ -25,6 +25,7 @@ exclude_paths:
   - .sops.yaml
   - apps/
   - manifests/
+  - recovery/generated-*.yaml
   - collections/requirements.yml
   - alloy-values.yaml
   - cloudflared-config.yaml

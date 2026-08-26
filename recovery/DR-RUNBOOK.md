@@ -1405,7 +1405,7 @@ This helper:
 - does not create PV/PVC bindings
 - does not perform cleanup
 
-Validated execution from `vostro`:
+Validated execution from the operator workstation:
 
     ssh k3s-dr '
       sudo -n \
@@ -1430,7 +1430,7 @@ The protected DR-host installation is:
 
     /usr/local/libexec/k3s-dr/dr-validate-apps.sh
 
-From `vostro`, the validated non-interactive command is:
+From the operator workstation, the validated non-interactive command is:
 
     ssh k3s-dr '
       sudo -n /usr/local/libexec/k3s-dr/dr-validate-apps.sh
@@ -1500,7 +1500,7 @@ After application validation is complete, use:
 
     recovery/dr-cleanup.sh
 
-Validated non-interactive execution from `vostro`:
+Validated non-interactive execution from the operator workstation:
 
     ssh k3s-dr '
       sudo -n /usr/local/libexec/k3s-dr/dr-cleanup.sh
@@ -1652,7 +1652,7 @@ Do not proceed unless the intended recovery point is valid.
 
 ## Step 2 - Preflight the DR Cluster
 
-Preferred execution from `vostro`:
+Preferred execution from the operator workstation:
 
     ssh k3s-dr '
       sudo -n /usr/local/libexec/k3s-dr/dr-preflight.sh
@@ -1847,12 +1847,12 @@ Required ownership and permissions:
 The operator account must not be able to modify these privileged scripts.
 
 
-## Passwordless SSH From Vostro
+## Passwordless SSH From the Operator Workstation
 
 The workstation uses public-key authentication and the SSH alias:
 
     Host k3s-dr
-        HostName 192.168.1.126
+        HostName <DR_HOST_ADDRESS>
         User jeff
         IdentityFile ~/.ssh/id_ed25519
         IdentitiesOnly yes

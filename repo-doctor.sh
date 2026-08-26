@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2015  # Reporting helpers always return success.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,6 +11,7 @@ RUN_PREFLIGHT=true
 PASS=0
 WARN=0
 FAIL=0
+SKIP=0
 
 pass() {
   printf 'PASS: %s\n' "$*"
@@ -24,6 +26,11 @@ warn() {
 fail_check() {
   printf 'FAIL: %s\n' "$*"
   FAIL=$((FAIL + 1))
+}
+
+skip() {
+  printf 'SKIP: %s\n' "$*"
+  SKIP=$((SKIP + 1))
 }
 
 section() {
@@ -240,7 +247,7 @@ if [[ "$RUN_PREFLIGHT" == true ]]; then
     fail_check "deploy.sh is missing or not executable"
   fi
 else
-  warn "Deployment preflight skipped"
+  skip "Deployment preflight skipped by request"
 fi
 
 section "5. PRODUCTION KUBERNETES"
@@ -361,7 +368,7 @@ if [[ "$RUN_DR" == true ]]; then
     fail_check "dr-status.sh is missing or not executable"
   fi
 else
-  warn "DR readiness check skipped"
+  skip "DR readiness check skipped by request"
 fi
 
 section "REPOSITORY DOCTOR SUMMARY"
@@ -369,6 +376,7 @@ section "REPOSITORY DOCTOR SUMMARY"
 echo "PASS: $PASS"
 echo "WARN: $WARN"
 echo "FAIL: $FAIL"
+echo "SKIP: $SKIP"
 echo
 
 if (( FAIL > 0 )); then

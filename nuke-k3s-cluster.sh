@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # nuke-k3s-cluster.sh
-# Run from vostro. Wipes k3s + related state from every node listed below,
+# Run only from an authorized operator workstation. Wipes k3s and related
+# state from every node listed below,
 # then reboots each one so it comes back as a clean Ubuntu host.
 #
 # Requires: key-based SSH to each node as $SSH_USER, passwordless sudo there.
@@ -24,7 +25,11 @@ NODES=(
   "k3s-node-5"
 )
 SSH_USER="${SSH_USER:-jeff}"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o ServerAliveInterval=15"
+SSH_OPTS=(
+  -o StrictHostKeyChecking=accept-new
+  -o ConnectTimeout=10
+  -o ServerAliveInterval=15
+)
 REBOOT="${REBOOT:-yes}"       # "no" to skip reboot
 REBOOT_TIMEOUT="${REBOOT_TIMEOUT:-300}"   # seconds to wait for a node to come back
 PARALLEL="${PARALLEL:-yes}"   # "no" for serial (easier to read logs)
@@ -92,18 +97,18 @@ EOSH
 run_on_node() {
   local node="$1"
   # run the cleanup
-  ssh $SSH_OPTS "${SSH_USER}@${node}" "bash -s" <<< "$REMOTE_SCRIPT" 2>&1 \
+  ssh "${SSH_OPTS[@]}" "${SSH_USER}@${node}" "bash -s" <<< "$REMOTE_SCRIPT" 2>&1 \
     | sed "s/^/[$node] /"
   local rc=${PIPESTATUS[0]}
   if [[ $rc -ne 0 ]]; then
     echo "!!! [$node] cleanup exited $rc"
-    return $rc
+    return "$rc"
   fi
 
   if [[ "$REBOOT" == "yes" ]]; then
     echo "[$node] scheduling reboot in 2s"
     # systemd-run lets the SSH session exit cleanly before reboot fires
-    ssh $SSH_OPTS "${SSH_USER}@${node}" \
+    ssh "${SSH_OPTS[@]}" "${SSH_USER}@${node}" \
       "sudo systemd-run --on-active=2s --unit=nuke-reboot systemctl reboot" \
       >/dev/null 2>&1 || true
   fi
@@ -111,12 +116,14 @@ run_on_node() {
 
 wait_for_reboot() {
   local node="$1"
-  local start=$(date +%s)
-  local probe="ssh -o ConnectTimeout=3 -o BatchMode=yes $SSH_OPTS ${SSH_USER}@${node} true"
+  local start
+  local down_deadline
+  start=$(date +%s)
 
   echo "[$node] waiting for node to go down..."
-  local down_deadline=$(($(date +%s) + 60))
-  while $probe 2>/dev/null; do
+  down_deadline=$(($(date +%s) + 60))
+  while ssh -o ConnectTimeout=3 -o BatchMode=yes \
+    "${SSH_OPTS[@]}" "${SSH_USER}@${node}" true 2>/dev/null; do
     if (( $(date +%s) > down_deadline )); then
       echo "!!! [$node] still up after 60s -- reboot didn't take?"
       return 1
@@ -125,7 +132,8 @@ wait_for_reboot() {
   done
 
   echo "[$node] down, waiting for it to come back..."
-  while ! $probe 2>/dev/null; do
+  while ! ssh -o ConnectTimeout=3 -o BatchMode=yes \
+    "${SSH_OPTS[@]}" "${SSH_USER}@${node}" true 2>/dev/null; do
     if (( $(date +%s) - start > REBOOT_TIMEOUT )); then
       echo "!!! [$node] did not return within ${REBOOT_TIMEOUT}s"
       return 1
@@ -137,7 +145,8 @@ wait_for_reboot() {
 
 verify_node() {
   local node="$1"
-  ssh -o ConnectTimeout=5 $SSH_OPTS "${SSH_USER}@${node}" 'bash -s' <<'EOVR' 2>&1 | sed "s/^/[$node] /"
+  ssh -o ConnectTimeout=5 "${SSH_OPTS[@]}" \
+    "${SSH_USER}@${node}" 'bash -s' <<'EOVR' 2>&1 | sed "s/^/[$node] /"
 echo "uptime: $(uptime -p) (booted $(uptime -s))"
 check() { # $1=path-or-bin  $2=label  $3=type (dir|bin|mount)
   case "$3" in

@@ -8,14 +8,49 @@ require an explicit `--apply` before making changes.
 
 | Script | Purpose | Normal use |
 | --- | --- | --- |
+| `workstation-readiness.sh` | Validate the operator workstation, backups, and DR path | Before retiring or replacing the workstation/DR host |
 | `maintain-cluster.sh` | Safely reconcile the complete cluster | Preferred for routine maintenance |
 | `maintain-node.sh` | Safely reconcile exactly one inventory node | Troubleshooting or targeted maintenance |
+| `tests/test-workstation-readiness.sh` | Mock readiness success, warning, and failure | Run after editing the readiness wrapper |
 | `tests/test-maintain-node-validation.sh` | Mock success and post-maintenance failures | Run after editing validation logic |
 | `tests/test-maintain-cluster.sh` | Mock ordering and stop-on-failure behavior | Run after editing the rolling wrapper |
 
 `maintain-cluster.sh` delegates every target to `maintain-node.sh`. Workers are
 processed first, followed by control-plane nodes, and only one node is processed
 at a time. The rolling run stops immediately if any node fails.
+
+## Workstation and DR-host handoff
+
+Before powering off or replacing the current operator workstation or DR host,
+run the complete read-only/plan-only handoff workflow from the ThinkPad:
+
+```bash
+cd ~/Work/k3s-homelab
+./workstation-readiness.sh
+```
+
+Do not retire the existing DR host unless the report ends with:
+
+```text
+RESULT: WORKSTATION READY
+```
+
+The report covers the repository and toolchain, deployment preflight, rolling
+maintenance check mode, production backup verification, `k3s-dr` connectivity
+and preflight, and DR restore-plan validation. Logs are written to
+`logs/readiness/`. Expect one sudo authentication request before the backup
+verification stage if no sudo credential is currently cached.
+
+Optional skips are available for targeted troubleshooting:
+
+```bash
+./workstation-readiness.sh --no-maintenance
+./workstation-readiness.sh --no-backup
+./workstation-readiness.sh --no-dr
+```
+
+A report produced with skipped checks is not sufficient approval to retire the
+current DR host.
 
 ## Recommended full-cluster procedure
 
@@ -176,6 +211,7 @@ Run the isolated safety tests before testing against the live cluster:
 ```bash
 ./tests/test-maintain-node-validation.sh
 ./tests/test-maintain-cluster.sh
+./tests/test-workstation-readiness.sh
 ```
 
 Expected result:
@@ -183,6 +219,7 @@ Expected result:
 ```text
 Validation tests: 6 passed, 0 failed
 Rolling wrapper tests: 2 passed, 0 failed
+Workstation readiness tests: 3 passed, 0 failed
 ```
 
 Then run shell and repository checks:
@@ -190,11 +227,14 @@ Then run shell and repository checks:
 ```bash
 bash -n maintain-node.sh
 bash -n maintain-cluster.sh
+bash -n workstation-readiness.sh
 pre-commit run --files \
   maintain-node.sh \
   maintain-cluster.sh \
+  workstation-readiness.sh \
   tests/test-maintain-node-validation.sh \
-  tests/test-maintain-cluster.sh
+  tests/test-maintain-cluster.sh \
+  tests/test-workstation-readiness.sh
 ```
 
 Finally, run `./maintain-cluster.sh` in check-only mode against the real
