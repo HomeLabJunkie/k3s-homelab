@@ -5,6 +5,11 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${ROOT_DIR:-$SCRIPT_DIR}"
 
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  export VIRTUAL_ENV="${VIRTUAL_ENV:-$ROOT_DIR/.venv}"
+  export PATH="$ROOT_DIR/.venv/bin:$PATH"
+fi
+
 RUN_DR=true
 RUN_PREFLIGHT=true
 
