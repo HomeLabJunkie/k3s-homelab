@@ -45,7 +45,7 @@ MONITORING_INGRESS="${MONITORING_INGRESS:-$K3S_DIR/monitoring-ingress.yaml}"
 MONITORING_LONGHORN="${MONITORING_LONGHORN:-$K3S_DIR/monitoring-longhorn-v2.yaml}"
 MONITORING_DASHBOARDS="${MONITORING_DASHBOARDS:-$K3S_DIR/monitoring-dashboards.yaml}"
 GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.example.invalid}"
-PORTAINER_CHART_VERSION="${PORTAINER_CHART_VERSION:-239.5.0}"
+PORTAINER_CHART_VERSION="${PORTAINER_CHART_VERSION:-245.0.0}"
 PORTAINER_VALUES="${PORTAINER_VALUES:-$K3S_DIR/portainer-values.yaml}"
 PORTAINER_INGRESS="${PORTAINER_INGRESS:-$K3S_DIR/portainer-ingress.yaml}"
 PORTAINER_HOSTNAME="${PORTAINER_HOSTNAME:-portainer.example.invalid}"
@@ -1121,7 +1121,7 @@ echo "==========================================================================
 echo " Portainer URL:"
 echo " https://${PORTAINER_HOSTNAME}"
 echo
-echo " Portainer 2.39.5 protects new installations with a one-time setup token."
+echo " Portainer 2.45.0 protects new installations with a one-time setup token."
 echo " Retrieve the current setup token from the Portainer pod logs:"
 echo "   kubectl -n portainer logs deployment/portainer | grep 'setup_token='"
 echo

@@ -1,9 +1,9 @@
-# Portainer CE 2.39.5 / Helm chart 239.5.0
+# Portainer CE 2.45.0 / Helm chart 245.0.0
 replicaCount: 1
 
 image:
   repository: portainer/portainer-ce
-  tag: 2.39.5-alpine
+  tag: 2.45.0-alpine
   pullPolicy: IfNotPresent
 
 service:
