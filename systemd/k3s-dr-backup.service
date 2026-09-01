@@ -2,9 +2,12 @@
 OnFailure=k3s-dr-monitor.service
 Description=K3s disaster-recovery cluster backup
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 Environment=HOME=%h
-WorkingDirectory=%h/k3s
-ExecStart=%h/k3s/backup/backup.sh
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+WorkingDirectory=%h/Work/k3s-homelab
+ExecStart=%h/Work/k3s-homelab/backup/backup.sh
+TimeoutStartSec=45min

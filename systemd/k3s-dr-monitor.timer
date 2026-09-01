@@ -5,6 +5,7 @@ Description=Run K3s disaster-recovery health monitor
 OnCalendar=*-*-* 05:30:00
 Persistent=true
 RandomizedDelaySec=3m
+AccuracySec=1m
 
 [Install]
 WantedBy=timers.target

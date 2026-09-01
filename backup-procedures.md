@@ -45,10 +45,15 @@ LONGHORN_BACKUP_EXPORT
 The backup host also needs:
 
 - working cluster-admin `kubectl` access
-- `helm`, `ssh`, `tar`, `sha256sum`, `flock`, and NFS client tools
+- `helm`, `ssh`, `tar`, `sha256sum`, and `flock`
 - passwordless SSH key authentication to the Kubernetes control-plane nodes
-- `sudo` authorization for the NFS mount and root-owned backup files
+- passwordless `sudo` on the selected control-plane node for K3s and NFS tasks
 - network access to the configured NAS exports
+
+The ThinkPad does not need local `sudo`. It stages each bundle under a private
+temporary directory, then uses the first control-plane node as a narrowly
+scoped storage proxy to publish and verify the root-owned NFS copy. Temporary
+staging data is removed after success or failure.
 
 The backup script refuses to run when the Kubernetes API is unavailable, any
 node is not Ready, the Longhorn target is unavailable, another backup process
@@ -193,7 +198,8 @@ scheduled check:
 ./backup/verify-backup.sh
 ```
 
-The verifier mounts the cluster-backup export if needed and checks:
+The verifier accesses the cluster-backup export through the same control-plane
+storage proxy and checks:
 
 - the `cluster/latest` symlink resolves to a bundle
 - `BACKUP-MANIFEST.txt` exists and contains `created_at`
@@ -247,13 +253,13 @@ Review every warning before accepting `DR READY WITH WARNINGS`. Any
 
 ### Inspect the current bundle
 
-`backup/verify-backup.sh` prints the resolved latest path. After it mounts the
-export, the equivalent checks are:
+`backup/verify-backup.sh` prints the resolved remote path. Inspect it through a
+control-plane node when manual inspection is required:
 
 ```bash
-readlink -f /mnt/k3s-backup/cluster/latest
-sudo cat /mnt/k3s-backup/cluster/latest/BACKUP-MANIFEST.txt
-sudo find /mnt/k3s-backup/cluster/latest -maxdepth 2 -type f
+ssh <CONTROL_PLANE_IP> sudo readlink -f /mnt/k3s-backup/cluster/latest
+ssh <CONTROL_PLANE_IP> sudo cat /mnt/k3s-backup/cluster/latest/BACKUP-MANIFEST.txt
+ssh <CONTROL_PLANE_IP> sudo find /mnt/k3s-backup/cluster/latest -maxdepth 2 -type f
 ```
 
 Use the verifier for checksum validation instead of checking only that files
@@ -277,8 +283,7 @@ kubectl get --raw=/readyz
 kubectl get nodes
 kubectl -n longhorn-system get backuptarget default -o yaml
 kubectl -n longhorn-system get backups.longhorn.io
-mountpoint /mnt/k3s-backup
-ssh -o BatchMode=yes <CONTROL_PLANE_IP> true
+ssh -o BatchMode=yes <CONTROL_PLANE_IP> sudo -n true
 ```
 
 Typical causes are an unavailable NAS export, stale or failed Longhorn backups,
@@ -301,19 +306,25 @@ Check timer state with:
 
 ```bash
 systemctl --user list-timers 'k3s-dr-*' --all
-systemctl --user is-enabled k3s-dr-backup.timer k3s-dr-verify.timer
-systemctl --user is-active k3s-dr-backup.timer k3s-dr-verify.timer
+systemctl --user is-enabled k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer
+systemctl --user is-active k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer
 ```
 
-The current unit and installer files assume a checkout under `%h/k3s` (and the
-monitor unit currently references `%h/k3s-git`). If the repository is checked
-out elsewhere, such as `~/Work/k3s-homelab`, do not enable the timers until
-their paths are updated and reviewed. Manual backup and verification remain the
-canonical procedure in that situation.
+Install all three timers from the ThinkPad checkout:
 
-Scheduled execution also requires non-interactive, narrowly scoped sudo for the
-NFS and backup operations. `install-dr-timers.sh` refuses to enable timers when
-`sudo -n true` fails. Never place a sudo password in a unit file or repository.
+```bash
+cd ~/Work/k3s-homelab
+./install-dr-timers.sh
+```
+
+The units use `%h/Work/k3s-homelab`, require no local sudo, and are persistent.
+If the user manager was stopped at a scheduled time, systemd starts the missed
+job when the user session returns. Enable user lingering once if backups must
+run while logged out; a powered-off ThinkPad catches up after the next login.
+
+The monitor validates the bundle itself and warns at 24 hours, before the
+30-hour DR freshness limit. It also checks every protected Longhorn backup,
+timer enablement, timer activity, and failed backup/verification services.
 
 ## Retention and freshness overrides
 

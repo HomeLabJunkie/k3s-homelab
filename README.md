@@ -90,7 +90,7 @@ never sent through initial bootstrap logic by accident.
 For normal production changes, first run the no-change preflight:
 
 ```bash
-cd ~/k3s-git
+cd ~/Work/k3s-homelab
 ./deploy.sh --preflight-only
 ```
 
@@ -478,7 +478,7 @@ There are two complementary backup layers.
 Run:
 
 ```bash
-cd ~/k3s-git
+cd ~/Work/k3s-homelab
 ./backup/backup.sh
 ```
 
@@ -854,7 +854,7 @@ Use `repo-doctor.sh` as the read-only front-door health check before cluster
 maintenance:
 
 ```bash
-cd ~/k3s-git
+cd ~/Work/k3s-homelab
 ./repo-doctor.sh
 ```
 
@@ -899,11 +899,10 @@ It runs, in order:
 - a plan-only DR rehearsal against the `k3s-dr` SSH alias
 
 The wrapper never passes `--apply`, `--bootstrap`, or `--execute`. Backup
-verification may temporarily mount the configured NFS export, and the DR
-plan-only rehearsal writes generated manifests and copies validation input to
-the DR host, but neither operation changes production workloads or restores
-data. The wrapper requests sudo authentication once before backup verification
-instead of allowing an unexpected password prompt in the middle of the run.
+verification accesses the configured NFS export through a control-plane storage
+proxy, and the DR plan-only rehearsal writes generated manifests and copies
+validation input to the DR host, but neither operation changes production
+workloads or restores data. No local sudo prompt is required.
 
 Successful handoff ends with `RESULT: WORKSTATION READY`. Exit code `1` means
 the workstation or DR path is not ready; exit code `2` means ready with
@@ -1000,7 +999,7 @@ control-plane target, and runs the quick repository doctor.
 ### Preflight normal production reconciliation
 
 ```bash
-cd ~/k3s-git
+cd ~/Work/k3s-homelab
 ./deploy.sh --preflight-only
 ```
 

@@ -54,7 +54,6 @@ run_case() {
     MOCK_CALLS="$CALLS" \
     MOCK_WARN_STAGE="$warn_stage" \
     MOCK_FAIL_STAGE="$fail_stage" \
-    BACKUP_SUDO_CHECK=false \
     "$REPO_ROOT/workstation-readiness.sh" >"$output" 2>&1
   rc=$?
   set -e
