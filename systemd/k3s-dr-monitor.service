@@ -1,9 +1,12 @@
 [Unit]
 Description=K3s disaster-recovery health monitor
-After=network-online.target
+After=network-online.target k3s-dr-backup.service k3s-dr-verify.service
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 Environment=HOME=%h
-WorkingDirectory=%h/k3s-git
-ExecStart=%h/k3s-git/monitoring/dr-monitor.sh
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+WorkingDirectory=%h/Work/k3s-homelab
+ExecStart=%h/Work/k3s-homelab/monitoring/dr-monitor.sh
+TimeoutStartSec=20min

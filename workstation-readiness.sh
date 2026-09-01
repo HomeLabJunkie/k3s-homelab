@@ -19,7 +19,6 @@ DR_REHEARSAL="${DR_REHEARSAL:-$ROOT_DIR/recovery/dr-rehearsal.sh}"
 RUN_MAINTENANCE=true
 RUN_BACKUP=true
 RUN_DR=true
-BACKUP_SUDO_CHECK="${BACKUP_SUDO_CHECK:-true}"
 
 usage() {
   cat <<'EOF'
@@ -171,28 +170,8 @@ else
 fi
 
 if [[ "$RUN_BACKUP" == true ]]; then
-  if [[ "$BACKUP_SUDO_CHECK" == true ]]; then
-    echo
-    echo "Backup verification requires temporary sudo access for the NFS mount."
-    if [[ -t 0 ]]; then
-      if sudo -v; then
-        run_stage backup "Production backup verification" \
-          "$BACKUP_VERIFY"
-      else
-        echo "ERROR: sudo authentication failed; backup verification did not run."
-        record_stage backup "Production backup verification" FAIL 1
-      fi
-    elif sudo -n -v >/dev/null 2>&1; then
-      run_stage backup "Production backup verification" \
-        "$BACKUP_VERIFY"
-    else
-      echo "ERROR: backup verification requires cached or passwordless sudo in non-interactive mode."
-      record_stage backup "Production backup verification" FAIL 1
-    fi
-  else
-    run_stage backup "Production backup verification" \
-      "$BACKUP_VERIFY"
-  fi
+  run_stage backup "Production backup verification" \
+    "$BACKUP_VERIFY"
 else
   skip_stage backup "Production backup verification"
 fi

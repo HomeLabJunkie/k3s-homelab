@@ -2,15 +2,16 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APPS_FILE="${APPS_FILE:-$ROOT/recovery/apps.conf}"
-STATE_DIR="${STATE_DIR:-$ROOT/monitoring/state}"
+STATE_DIR="${STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/k3s-dr}"
 STATUS_FILE="$STATE_DIR/last-status"
 DETAIL_FILE="$STATE_DIR/last-details.txt"
 NOTIFY="${NOTIFY:-$ROOT/monitoring/dr-notify.sh}"
+BACKUP_VERIFY="${BACKUP_VERIFY:-$ROOT/backup/verify-backup.sh}"
 
 WARN_BACKUP_AGE_HOURS="${WARN_BACKUP_AGE_HOURS:-24}"
-CRIT_BACKUP_AGE_HOURS="${CRIT_BACKUP_AGE_HOURS:-36}"
+CRIT_BACKUP_AGE_HOURS="${CRIT_BACKUP_AGE_HOURS:-30}"
 WARN_APP_BACKUP_AGE_HOURS="${WARN_APP_BACKUP_AGE_HOURS:-24}"
-CRIT_APP_BACKUP_AGE_HOURS="${CRIT_APP_BACKUP_AGE_HOURS:-36}"
+CRIT_APP_BACKUP_AGE_HOURS="${CRIT_APP_BACKUP_AGE_HOURS:-30}"
 
 mkdir -p "$STATE_DIR"
 severity=0
@@ -37,7 +38,28 @@ for n in d.get("items",[]):
 lh="$(kubectl -n longhorn-system get backuptarget default -o jsonpath='{.status.available}' 2>/dev/null || true)"
 [[ "$lh" == "true" ]] || crit "Longhorn backup target is unavailable"
 
-for unit in k3s-dr-backup.timer k3s-dr-verify.timer; do
+backup_output=""
+if backup_output="$("$BACKUP_VERIFY" 2>&1)"; then
+  bundle_age="$(sed -n 's/^==> Backup age: \([0-9][0-9]*\)h.*/\1/p' <<<"$backup_output" | head -1)"
+  if [[ "$bundle_age" =~ ^[0-9]+$ ]]; then
+    if (( bundle_age >= CRIT_BACKUP_AGE_HOURS )); then
+      crit "Cluster recovery bundle is ${bundle_age}h old"
+    elif (( bundle_age >= WARN_BACKUP_AGE_HOURS )); then
+      warn "Cluster recovery bundle is ${bundle_age}h old"
+    fi
+  else
+    crit "Cluster recovery bundle age could not be determined"
+  fi
+else
+  bundle_age="$(sed -n 's/^==> Backup age: \([0-9][0-9]*\)h.*/\1/p' <<<"$backup_output" | head -1)"
+  if [[ "$bundle_age" =~ ^[0-9]+$ ]]; then
+    crit "Cluster recovery bundle verification failed at age ${bundle_age}h"
+  else
+    crit "Cluster recovery bundle verification failed"
+  fi
+fi
+
+for unit in k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer; do
   [[ "$(systemctl --user is-enabled "$unit" 2>/dev/null || true)" == "enabled" ]] || warn "$unit is not enabled"
   [[ "$(systemctl --user is-active "$unit" 2>/dev/null || true)" == "active" ]] || crit "$unit is not active"
 done

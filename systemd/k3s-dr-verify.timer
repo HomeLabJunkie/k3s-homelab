@@ -5,6 +5,7 @@ Description=Daily K3s disaster-recovery verification
 OnCalendar=*-*-* 05:15:00
 Persistent=true
 RandomizedDelaySec=5m
+AccuracySec=1m
 
 [Install]
 WantedBy=timers.target

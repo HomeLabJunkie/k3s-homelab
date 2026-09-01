@@ -1,18 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# ---------------------------------------------------------------------------
-# Repository / environment discovery
-# ---------------------------------------------------------------------------
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-if [[ "$(basename "$SCRIPT_DIR")" == "backup" || "$(basename "$SCRIPT_DIR")" == "recovery" ]]; then
-    ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-else
-    ROOT_DIR="$SCRIPT_DIR"
-fi
-
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -22,33 +12,25 @@ if [[ -f "$ENV_FILE" ]]; then
     set +a
 fi
 
+# shellcheck source=backup/remote-storage.sh
+source "$SCRIPT_DIR/remote-storage.sh"
+
 REPO="${REPO:-$ROOT_DIR}"
-
-# Resolve the repository to an absolute canonical path.
-if ! REPO="$(readlink -f "$REPO" 2>/dev/null)"; then
-    echo "ERROR: unable to resolve repository path: $REPO" >&2
-    exit 1
-fi
-
+REPO="$(readlink -f "$REPO")"
 NAS="${NAS:-${UNRAID_IP:-192.0.2.9}}"
 EXPORT="${EXPORT:-${CLUSTER_BACKUP_EXPORT:-/mnt/user/K3S-Backup}}"
-MOUNT="${MOUNT:-/mnt/k3s-backup}"
-
 HOST="$(hostname -s)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-
-DEST="${MOUNT}/cluster/${HOST}/${STAMP}"
-
+DEST="${STORAGE_MOUNT}/cluster/${HOST}/${STAMP}"
 BACKUP_KEEP_COUNT="${BACKUP_KEEP_COUNT:-14}"
 LOCK_FILE="${LOCK_FILE:-/tmp/k3s-dr-backup.lock}"
 
-MOUNTED_BY_SCRIPT=0
-DEST_CREATED=0
+STAGE_ROOT=""
+STAGE_DEST=""
+REMOTE_DEST_CREATED=0
 BACKUP_COMPLETE=0
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+SNAPSHOT=""
+CONTROL_IP=""
 
 fail() {
     echo "ERROR: $*" >&2
@@ -56,53 +38,30 @@ fail() {
 }
 
 require_command() {
-    local cmd="$1"
-    local hint="${2:-}"
-
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        if [[ -n "$hint" ]]; then
-            fail "required command not found: $cmd ($hint)"
-        else
-            fail "required command not found: $cmd"
-        fi
-    fi
+    command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
 }
 
 on_error() {
-    local rc=$?
-    local line="${BASH_LINENO[0]:-unknown}"
-
+    local rc=$? line="${BASH_LINENO[0]:-unknown}"
     echo >&2
     echo "ERROR: backup failed at line ${line} with exit code ${rc}" >&2
     echo "ERROR: latest backup symlink was not updated." >&2
-
     return "$rc"
 }
 
 cleanup() {
     local rc=$?
-
-    cd / || true
-
-    # Remove an incomplete destination so a failed run cannot look like
-    # a valid recovery bundle.
     if (( rc != 0 || BACKUP_COMPLETE == 0 )) &&
-       (( DEST_CREATED == 1 )) &&
-       [[ -n "${DEST:-}" ]] &&
-       [[ "$DEST" == "${MOUNT}/cluster/${HOST}/"* ]] &&
-       [[ -d "$DEST" ]]; then
-
-        echo "==> Removing incomplete backup bundle:"
+       (( REMOTE_DEST_CREATED == 1 )) &&
+       [[ "$DEST" == "${STORAGE_MOUNT}/cluster/${HOST}/"* ]]; then
+        echo "==> Removing incomplete remote backup bundle:"
         echo "    $DEST"
-        sudo rm -rf -- "$DEST" || true
+        storage_sudo rm -rf -- "$DEST" || true
     fi
-
-    if [[ "$MOUNTED_BY_SCRIPT" == "1" ]] &&
-       mountpoint -q "$MOUNT" 2>/dev/null; then
-        echo "==> Unmounting backup target..."
-        sudo umount "$MOUNT" || true
+    storage_unmount
+    if [[ -n "$STAGE_ROOT" && "$STAGE_ROOT" == /tmp/k3s-dr-backup.* ]]; then
+        rm -rf -- "$STAGE_ROOT"
     fi
-
     return "$rc"
 }
 
@@ -110,39 +69,26 @@ trap on_error ERR
 trap cleanup EXIT
 
 prune_cluster_bundles() {
+    local bundle_root="${STORAGE_MOUNT}/cluster/${HOST}" old
+    local -a bundles=()
     [[ "$BACKUP_KEEP_COUNT" =~ ^[0-9]+$ ]] ||
         fail "BACKUP_KEEP_COUNT must be a non-negative integer"
-
     (( BACKUP_KEEP_COUNT > 0 )) || return 0
 
-    local bundle_root="${MOUNT}/cluster/${HOST}"
-
     mapfile -t bundles < <(
-        find "$bundle_root" \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -name '20????????-??????' \
-            -printf '%f\n' 2>/dev/null |
-        sort -r
+        storage_sudo find "$bundle_root" -mindepth 1 -maxdepth 1 -type d \
+            -name '20????????-??????' -printf '%f\n' 2>/dev/null | sort -r
     )
-
-    if (( ${#bundles[@]} <= BACKUP_KEEP_COUNT )); then
-        return 0
-    fi
+    (( ${#bundles[@]} > BACKUP_KEEP_COUNT )) || return 0
 
     echo "==> Pruning old cluster bundles; keeping newest ${BACKUP_KEEP_COUNT}..."
-
-    local old
     for old in "${bundles[@]:BACKUP_KEEP_COUNT}"; do
+        [[ "$old" =~ ^20[0-9]{6}-[0-9]{6}$ ]] ||
+            fail "refusing to prune unexpected bundle name: $old"
         echo "    deleting ${old}"
-        sudo rm -rf -- "${bundle_root}/${old}"
+        storage_sudo rm -rf -- "${bundle_root}/${old}"
     done
 }
-
-# ---------------------------------------------------------------------------
-# Preconditions
-# ---------------------------------------------------------------------------
 
 echo "============================================"
 echo " K3S CLUSTER RECOVERY BACKUP"
@@ -151,365 +97,152 @@ echo
 echo "Host:       $HOST"
 echo "Repository: $REPO"
 echo "NAS:        ${NAS}:${EXPORT}"
-echo "Mount:      $MOUNT"
+echo "Proxy:      auto-selected control-plane node"
 echo
 
-[[ -d "$REPO" ]] ||
-    fail "repository path does not exist: $REPO"
+[[ -d "$REPO/.git" ]] || fail "repository path is not a Git working tree: $REPO"
+for command in kubectl helm ssh tar sha256sum flock find readlink mktemp python3; do
+    require_command "$command"
+done
 
-[[ -d "$REPO/.git" ]] ||
-    fail "repository path is not a Git working tree: $REPO"
-
-require_command kubectl
-require_command helm
-require_command ssh
-require_command tar
-require_command sha256sum
-require_command flock
-require_command mountpoint
-require_command mount
-require_command find
-require_command readlink
-require_command sudo
-
-# mount.nfs/mount.nfs4 is supplied by nfs-utils on Arch/Omarchy.
-if ! command -v mount.nfs4 >/dev/null 2>&1 &&
-   ! command -v mount.nfs >/dev/null 2>&1; then
-    fail "NFS client helper is missing. On Arch/Omarchy install: sudo pacman -S nfs-utils"
-fi
-
-# Obtain/validate sudo credentials before doing any real backup work.
-sudo -v || fail "sudo authentication failed"
-
-# Prevent concurrent backup runs.
 exec 9>"$LOCK_FILE"
-
-if ! flock -n 9; then
-    fail "another backup.sh instance is already running"
-fi
-
-# ---------------------------------------------------------------------------
-# Kubernetes / Longhorn preflight
-# ---------------------------------------------------------------------------
+flock -n 9 || fail "another backup.sh instance is already running"
 
 echo "==> Checking Kubernetes..."
-
-kubectl get --raw='/readyz' >/dev/null ||
-    fail "Kubernetes API is not ready"
-
-kubectl get nodes >/dev/null ||
-    fail "unable to query Kubernetes nodes"
-
-NOT_READY="$(
-    kubectl get nodes --no-headers |
-    awk '$2 != "Ready" {print}'
-)"
-
+kubectl get --raw='/readyz' >/dev/null || fail "Kubernetes API is not ready"
+kubectl get nodes >/dev/null || fail "unable to query Kubernetes nodes"
+NOT_READY="$(kubectl get nodes --no-headers | awk '$2 != "Ready" {print}')"
 if [[ -n "$NOT_READY" ]]; then
     echo "$NOT_READY" >&2
     fail "one or more Kubernetes nodes are not Ready"
 fi
 
 echo "==> Checking Longhorn backup target..."
-
-AVAILABLE="$(
-    kubectl -n longhorn-system \
-        get backuptarget default \
-        -o jsonpath='{.status.available}'
-)"
-
-[[ "$AVAILABLE" == "true" ]] ||
-    fail "Longhorn backup target is unavailable"
-
-# ---------------------------------------------------------------------------
-# Mount backup destination
-# ---------------------------------------------------------------------------
-
-echo "==> Mounting Unraid K3S-Backup..."
-
-sudo mkdir -p "$MOUNT"
-
-if ! mountpoint -q "$MOUNT"; then
-    sudo mount \
-        -t nfs4 \
-        -o vers=4.2,proto=tcp \
-        "${NAS}:${EXPORT}" \
-        "$MOUNT"
-
-    MOUNTED_BY_SCRIPT=1
-fi
-
-mountpoint -q "$MOUNT" ||
-    fail "backup target is not mounted: $MOUNT"
-
-[[ -d "${MOUNT}/cluster" ]] ||
-    sudo mkdir -p "${MOUNT}/cluster"
-
-sudo mkdir -p \
-    "${DEST}/repo" \
-    "${DEST}/cluster-state" \
-    "${DEST}/etcd"
-
-DEST_CREATED=1
-
-# ---------------------------------------------------------------------------
-# Repository backup
-# ---------------------------------------------------------------------------
-
-echo "==> Backing up repository..."
-
-REPO_PARENT="$(dirname "$REPO")"
-REPO_NAME="$(basename "$REPO")"
-
-[[ -d "${REPO_PARENT}/${REPO_NAME}" ]] ||
-    fail "resolved repository directory does not exist: ${REPO_PARENT}/${REPO_NAME}"
-
-sudo tar \
-    --exclude='.git' \
-    --exclude='logs' \
-    --exclude='*.tmp' \
-    --exclude='recovery/state/*/archive' \
-    -C "$REPO_PARENT" \
-    -czf "${DEST}/repo/k3s-repository.tar.gz" \
-    "$REPO_NAME"
-
-sudo test -s "${DEST}/repo/k3s-repository.tar.gz" ||
-    fail "repository archive was not created"
-
-echo "    repository: $REPO"
-echo "    archive root: $REPO_NAME"
-
-# ---------------------------------------------------------------------------
-# Cluster state
-# ---------------------------------------------------------------------------
-
-echo "==> Saving cluster state..."
-
-kubectl get nodes -o yaml |
-    sudo tee "${DEST}/cluster-state/nodes.yaml" >/dev/null
-
-kubectl get namespaces -o yaml |
-    sudo tee "${DEST}/cluster-state/namespaces.yaml" >/dev/null
-
-kubectl get storageclass -o yaml |
-    sudo tee "${DEST}/cluster-state/storageclasses.yaml" >/dev/null
-
-kubectl get pv -o yaml |
-    sudo tee "${DEST}/cluster-state/persistentvolumes.yaml" >/dev/null
-
-kubectl get pvc -A -o yaml |
-    sudo tee "${DEST}/cluster-state/persistentvolumeclaims.yaml" >/dev/null
-
-kubectl get ingress -A -o yaml |
-    sudo tee "${DEST}/cluster-state/ingresses.yaml" >/dev/null
-
-kubectl get pvc -A \
-    -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,VOLUME:.spec.volumeName,SC:.spec.storageClassName,STATUS:.status.phase' |
-    sudo tee "${DEST}/cluster-state/pvc-volume-map.txt" >/dev/null
-
-kubectl -n longhorn-system get volumes.longhorn.io -o yaml |
-    sudo tee "${DEST}/cluster-state/longhorn-volumes.yaml" >/dev/null
-
-kubectl -n longhorn-system get backups.longhorn.io -o yaml |
-    sudo tee "${DEST}/cluster-state/longhorn-backups.yaml" >/dev/null
-
-kubectl -n longhorn-system get backupvolumes.longhorn.io -o yaml |
-    sudo tee "${DEST}/cluster-state/longhorn-backupvolumes.yaml" >/dev/null
-
-kubectl -n longhorn-system get backuptarget default -o yaml |
-    sudo tee "${DEST}/cluster-state/longhorn-backuptarget.yaml" >/dev/null
-
-kubectl -n longhorn-system get recurringjobs.longhorn.io -o yaml |
-    sudo tee "${DEST}/cluster-state/longhorn-recurringjobs.yaml" >/dev/null
-
-kubectl -n longhorn-system get systembackups.longhorn.io -o yaml 2>/dev/null |
-    sudo tee "${DEST}/cluster-state/longhorn-systembackups.yaml" >/dev/null ||
-    true
-
-helm list -A -o yaml |
-    sudo tee "${DEST}/cluster-state/helm-releases.yaml" >/dev/null
-
-# ---------------------------------------------------------------------------
-# etcd snapshot
-# ---------------------------------------------------------------------------
-
-echo "==> Requesting K3s etcd snapshot..."
+AVAILABLE="$(kubectl -n longhorn-system get backuptarget default -o jsonpath='{.status.available}')"
+[[ "$AVAILABLE" == true ]] || fail "Longhorn backup target is unavailable"
 
 CONTROL_NODE="$(
-    kubectl get nodes \
-        -l node-role.kubernetes.io/control-plane \
-        -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
-    sort |
-    head -1
+    kubectl get nodes -l node-role.kubernetes.io/control-plane \
+        -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort | head -1
 )"
-
-[[ -n "$CONTROL_NODE" ]] ||
-    fail "no control-plane node found"
-
+[[ -n "$CONTROL_NODE" ]] || fail "no control-plane node found"
 CONTROL_IP="$(
     kubectl get node "$CONTROL_NODE" \
         -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}'
 )"
+[[ -n "$CONTROL_IP" ]] || fail "could not determine control-plane InternalIP"
 
-[[ -n "$CONTROL_IP" ]] ||
-    fail "could not determine InternalIP for control-plane node $CONTROL_NODE"
-
+STORAGE_SSH_HOST="${STORAGE_SSH_HOST:-$CONTROL_IP}"
+storage_init || fail "unable to initialize remote backup storage"
 echo "    node: $CONTROL_NODE ($CONTROL_IP)"
 
-ssh \
-    -o BatchMode=yes \
-    -o ConnectTimeout=10 \
-    "$CONTROL_IP" \
-    "sudo k3s etcd-snapshot save --name manual-${STAMP}"
+STAGE_ROOT="$(mktemp -d /tmp/k3s-dr-backup.XXXXXX)"
+STAGE_DEST="${STAGE_ROOT}/${STAMP}"
+mkdir -p "$STAGE_DEST/repo" "$STAGE_DEST/cluster-state" "$STAGE_DEST/etcd"
+chmod 700 "$STAGE_ROOT"
 
+echo "==> Staging repository backup locally..."
+REPO_PARENT="$(dirname "$REPO")"
+REPO_NAME="$(basename "$REPO")"
+tar --exclude='.git' --exclude='logs' --exclude='*.tmp' \
+    --exclude='recovery/state/*/archive' -C "$REPO_PARENT" \
+    -czf "$STAGE_DEST/repo/k3s-repository.tar.gz" "$REPO_NAME"
+[[ -s "$STAGE_DEST/repo/k3s-repository.tar.gz" ]] ||
+    fail "repository archive was not created"
+
+echo "==> Saving cluster state..."
+kubectl get nodes -o yaml >"$STAGE_DEST/cluster-state/nodes.yaml"
+kubectl get namespaces -o yaml >"$STAGE_DEST/cluster-state/namespaces.yaml"
+kubectl get storageclass -o yaml >"$STAGE_DEST/cluster-state/storageclasses.yaml"
+kubectl get pv -o yaml >"$STAGE_DEST/cluster-state/persistentvolumes.yaml"
+kubectl get pvc -A -o yaml >"$STAGE_DEST/cluster-state/persistentvolumeclaims.yaml"
+kubectl get ingress -A -o yaml >"$STAGE_DEST/cluster-state/ingresses.yaml"
+kubectl get pvc -A \
+    -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,VOLUME:.spec.volumeName,SC:.spec.storageClassName,STATUS:.status.phase' \
+    >"$STAGE_DEST/cluster-state/pvc-volume-map.txt"
+kubectl -n longhorn-system get volumes.longhorn.io -o yaml >"$STAGE_DEST/cluster-state/longhorn-volumes.yaml"
+kubectl -n longhorn-system get backups.longhorn.io -o yaml >"$STAGE_DEST/cluster-state/longhorn-backups.yaml"
+kubectl -n longhorn-system get backupvolumes.longhorn.io -o yaml >"$STAGE_DEST/cluster-state/longhorn-backupvolumes.yaml"
+kubectl -n longhorn-system get backuptarget default -o yaml >"$STAGE_DEST/cluster-state/longhorn-backuptarget.yaml"
+kubectl -n longhorn-system get recurringjobs.longhorn.io -o yaml >"$STAGE_DEST/cluster-state/longhorn-recurringjobs.yaml"
+kubectl -n longhorn-system get systembackups.longhorn.io -o yaml \
+    >"$STAGE_DEST/cluster-state/longhorn-systembackups.yaml" 2>/dev/null || true
+helm list -A -o yaml >"$STAGE_DEST/cluster-state/helm-releases.yaml"
+
+echo "==> Requesting K3s etcd snapshot..."
+ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
+    "sudo -n k3s etcd-snapshot save --name manual-${STAMP}"
 SNAPSHOT="$(
-    ssh \
-        -o BatchMode=yes \
-        -o ConnectTimeout=10 \
-        "$CONTROL_IP" \
-        "sudo find /var/lib/rancher/k3s/server/db/snapshots \
-            -maxdepth 1 \
-            -type f \
-            -name 'manual-${STAMP}*' \
-            -printf '%f\n' |
-         head -1"
+    ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
+        "sudo -n find /var/lib/rancher/k3s/server/db/snapshots -maxdepth 1 -type f -name 'manual-${STAMP}*' -printf '%f\\n'" |
+    head -1
 )"
-
-[[ -n "$SNAPSHOT" ]] ||
-    fail "etcd snapshot was not found on $CONTROL_NODE"
-
+[[ "$SNAPSHOT" =~ ^manual-${STAMP}[-A-Za-z0-9._]*$ ]] ||
+    fail "etcd snapshot was not found or had an unexpected name"
 echo "    snapshot: $SNAPSHOT"
-
-ssh \
-    -o BatchMode=yes \
-    -o ConnectTimeout=10 \
-    "$CONTROL_IP" \
-    "sudo cat '/var/lib/rancher/k3s/server/db/snapshots/${SNAPSHOT}'" |
-    sudo tee "${DEST}/etcd/${SNAPSHOT}" >/dev/null
-
-sudo test -s "${DEST}/etcd/${SNAPSHOT}" ||
-    fail "copied etcd snapshot is empty"
-
-# ---------------------------------------------------------------------------
-# Manifest
-# ---------------------------------------------------------------------------
+ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
+    "sudo -n cat '/var/lib/rancher/k3s/server/db/snapshots/${SNAPSHOT}'" \
+    >"$STAGE_DEST/etcd/$SNAPSHOT"
+[[ -s "$STAGE_DEST/etcd/$SNAPSHOT" ]] || fail "copied etcd snapshot is empty"
 
 echo "==> Creating backup manifest..."
-
 KUBERNETES_VERSION="$(
     kubectl version -o json 2>/dev/null |
-    python3 -c '
-import json
-import sys
-
-data = json.load(sys.stdin)
-print(data.get("serverVersion", {}).get("gitVersion", "unknown"))
-' 2>/dev/null ||
-    echo unknown
+    python3 -c 'import json,sys; print(json.load(sys.stdin).get("serverVersion",{}).get("gitVersion","unknown"))' \
+        2>/dev/null || echo unknown
 )"
+LONGHORN_TARGET="$(kubectl -n longhorn-system get backuptarget default -o jsonpath='{.spec.backupTargetURL}')"
+cat >"$STAGE_DEST/BACKUP-MANIFEST.txt" <<EOF
+created_at=$(date -Iseconds)
+host=${HOST}
+repository=${REPO}
+repository_name=${REPO_NAME}
+kubernetes_server=${KUBERNETES_VERSION}
+longhorn_target=${LONGHORN_TARGET}
+control_node=${CONTROL_NODE}
+control_ip=${CONTROL_IP}
+etcd_snapshot=${SNAPSHOT}
+backup_keep_count=${BACKUP_KEEP_COUNT}
+storage_proxy=${STORAGE_SSH_HOST}
+EOF
 
-LONGHORN_TARGET="$(
-    kubectl -n longhorn-system \
-        get backuptarget default \
-        -o jsonpath='{.spec.backupTargetURL}'
-)"
-
-{
-    echo "created_at=$(date -Iseconds)"
-    echo "host=${HOST}"
-    echo "repository=${REPO}"
-    echo "repository_name=${REPO_NAME}"
-    echo "kubernetes_server=${KUBERNETES_VERSION}"
-    echo "longhorn_target=${LONGHORN_TARGET}"
-    echo "control_node=${CONTROL_NODE}"
-    echo "control_ip=${CONTROL_IP}"
-    echo "etcd_snapshot=${SNAPSHOT}"
-    echo "backup_keep_count=${BACKUP_KEEP_COUNT}"
-} |
-    sudo tee "${DEST}/BACKUP-MANIFEST.txt" >/dev/null
-
-sudo test -s "${DEST}/BACKUP-MANIFEST.txt" ||
-    fail "backup manifest was not created"
-
-# ---------------------------------------------------------------------------
-# Checksums and archive validation
-# ---------------------------------------------------------------------------
-
-echo "==> Creating checksums..."
-
-sudo bash -c '
-    set -e
-    cd "$1"
-
-    find . \
-        -type f \
-        ! -name SHA256SUMS \
-        -exec sha256sum {} \;
-' _ "$DEST" |
-    sudo tee "${DEST}/SHA256SUMS" >/dev/null
-
-sudo test -s "${DEST}/SHA256SUMS" ||
-    fail "SHA256SUMS was not created"
-
-echo "==> Verifying newly-created repository archive..."
-
-sudo tar -tzf "${DEST}/repo/k3s-repository.tar.gz" >/dev/null ||
-    fail "repository archive validation failed"
-
-echo "==> Verifying newly-created checksums..."
-
-sudo bash -c '
-    set -e
-    cd "$1"
+echo "==> Creating and verifying checksums..."
+(
+    cd "$STAGE_DEST"
+    find . -type f ! -name SHA256SUMS -exec sha256sum {} \; >SHA256SUMS
+    tar -tzf repo/k3s-repository.tar.gz >/dev/null
     sha256sum -c SHA256SUMS >/dev/null
-' _ "$DEST" ||
-    fail "new backup checksum verification failed"
+)
 
-# ---------------------------------------------------------------------------
-# Publish bundle
-# ---------------------------------------------------------------------------
+echo "==> Publishing completed bundle to Unraid through ${STORAGE_SSH_HOST}..."
+storage_mount
+storage_sudo mkdir -p "$DEST"
+REMOTE_DEST_CREATED=1
+tar -C "$STAGE_DEST" -cf - . | storage_sudo tar -C "$DEST" -xf -
+storage_root_script "$DEST" <<'REMOTE'
+set -Eeuo pipefail
+destination="$1"
+cd "$destination"
+tar -tzf repo/k3s-repository.tar.gz >/dev/null
+sha256sum -c SHA256SUMS >/dev/null
+test -s BACKUP-MANIFEST.txt
+test -s cluster-state/pvc-volume-map.txt
+find etcd -maxdepth 1 -type f -size +0c -print -quit | grep -q .
+REMOTE
 
-echo "==> Updating latest symlink..."
+storage_sudo ln -sfn "${HOST}/${STAMP}" "${STORAGE_MOUNT}/cluster/latest"
+LATEST_RESOLVED="$(storage_sudo readlink -f "${STORAGE_MOUNT}/cluster/latest")"
+[[ "$LATEST_RESOLVED" == "$DEST" ]] || fail "latest symlink does not resolve to new bundle"
 
-sudo ln -sfn \
-    "${HOST}/${STAMP}" \
-    "${MOUNT}/cluster/latest"
-
-LATEST_RESOLVED="$(
-    readlink -f "${MOUNT}/cluster/latest" 2>/dev/null || true
-)"
-
-[[ "$LATEST_RESOLVED" == "$DEST" ]] ||
-    fail "latest symlink does not resolve to new backup bundle"
-
-# At this point the bundle is complete and published.
 BACKUP_COMPLETE=1
-
-# ---------------------------------------------------------------------------
-# Retention
-# ---------------------------------------------------------------------------
-
 prune_cluster_bundles
 
-# ---------------------------------------------------------------------------
-# Remove temporary etcd snapshot
-# ---------------------------------------------------------------------------
-
 echo "==> Removing copied on-demand etcd snapshot from control node..."
-
-if ! ssh \
-    -o BatchMode=yes \
-    -o ConnectTimeout=10 \
-    "$CONTROL_IP" \
-    "sudo k3s etcd-snapshot delete '${SNAPSHOT}'" >/dev/null 2>&1; then
-
+if ! ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
+    "sudo -n k3s etcd-snapshot delete '${SNAPSHOT}'" >/dev/null 2>&1; then
     echo "WARNING: unable to delete control-node snapshot ${SNAPSHOT}."
     echo "WARNING: backup on Unraid is intact."
 fi
-
-# ---------------------------------------------------------------------------
-# Final result
-# ---------------------------------------------------------------------------
 
 echo
 echo "============================================"

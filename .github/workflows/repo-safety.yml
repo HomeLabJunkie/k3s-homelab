@@ -20,5 +20,6 @@ jobs:
           ./tests/test-maintain-node-validation.sh
           ./tests/test-maintain-cluster.sh
           ./tests/test-workstation-readiness.sh
+          ./tests/test-dr-monitor-bundle-age.sh
       - name: Secret/config scan
         run: ./scripts/scan-secrets.sh
