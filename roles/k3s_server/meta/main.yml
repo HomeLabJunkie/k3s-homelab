@@ -132,7 +132,6 @@ argument_specs:
 
       server_service_args:
         description: Persistent join arguments for secondary server services
-        default: ""
 
       systemd_dir:
         description: Path to systemd services
