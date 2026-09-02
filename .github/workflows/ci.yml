@@ -15,7 +15,6 @@ on:
       - '**/*.md'
       - '**/.editorconfig'
       - '**/ansible.example.cfg'
-      - '**/deploy.sh'
       - '**/LICENSE'
       - '**/reboot.sh'
       - '**/reset.sh'
