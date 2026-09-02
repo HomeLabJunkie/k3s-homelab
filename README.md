@@ -17,7 +17,7 @@ The production cluster is currently operated as a six-node K3s cluster:
 - 3 K3s server/control-plane/etcd nodes
 - 3 K3s agent/worker nodes
 - Ubuntu 26.04 LTS
-- K3s `v1.35.6+k3s1`
+- K3s `v1.35.8+k3s1`
 
 Core platform:
 

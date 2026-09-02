@@ -7,6 +7,7 @@
     owner: root
     group: root
     mode: "0755"
+  register: k3s_binary_x64_download
   when: ansible_facts.architecture == "x86_64"
 
 - name: Download k3s binary arm64
@@ -17,6 +18,7 @@
     owner: root
     group: root
     mode: "0755"
+  register: k3s_binary_arm64_download
   when:
     - ( ansible_facts.architecture is search("arm") and ansible_facts.userspace_bits == "64" )
       or ansible_facts.architecture is search("aarch64")
@@ -29,6 +31,29 @@
     owner: root
     group: root
     mode: "0755"
+  register: k3s_binary_armhf_download
   when:
     - ansible_facts.architecture is search("arm")
     - ansible_facts.userspace_bits == "32"
+
+- name: Record whether the K3s binary changed
+  ansible.builtin.set_fact:
+    k3s_binary_changed: >-
+      {{
+        (k3s_binary_x64_download.changed | default(false)) or
+        (k3s_binary_arm64_download.changed | default(false)) or
+        (k3s_binary_armhf_download.changed | default(false))
+      }}
+
+- name: Read installed K3s binary version
+  ansible.builtin.command: k3s --version
+  register: installed_k3s_binary_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify installed K3s binary version
+  ansible.builtin.assert:
+    that:
+      - k3s_version in installed_k3s_binary_version.stdout
+    fail_msg: "Installed K3s binary does not match target {{ k3s_version }}."
+  when: not ansible_check_mode

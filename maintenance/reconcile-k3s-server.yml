@@ -52,6 +52,10 @@
           - "mode=existing-etcd-reconciliation"
 
   tasks:
+    - name: Install target K3s binary
+      ansible.builtin.include_role:
+        name: download
+
     - name: Run service-only K3s reconciliation
       ansible.builtin.include_role:
         name: k3s_server

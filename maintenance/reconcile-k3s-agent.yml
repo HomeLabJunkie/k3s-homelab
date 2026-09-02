@@ -51,6 +51,10 @@
           - "mode=existing-agent-reconciliation"
 
   tasks:
+    - name: Install target K3s binary
+      ansible.builtin.include_role:
+        name: download
+
     - name: Reconcile K3s agent service
       ansible.builtin.include_role:
         name: k3s_agent
