@@ -130,6 +130,10 @@ argument_specs:
       server_init_args:
         description: Arguments for server nodes
 
+      server_service_args:
+        description: Persistent join arguments for secondary server services
+        default: ""
+
       systemd_dir:
         description: Path to systemd services
         default: /etc/systemd/system

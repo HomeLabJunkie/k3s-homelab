@@ -37,4 +37,15 @@ server_init_args: >-
   {% endif %}
   {{ extra_server_args }}
 
+# Keep secondary servers pointed at the first control-plane server even after
+# initial bootstrap. This is required when a peer's etcd database is removed
+# during snapshot recovery: without persistent join arguments, K3s initializes
+# a new single-node cluster instead of rejoining the restored cluster.
+server_service_args: >-
+  {% if groups[group_name_master | default('master')] | length > 1 and
+        inventory_hostname != groups[group_name_master | default('master')][0] %}
+    --server https://{{ hostvars[groups[group_name_master | default('master')][0]].k3s_node_ip | split(",") | first | ansible.utils.ipwrap }}:6443
+    --token-file /var/lib/rancher/k3s/server/token
+  {% endif %}
+
 systemd_dir: /etc/systemd/system

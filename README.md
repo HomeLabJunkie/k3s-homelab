@@ -118,6 +118,9 @@ Existing-cluster reconciliation:
 - validates every control-plane server as an existing embedded-etcd member
 - reconciles control-plane servers one at a time
 - never runs `k3s-init` or `--cluster-init` against an existing etcd member
+- keeps secondary server services configured with a primary-server join URL
+  and the local K3s server token file, allowing them to rejoin safely after an
+  etcd snapshot restore
 - uses the service-only `roles/k3s_server/tasks/reconcile.yml` path
 - restarts K3s only when effective service configuration changes
 - waits for local `/readyz` and Kubernetes Node `Ready` before continuing
