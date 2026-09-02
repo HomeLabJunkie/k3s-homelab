@@ -21,7 +21,7 @@ KUBECONFIG_TARGET="${KUBECONFIG_TARGET:-$HOME/.kube/config}"
 CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.21.1}"
 TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.4.0}"
 RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.14.3}"
-LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
+LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-109.4.0+up1.12.1}"
 
 RANCHER_HOSTNAME="${RANCHER_HOSTNAME:-rancher.example.invalid}"
 RANCHER_ADMIN_USER="${RANCHER_ADMIN_USER:-admin}"
@@ -363,7 +363,7 @@ echo "==> Configuring Helm repositories..."
 helm repo add jetstack https://charts.jetstack.io --force-update
 helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo add rancher-stable https://releases.rancher.com/server-charts/stable --force-update
-helm repo add longhorn https://charts.longhorn.io --force-update
+helm repo add rancher-charts https://raw.githubusercontent.com/rancher/charts/release-v2.14 --force-update
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 helm repo add portainer https://portainer.github.io/k8s/ --force-update
 helm repo add grafana-community https://grafana-community.github.io/helm-charts --force-update
@@ -430,8 +430,16 @@ while read -r NODE; do
   kubectl label node "$NODE" node.longhorn.io/create-default-disk=config --overwrite
 done < <(kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
 
+echo "==> Installing Longhorn CRDs ${LONGHORN_CHART_VERSION}..."
+helm upgrade --install longhorn-crd rancher-charts/longhorn-crd \
+  --version "$LONGHORN_CHART_VERSION" \
+  --namespace longhorn-system \
+  --create-namespace \
+  --wait \
+  --timeout=600s
+
 echo "==> Installing Longhorn ${LONGHORN_CHART_VERSION}..."
-helm upgrade --install longhorn longhorn/longhorn \
+helm upgrade --install longhorn rancher-charts/longhorn \
   --version "$LONGHORN_CHART_VERSION" \
   --namespace longhorn-system \
   --create-namespace \
