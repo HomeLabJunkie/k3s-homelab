@@ -294,7 +294,7 @@ ansible-playbook   -i inventory/k3s-ansible/hosts.ini   /dev/stdin <<'ANSIBLE_PR
   vars:
     expected_server_service_args: >-
       {% if groups['master'] | length > 1 and inventory_hostname != groups['master'][0] %}
-        --server https://{{ hostvars[groups['master'][0]].k3s_node_ip | split(',') | first | ansible.utils.ipwrap }}:6443
+        --server https://{{ hostvars[groups['master'][0]].ansible_host | default(groups['master'][0]) | ansible.utils.ipwrap }}:6443
         --token-file /var/lib/rancher/k3s/server/token
       {% endif %}
   tasks:
