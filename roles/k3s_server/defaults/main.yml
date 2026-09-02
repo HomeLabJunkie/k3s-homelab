@@ -44,7 +44,7 @@ server_init_args: >-
 server_service_args: >-
   {% if groups[group_name_master | default('master')] | length > 1 and
         inventory_hostname != groups[group_name_master | default('master')][0] %}
-    --server https://{{ hostvars[groups[group_name_master | default('master')][0]].k3s_node_ip | split(",") | first | ansible.utils.ipwrap }}:6443
+    --server https://{{ hostvars[groups[group_name_master | default('master')][0]].ansible_host | default(groups[group_name_master | default('master')][0]) | ansible.utils.ipwrap }}:6443
     --token-file /var/lib/rancher/k3s/server/token
   {% endif %}
 
