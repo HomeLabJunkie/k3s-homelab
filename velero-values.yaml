@@ -1,3 +1,4 @@
+---
 image:
   repository: docker.io/velero/velero
   tag: v1.18.2
@@ -114,4 +115,3 @@ metrics:
         for: 30m
         labels:
           severity: critical
-
