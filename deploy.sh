@@ -291,6 +291,12 @@ ansible-playbook   -i inventory/k3s-ansible/hosts.ini   /dev/stdin <<'ANSIBLE_PR
 - name: Validate rendered K3s control-plane configuration
   hosts: master
   gather_facts: true
+  vars:
+    expected_server_service_args: >-
+      {% if groups['master'] | length > 1 and inventory_hostname != groups['master'][0] %}
+        --server https://{{ hostvars[groups['master'][0]].k3s_node_ip | split(',') | first | ansible.utils.ipwrap }}:6443
+        --token-file /var/lib/rancher/k3s/server/token
+      {% endif %}
   tasks:
     - name: Validate critical rendered values
       ansible.builtin.assert:
@@ -302,6 +308,10 @@ ansible-playbook   -i inventory/k3s-ansible/hosts.ini   /dev/stdin <<'ANSIBLE_PR
           - ('--node-ip=' + k3s_node_ip) in extra_server_args
           - "'--disable-agent' not in extra_server_args"
           - "'--disable-kube-proxy' not in extra_server_args"
+          - >-
+            inventory_hostname == groups['master'][0]
+            or ('--server https://' in expected_server_service_args and
+                '--token-file /var/lib/rancher/k3s/server/token' in expected_server_service_args)
         fail_msg: >-
           Rendered K3s configuration is unsafe. Deployment will not proceed.
 
@@ -312,6 +322,7 @@ ansible-playbook   -i inventory/k3s-ansible/hosts.ini   /dev/stdin <<'ANSIBLE_PR
           - "node_ip={{ k3s_node_ip }}"
           - "api_vip={{ apiserver_endpoint }}"
           - "server_args={{ extra_server_args }}"
+          - "service_join_args={{ expected_server_service_args }}"
 ANSIBLE_PREFLIGHT
 
 if [[ "$PREFLIGHT_ONLY" == true ]]; then

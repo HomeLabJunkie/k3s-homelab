@@ -9,6 +9,10 @@
       - k3s_token | trim | length > 0
       - k3s_node_ip is defined
       - k3s_node_ip | trim | length > 0
+      - >-
+        inventory_hostname == groups[group_name_master | default('master')][0]
+        or ('--server https://' in server_service_args and
+            '--token-file /var/lib/rancher/k3s/server/token' in server_service_args)
     fail_msg: >-
       Refusing K3s reconciliation because critical cluster configuration
       is missing or invalid.
