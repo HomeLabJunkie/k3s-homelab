@@ -131,6 +131,7 @@
     owner: root
     group: root
     mode: "0644"
+    validate: /usr/bin/systemd-analyze verify %s
 
 - name: Enable and check K3s service
   ansible.builtin.systemd:
