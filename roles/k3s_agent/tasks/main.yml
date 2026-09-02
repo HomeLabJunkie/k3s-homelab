@@ -27,6 +27,7 @@
     owner: root
     group: root
     mode: "0755"
+    validate: /usr/bin/systemd-analyze verify %s
   register: k3s_agent_service
 
 - name: Restart k3s agent when configuration changed # noqa no-handler
@@ -35,7 +36,9 @@
     daemon_reload: true
     state: restarted
     enabled: true
-  when: k3s_agent_service.changed
+  when: >-
+    k3s_agent_service.changed or
+    (k3s_binary_changed | default(false))
 
 - name: Ensure k3s agent is enabled and running
   ansible.builtin.systemd:
@@ -43,7 +46,9 @@
     daemon_reload: true
     state: started
     enabled: true
-  when: not k3s_agent_service.changed
+  when:
+    - not k3s_agent_service.changed
+    - not (k3s_binary_changed | default(false))
 
 - name: Wait for k3s agent node to become Ready
   ansible.builtin.command:

@@ -69,7 +69,8 @@
     state: restarted
     enabled: true
   when:
-    - >
+    - >-
+      (k3s_binary_changed | default(false)) or
       reconcile_service.changed or
       (reconcile_config_archive is defined and
        reconcile_config_archive.changed | default(false))
@@ -81,6 +82,7 @@
     state: started
     enabled: true
   when:
+    - not (k3s_binary_changed | default(false))
     - not reconcile_service.changed
     - not (
         reconcile_config_archive is defined and
