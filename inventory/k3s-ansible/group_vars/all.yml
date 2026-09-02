@@ -19,7 +19,7 @@ calico_tag: v3.31.4 # calico version tag
 # ensure v4.19.57, v5.1.16, v5.2.0 or more recent kernel
 cilium_iface: "eno1"
 cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
-cilium_tag: v1.19.1 # cilium version tag
+cilium_tag: v1.20.1 # cilium version tag
 cilium_hubble: true # enable hubble observability relay and ui
 
 # if using calico or cilium, you may specify the cluster pod cidr pool
