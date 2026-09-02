@@ -7,11 +7,14 @@ STATUS_FILE="$STATE_DIR/last-status"
 DETAIL_FILE="$STATE_DIR/last-details.txt"
 NOTIFY="${NOTIFY:-$ROOT/monitoring/dr-notify.sh}"
 BACKUP_VERIFY="${BACKUP_VERIFY:-$ROOT/backup/verify-backup.sh}"
+VELERO_VERIFY="${VELERO_VERIFY:-$ROOT/backup/verify-velero.sh}"
 
 WARN_BACKUP_AGE_HOURS="${WARN_BACKUP_AGE_HOURS:-24}"
 CRIT_BACKUP_AGE_HOURS="${CRIT_BACKUP_AGE_HOURS:-30}"
 WARN_APP_BACKUP_AGE_HOURS="${WARN_APP_BACKUP_AGE_HOURS:-24}"
 CRIT_APP_BACKUP_AGE_HOURS="${CRIT_APP_BACKUP_AGE_HOURS:-30}"
+WARN_VELERO_BACKUP_AGE_HOURS="${WARN_VELERO_BACKUP_AGE_HOURS:-24}"
+CRIT_VELERO_BACKUP_AGE_HOURS="${CRIT_VELERO_BACKUP_AGE_HOURS:-30}"
 
 mkdir -p "$STATE_DIR"
 severity=0
@@ -37,6 +40,22 @@ for n in d.get("items",[]):
 
 lh="$(kubectl -n longhorn-system get backuptarget default -o jsonpath='{.status.available}' 2>/dev/null || true)"
 [[ "$lh" == "true" ]] || crit "Longhorn backup target is unavailable"
+
+velero_output=""
+if velero_output="$(MAX_VELERO_BACKUP_AGE_HOURS="$CRIT_VELERO_BACKUP_AGE_HOURS" "$VELERO_VERIFY" 2>&1)"; then
+  velero_age="$(sed -n 's/^==> Velero backup age: \([0-9][0-9]*\)h$/\1/p' <<<"$velero_output" | head -1)"
+  if [[ "$velero_age" =~ ^[0-9]+$ ]]; then
+    if (( velero_age >= CRIT_VELERO_BACKUP_AGE_HOURS )); then
+      crit "Velero RustFS backup is ${velero_age}h old"
+    elif (( velero_age >= WARN_VELERO_BACKUP_AGE_HOURS )); then
+      warn "Velero RustFS backup is ${velero_age}h old"
+    fi
+  else
+    crit "Velero RustFS backup age could not be determined"
+  fi
+else
+  crit "Velero RustFS backup verification failed"
+fi
 
 backup_output=""
 if backup_output="$("$BACKUP_VERIFY" 2>&1)"; then
