@@ -59,6 +59,7 @@
     owner: root
     group: root
     mode: "0644"
+    validate: /usr/bin/systemd-analyze verify %s
   register: reconcile_service
 
 - name: Restart K3s when effective configuration changed
