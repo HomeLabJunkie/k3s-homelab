@@ -176,6 +176,7 @@ fi
 echo "==> Validating cluster environment..."
 for var in \
   BASE_DOMAIN \
+  ADMIN_EMAIL \
   KUBE_VIP \
   K3S_NODE_0 \
   K3S_NODE_1 \
