@@ -1,4 +1,4 @@
-ansible-core>=2.20.8,<2.21
+ansible-core>=2.21.3,<2.22
 jmespath>=1.0.1
 jsonpatch>=1.33
 kubernetes>=29.0.0
