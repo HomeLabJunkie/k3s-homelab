@@ -7,12 +7,14 @@ ROOT_DIR="${ROOT_DIR:-$SCRIPT_DIR}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
 APPS_FILE="${APPS_FILE:-$ROOT_DIR/recovery/apps.conf}"
 BACKUP_VERIFY="${BACKUP_VERIFY:-$ROOT_DIR/backup/verify-backup.sh}"
+VELERO_VERIFY="${VELERO_VERIFY:-$ROOT_DIR/backup/verify-velero.sh}"
 
 DR_HOST="${DR_HOST:-k3s-dr}"
 DR_PREFLIGHT="${DR_PREFLIGHT:-/usr/local/libexec/k3s-dr/dr-preflight.sh}"
 
 MAX_BACKUP_AGE_HOURS="${MAX_BACKUP_AGE_HOURS:-30}"
 MAX_APP_BACKUP_AGE_HOURS="${MAX_APP_BACKUP_AGE_HOURS:-30}"
+MAX_VELERO_BACKUP_AGE_HOURS="${MAX_VELERO_BACKUP_AGE_HOURS:-30}"
 CAPACITY_HEADROOM_PERCENT="${CAPACITY_HEADROOM_PERCENT:-20}"
 
 PASS=0
@@ -43,6 +45,7 @@ Environment overrides:
   DR_PREFLIGHT              Protected DR preflight helper.
   MAX_BACKUP_AGE_HOURS      Max cluster recovery-bundle age. Default: 30
   MAX_APP_BACKUP_AGE_HOURS  Max protected Longhorn backup age. Default: 30
+  MAX_VELERO_BACKUP_AGE_HOURS Max scheduled Velero backup age. Default: 30
   CAPACITY_HEADROOM_PERCENT Additional restore capacity required. Default: 20
 
 Exit codes:
@@ -351,7 +354,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "6. DR HOST CONNECTIVITY"
+section "6. VELERO RUSTFS BACKUP"
+
+velero_output=""
+velero_rc=1
+if [[ -x "$VELERO_VERIFY" ]]; then
+    set +e
+    velero_output="$(MAX_VELERO_BACKUP_AGE_HOURS="$MAX_VELERO_BACKUP_AGE_HOURS" "$VELERO_VERIFY" 2>&1)"
+    velero_rc=$?
+    set -e
+    printf '%s\n' "$velero_output"
+    if (( velero_rc == 0 )); then
+        pass "Velero RustFS backup and node agents pass verification"
+    else
+        fail "Velero RustFS backup verification failed"
+    fi
+else
+    fail "Velero verifier is missing or not executable: $VELERO_VERIFY"
+fi
+
+# ---------------------------------------------------------------------------
+section "7. DR HOST CONNECTIVITY"
 
 if ssh -o BatchMode=yes -o ConnectTimeout=8 "$DR_HOST" 'true' >/dev/null 2>&1; then
     pass "Passwordless SSH to DR host works"
@@ -362,7 +385,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "7. DR PREFLIGHT"
+section "8. DR PREFLIGHT"
 
 dr_output=""
 dr_rc=1
@@ -403,7 +426,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "8. RESTORE CAPACITY HEADROOM"
+section "9. RESTORE CAPACITY HEADROOM"
 
 if [[ "$dr_available_gib" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     capacity_ok="$(

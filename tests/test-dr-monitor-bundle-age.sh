@@ -37,6 +37,12 @@ echo '==> Backup age: 24h (max 30h)'
 echo 'BACKUP VERIFICATION PASSED'
 EOF
 
+cat >"$TEST_ROOT/verify-velero" <<'EOF'
+#!/usr/bin/env bash
+echo '==> Velero backup age: 0h'
+echo 'VELERO BACKUP VERIFICATION PASSED'
+EOF
+
 cat >"$TEST_ROOT/verify-critical" <<'EOF'
 #!/usr/bin/env bash
 echo '==> Backup age: 31h (max 30h)'
@@ -45,7 +51,7 @@ exit 1
 EOF
 
 chmod +x "$TEST_ROOT/bin/kubectl" "$TEST_ROOT/bin/systemctl" \
-  "$TEST_ROOT/verify-warning" "$TEST_ROOT/verify-critical"
+  "$TEST_ROOT/verify-warning" "$TEST_ROOT/verify-critical" "$TEST_ROOT/verify-velero"
 
 run_monitor() {
   local verifier="$1" state="$2" output="$3"
@@ -53,6 +59,7 @@ run_monitor() {
     APPS_FILE="$TEST_ROOT/apps.conf" \
     STATE_DIR="$state" \
     BACKUP_VERIFY="$verifier" \
+    VELERO_VERIFY="$TEST_ROOT/verify-velero" \
     NOTIFY=/bin/true \
     "$REPO_ROOT/monitoring/dr-monitor.sh" >"$output" 2>&1
 }

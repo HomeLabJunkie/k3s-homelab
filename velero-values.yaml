@@ -1,0 +1,117 @@
+---
+image:
+  repository: docker.io/velero/velero
+  tag: v1.18.2
+  pullPolicy: IfNotPresent
+
+initContainers:
+  - name: velero-plugin-for-aws
+    image: docker.io/velero/velero-plugin-for-aws:v1.14.2
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+configuration:
+  backupStorageLocation:
+    - name: rustfs
+      provider: aws
+      bucket: k3s-velero
+      default: true
+      accessMode: ReadWrite
+      credential:
+        name: velero-rustfs-credentials
+        key: cloud
+      config:
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: https://192.168.1.250:30292
+  volumeSnapshotLocation: []
+  features: EnableCSI
+  defaultBackupStorageLocation: rustfs
+  defaultSnapshotMoveData: true
+  defaultBackupTTL: 336h
+  defaultItemOperationTimeout: 6h
+  uploaderType: kopia
+  repositoryMaintenanceJob:
+    repositoryConfigData:
+      global:
+        keepLatestMaintenanceJobs: 3
+
+credentials:
+  useSecret: true
+  existingSecret: velero-rustfs-credentials
+
+backupsEnabled: true
+snapshotsEnabled: false
+deployNodeAgent: true
+
+nodeAgent:
+  disableHostPath: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  extraArgs:
+    - --node-agent-configmap=velero-velero-node-agent-config
+
+configMaps:
+  velero-node-agent-config:
+    data:
+      config.json: |
+        {
+          "loadConcurrency": {
+            "globalConfig": 1
+          },
+          "backupPVC": {
+            "longhorn": {
+              "storageClass": "longhorn-velero-temp"
+            }
+          },
+          "podResources": {
+            "cpuRequest": "100m",
+            "memoryRequest": "256Mi"
+          }
+        }
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    autodetect: true
+    enabled: true
+    additionalLabels:
+      release: monitoring
+  nodeAgentPodMonitor:
+    autodetect: true
+    enabled: true
+    additionalLabels:
+      release: monitoring
+  prometheusRule:
+    autodetect: true
+    enabled: true
+    additionalLabels:
+      release: monitoring
+    spec:
+      - alert: VeleroBackupFailed
+        annotations:
+          summary: Velero backup failed
+          description: "Velero schedule {{ $labels.schedule }} has a failed backup."
+        expr: 'velero_backup_last_status{schedule!=""} != 1'
+        for: 15m
+        labels:
+          severity: critical
+      - alert: VeleroNoFreshBackup
+        annotations:
+          summary: Velero has no fresh scheduled backup
+          description: "Velero schedule {{ $labels.schedule }} has no successful backup newer than 30 hours."
+        expr: '(time() - velero_backup_last_successful_timestamp{schedule!=""}) > 108000'
+        for: 30m
+        labels:
+          severity: critical

@@ -1,0 +1,19 @@
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: protected-apps-daily
+  namespace: velero
+spec:
+  schedule: "CRON_TZ=America/Chicago 17 1 * * *"
+  skipImmediately: true
+  template:
+    includedNamespaces:
+      - trilium
+      - vaultwarden
+      - portainer
+      - monitoring
+      - logging
+    snapshotMoveData: true
+    storageLocation: rustfs
+    ttl: 336h
+
