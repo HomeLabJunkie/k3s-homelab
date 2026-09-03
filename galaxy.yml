@@ -16,7 +16,8 @@ readme: README.md
 # A list of the collection's content authors. Can be just the name or in the format 'Full Name <email> (url)
 # @nicks:irc/im.site#channel'
 authors:
-- your name <example@domain.com>
+- HomeLabJunkie (https://github.com/HomeLabJunkie/k3s-homelab)
+- techno-tim (upstream https://github.com/techno-tim/k3s-ansible)
 
 
 ### OPTIONAL but strongly recommended
@@ -62,7 +63,7 @@ repository: https://github.com/techno-tim/k3s-ansible
 documentation: https://github.com/techno-tim/k3s-ansible
 
 # The URL to the homepage of the collection/project
-homepage: https://www.youtube.com/watch?v=CbkEWcUZ7zM
+homepage: https://github.com/HomeLabJunkie/k3s-homelab
 
 # The URL to the collection issue tracker
 issues: https://github.com/techno-tim/k3s-ansible/issues

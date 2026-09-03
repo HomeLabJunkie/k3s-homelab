@@ -144,7 +144,7 @@ smtp:
   authMechanism: Plain
   debug: false
   existingSecret: vaultwarden-integrations
-  from: jeffriffle@gmail.com
+  from: ${ADMIN_EMAIL}
   fromName: Vaultwarden
   host: smtp.gmail.com
   password:

@@ -11,11 +11,12 @@ ENV_FILE="${ENV_FILE:-$ROOT/config/cluster.env}"
 }
 
 set -a
+# shellcheck source=/dev/null
 source "$ENV_FILE"
 set +a
 
 required=(
-  BASE_DOMAIN KUBE_VIP
+  BASE_DOMAIN ADMIN_EMAIL KUBE_VIP
   K3S_NODE_0 K3S_NODE_1 K3S_NODE_2
   K3S_NODE_3 K3S_NODE_4 K3S_NODE_5
   METALLB_IP_RANGE CLOUDFLARE_ORIGIN_IP
@@ -38,7 +39,7 @@ envsubst < "$ROOT/templates/cloudflared/cloudflared.yaml.template" > "$ROOT/clou
 TEMPLATE_ROOT="$ROOT/templates/generated"
 if [[ -d "$TEMPLATE_ROOT" ]]; then
   while IFS= read -r -d '' src; do
-    rel="${src#$TEMPLATE_ROOT/}"
+    rel="${src#"$TEMPLATE_ROOT"/}"
     dest="${rel%.template}"
     mkdir -p "$ROOT/$(dirname "$dest")"
     envsubst < "$src" > "$ROOT/$dest"

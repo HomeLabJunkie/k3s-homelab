@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
+# Validation reporter: checks tally PASS/WARN/FAIL and must all run, so -e is
+# intentionally omitted (matches the other recovery/dr-validate-*.sh scripts).
 set -u
+set -o pipefail
 
 KUBECTL="${KUBECTL:-sudo k3s kubectl}"
 DR_NODE="${DR_NODE:-k3s-dr-test}"

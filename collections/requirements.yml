@@ -1,5 +1,5 @@
 ---
-# Known-good collection set validated with ansible-core 2.20.1 / Ansible 13.1.0.
+# Known-good collection set validated with ansible-core 2.21.3.
 # Pin exact versions so ~/.ansible/collections does not drift between hosts/runs.
 collections:
   - name: ansible.utils

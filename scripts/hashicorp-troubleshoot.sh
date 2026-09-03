@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Diagnostic only: individual kubectl/vault probes are expected to fail
+# (e.g. sealed Vault, missing ingress), so -e is intentionally omitted.
+set -uo pipefail
 
 echo "=== Vault Troubleshooting Script ==="
 echo ""
