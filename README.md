@@ -192,16 +192,18 @@ toolchain against `config/toolchain.env`.
 Supported ranges:
 
 ```text
-ansible-core >= 2.20.1 and < 2.21.0
+ansible-core >= 2.21.3 and < 2.22.0
 Python       >= 3.11.0 and < 3.15.0
 ```
 
 This prevents a Homebrew or operating-system upgrade from silently moving
 the repository onto an unvalidated Ansible major/minor series while still
-allowing compatible 2.20.x patch updates.
+allowing compatible 2.21.x patch updates.
 
 `requirements.txt` remains the exact pip lock. `requirements.in` constrains
-ansible-core to the supported 2.20.x series.
+ansible-core to the supported 2.21.x series. The `ANSIBLE_CORE_*` bounds in
+`config/toolchain.env` are kept in lockstep with that constraint by
+`scripts/check-requirements-toolchain-sync.sh`, which runs in CI.
 
 ### Automatic Ansible dependency bootstrap
 
@@ -768,26 +770,42 @@ See [`recovery/DR-RUNBOOK.md`](recovery/DR-RUNBOOK.md) for the complete procedur
 ├── README.md
 ├── deploy.sh                       # End-to-end production deployment
 ├── dr-status.sh                    # Read-only DR readiness dashboard
+├── repo-doctor.sh                  # Aggregate repo + DR readiness report
+├── workstation-readiness.sh        # Operator workstation preflight
+├── maintain-cluster.sh             # Safe rolling cluster maintenance wrapper
+├── maintain-node.sh                # Single-node maintenance (toolchain-gated)
 ├── site.yml                        # Explicit initial/bootstrap provisioning
-├── maintenance/
-│   ├── reconcile-existing-cluster.yml # Safe normal cluster reconciliation
-│   └── reconcile-k3s-server.yml       # Safe single-server reconciliation
+├── reset.sh / reboot.sh            # ansible-playbook wrappers
 ├── ansible.cfg
+├── requirements.in / requirements.txt  # pip-compile source + lock
+├── collections/requirements.yml    # Pinned Ansible collections
+├── maintenance/
+│   ├── reconcile-existing-cluster.yml   # Safe normal cluster reconciliation
+│   ├── reconcile-k3s-server.yml         # Safe single-server reconciliation
+│   └── reconcile-k3s-agent.yml          # Safe single-agent reconciliation
 ├── inventory/
-│   ├── k3s-ansible/
-│   │   ├── group_vars/
-│   │   └── hosts.ini.template
+│   ├── k3s-ansible/                # group_vars/ + hosts.ini.template
 │   └── sample/
 ├── roles/                          # K3s / host Ansible roles
+├── molecule/                       # Scenario tests (default, cilium, calico, …)
 ├── config/
 │   ├── cluster.env.example         # Non-secret environment template
-│   └── email.env.example
-├── apps/
-│   ├── longhorn/
-│   └── trilium/
-├── backup/
-│   ├── backup.sh
-│   └── verify-backup.sh
+│   ├── email.env.example
+│   └── toolchain.env               # Supported ansible-core / Python ranges
+├── scripts/
+│   ├── check-ansible-toolchain.sh          # Gates deploy.sh / maintain-node.sh
+│   ├── check-requirements-toolchain-sync.sh # CI: requirements.in ↔ toolchain.env
+│   ├── ensure-ansible-collections.sh
+│   ├── render-config.sh / prepare-env.sh / run-deploy.sh
+│   ├── scan-secrets.sh                     # CI secret/config scan
+│   └── install-velero-backup.sh
+├── apps/                           # longhorn/ trilium/ (Helm values / manifests)
+├── templates/                      # envsubst sources rendered to rendered/
+├── manifests/backup/              # Longhorn snapshot class, recurring + Velero schedules
+├── backup/                         # backup.sh, remote-storage.sh, verify-*.sh
+├── monitoring/                     # dr-monitor.sh, dr-notify.sh
+├── systemd/                        # k3s-dr-{backup,monitor,verify} units + timers
+├── tests/                          # Shell safety tests run by repo-safety.yml
 ├── recovery/
 │   ├── DR-RUNBOOK.md
 │   ├── apps.conf
@@ -804,10 +822,16 @@ See [`recovery/DR-RUNBOOK.md`](recovery/DR-RUNBOOK.md) for the complete procedur
 │   ├── dr-cleanup.sh
 │   └── dr-rehearsal.sh
 ├── .sops.yaml
-└── .github/
+└── .github/                        # workflows/ + dependabot.yml
 ```
 
-Additional manifests and Helm values at the repository root define Traefik, Longhorn, monitoring, logging, Portainer, Trilium, Vaultwarden, Cloudflare, certificates, dashboards, and ingress behavior used by `deploy.sh`.
+Additional manifests and Helm values at the repository root (`traefik-*.yaml`,
+`longhorn-*.yaml`, `monitoring-*.yaml`, `loki-values.yaml`, `alloy-values.yaml`,
+`portainer-*.yaml`, `trilium-*.yaml`, `vaultwarden-*.yaml`, `cloudflared*.yaml`,
+`clusterissuer-letsencrypt.yaml`, `website.yaml`, dashboards, and ingress files)
+define Traefik, Longhorn, monitoring, logging, Portainer, Trilium, Vaultwarden,
+Cloudflare, certificates, and ingress behavior used by `deploy.sh`. Many are
+environment-specific and generated from `templates/`, so they are git-ignored.
 
 ## Configuration and Secrets
 

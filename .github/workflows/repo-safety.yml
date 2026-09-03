@@ -15,6 +15,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Shell syntax
         run: find . -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+      - name: Toolchain policy sync
+        run: ./scripts/check-requirements-toolchain-sync.sh
       - name: Maintenance safety tests
         run: |
           ./tests/test-maintain-node-validation.sh
