@@ -2,8 +2,9 @@
 
 Velero provides a second, independent application-data backup path. It uses
 Longhorn CSI snapshots, Velero's built-in Kopia data mover, and the dedicated
-Garage bucket `k3s-velero`. The existing Longhorn NFS backup target remains the
-primary Longhorn backup path and is not changed by this setup.
+Garage bucket `k3s-velero`. Longhorn application-volume backups use the
+separate WD NAS SMB/CIFS target; cluster recovery bundles use that NAS through
+its NFSv3 export.
 
 ## Pinned components
 
@@ -61,9 +62,9 @@ network pressure. Temporary full-copy snapshot volumes use the dedicated
 their normal replica count. The first seed backup can take substantially longer
 than later Kopia backups.
 
-The existing Longhorn NFS jobs remain unchanged:
+The existing Longhorn jobs remain unchanged:
 
-- `backup-nightly` at `37 2 * * *`, retaining 14 backups
+- `backup-nightly` at `37 2 * * *`, retaining 14 backups on the CIFS target
 - `system-backup-nightly` at `20 4 * * *`, retaining 7 backups
 
 ## Verify health and freshness
