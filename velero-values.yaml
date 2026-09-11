@@ -6,7 +6,9 @@ image:
 
 initContainers:
   - name: velero-plugin-for-aws
-    image: docker.io/velero/velero-plugin-for-aws:v1.14.2
+    # v1.14.2 corrupts metadata on non-AWS S3 backends via SDK checksum
+    # framing (velero-io/velero#9951). Keep v1.14.1 until v1.14.3 is stable.
+    image: docker.io/velero/velero-plugin-for-aws:v1.14.1
     imagePullPolicy: IfNotPresent
     volumeMounts:
       - mountPath: /target
@@ -14,21 +16,22 @@ initContainers:
 
 configuration:
   backupStorageLocation:
-    - name: rustfs
+    - name: garage
       provider: aws
       bucket: k3s-velero
       default: true
       accessMode: ReadWrite
       credential:
-        name: velero-rustfs-credentials
+        name: velero-garage-credentials
         key: cloud
       config:
-        region: us-east-1
+        checksumAlgorithm: ""
+        region: garage
         s3ForcePathStyle: "true"
-        s3Url: https://192.168.1.250:30292
+        s3Url: http://192.168.1.9:3900
   volumeSnapshotLocation: []
   features: EnableCSI
-  defaultBackupStorageLocation: rustfs
+  defaultBackupStorageLocation: garage
   defaultSnapshotMoveData: true
   defaultBackupTTL: 336h
   defaultItemOperationTimeout: 6h
@@ -40,7 +43,7 @@ configuration:
 
 credentials:
   useSecret: true
-  existingSecret: velero-rustfs-credentials
+  existingSecret: velero-garage-credentials
 
 backupsEnabled: true
 snapshotsEnabled: false

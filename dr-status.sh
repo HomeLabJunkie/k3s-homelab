@@ -354,7 +354,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "6. VELERO RUSTFS BACKUP"
+section "6. VELERO S3 BACKUP"
 
 velero_output=""
 velero_rc=1
@@ -365,9 +365,9 @@ if [[ -x "$VELERO_VERIFY" ]]; then
     set -e
     printf '%s\n' "$velero_output"
     if (( velero_rc == 0 )); then
-        pass "Velero RustFS backup and node agents pass verification"
+        pass "Velero S3 backup and node agents pass verification"
     else
-        fail "Velero RustFS backup verification failed"
+        fail "Velero S3 backup verification failed"
     fi
 else
     fail "Velero verifier is missing or not executable: $VELERO_VERIFY"

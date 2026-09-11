@@ -1,8 +1,8 @@
-# Velero RustFS Backup Procedures
+# Velero Garage Backup Procedures
 
 Velero provides a second, independent application-data backup path. It uses
 Longhorn CSI snapshots, Velero's built-in Kopia data mover, and the dedicated
-RustFS bucket `k3s-velero`. The existing Longhorn NFS backup target remains the
+Garage bucket `k3s-velero`. The existing Longhorn NFS backup target remains the
 primary Longhorn backup path and is not changed by this setup.
 
 ## Pinned components
@@ -12,20 +12,26 @@ primary Longhorn backup path and is not changed by this setup.
 | CSI snapshot controller and CRDs | v8.6.0 |
 | Velero | v1.18.2 |
 | Velero Helm chart | 12.1.0 |
-| Velero AWS object-store plugin | v1.14.2 |
+| Velero AWS object-store plugin | v1.14.1 |
 
 The snapshot controller version matches the `csi-snapshotter` sidecar shipped
 by Longhorn 1.12.1.
 
+The AWS plugin remains pinned to v1.14.1 because v1.14.2 corrupts metadata on
+non-AWS S3 backends by adding unsupported checksum framing. The Garage location
+also explicitly disables optional checksum calculation. Upgrade only after a
+stable plugin release containing the fix for `velero-io/velero#9951` passes the
+disposable restore test.
+
 ## Storage and credentials
 
-- Endpoint: `https://192.168.1.250:30292`
+- Endpoint: `http://192.168.1.9:3900`
 - Bucket: `k3s-velero`
-- Region: `us-east-1`
+- Region: `garage`
 - Addressing: S3 path style
-- TLS: verified with the RustFS CA copied from the existing Longhorn secret
-- RustFS identity: dedicated service account restricted to `k3s-velero`
-- Local secrets: `VELERO_RUSTFS_ACCESS_KEY`, `VELERO_RUSTFS_SECRET_KEY`, and
+- Network: trusted LAN endpoint; no TLS termination is currently configured
+- Garage identity: dedicated `velero-k3s` key restricted to `k3s-velero`
+- Local secrets: `VELERO_GARAGE_ACCESS_KEY`, `VELERO_GARAGE_SECRET_KEY`, and
   `VELERO_REPOSITORY_PASSWORD` in `.secrets.enc`
 
 Do not reuse `longhorn-data` for Velero. Longhorn expects to control the object
@@ -40,7 +46,7 @@ kubectl apply -f manifests/backup/velero-schedules.yaml
 ```
 
 The installer is idempotent. It installs the snapshot API, creates Kubernetes
-secrets from SOPS at runtime, installs Velero, and waits for the RustFS backup
+secrets from SOPS at runtime, installs Velero, and waits for the Garage backup
 location and every node agent to become ready. It does not enable the schedule;
 that remains an explicit manifest step.
 
@@ -48,7 +54,7 @@ that remains an explicit manifest step.
 
 `protected-apps-daily` runs daily at 01:17 `America/Chicago`, protects the
 namespaces represented
-in `recovery/apps.conf`, moves CSI snapshot data to RustFS, and retains each
+in `recovery/apps.conf`, moves CSI snapshot data to Garage, and retains each
 backup for 14 days. Data-mover concurrency is one per node to limit storage and
 network pressure. Temporary full-copy snapshot volumes use the dedicated
 `longhorn-velero-temp` storage class with one replica; production volumes keep
@@ -72,7 +78,7 @@ kubectl -n velero get pods
 
 The verifier requires:
 
-- RustFS backup location `Available`
+- Garage backup location `Available`
 - schedule `Enabled`
 - a completed scheduled backup no older than 30 hours
 - all Velero node agents Ready
@@ -87,7 +93,7 @@ The monitor warns at 24 hours and becomes critical at 30 hours.
 ```
 
 The test creates a 64 MiB Longhorn PVC, writes a unique marker, backs it up to
-RustFS, deletes the source namespace, restores to a different namespace, checks
+Garage, deletes the source namespace, restores to a different namespace, checks
 the marker, and removes both test namespaces. The completed canary backup is
 retained for its configured TTL unless deleted explicitly.
 

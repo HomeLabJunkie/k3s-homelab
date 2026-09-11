@@ -8,7 +8,7 @@ For the recommended maintenance commands and order of operations, see the
 [K3s maintenance cheat sheet](cheat-sheet.md).
 
 For backup creation, verification, scheduling, and troubleshooting, see the
-[K3s backup procedures](backup-procedures.md). The independent Velero/RustFS
+[K3s backup procedures](backup-procedures.md). The independent Velero/Garage
 path is documented in [Velero backup procedures](velero-backup-procedures.md).
 
 ## Current Architecture

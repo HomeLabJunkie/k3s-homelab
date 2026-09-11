@@ -24,5 +24,6 @@ jobs:
           ./tests/test-workstation-readiness.sh
           ./tests/test-dr-monitor-bundle-age.sh
           ./tests/test-backup-latest-symlink.sh
+          ./tests/test-verify-velero.sh
       - name: Secret/config scan
         run: ./scripts/scan-secrets.sh

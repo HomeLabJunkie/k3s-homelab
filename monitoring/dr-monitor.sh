@@ -46,15 +46,15 @@ if velero_output="$(MAX_VELERO_BACKUP_AGE_HOURS="$CRIT_VELERO_BACKUP_AGE_HOURS" 
   velero_age="$(sed -n 's/^==> Velero backup age: \([0-9][0-9]*\)h$/\1/p' <<<"$velero_output" | head -1)"
   if [[ "$velero_age" =~ ^[0-9]+$ ]]; then
     if (( velero_age >= CRIT_VELERO_BACKUP_AGE_HOURS )); then
-      crit "Velero RustFS backup is ${velero_age}h old"
+      crit "Velero S3 backup is ${velero_age}h old"
     elif (( velero_age >= WARN_VELERO_BACKUP_AGE_HOURS )); then
-      warn "Velero RustFS backup is ${velero_age}h old"
+      warn "Velero S3 backup is ${velero_age}h old"
     fi
   else
-    crit "Velero RustFS backup age could not be determined"
+    crit "Velero S3 backup age could not be determined"
   fi
 else
-  crit "Velero RustFS backup verification failed"
+  crit "Velero S3 backup verification failed"
 fi
 
 backup_output=""

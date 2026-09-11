@@ -4,10 +4,11 @@ set -Eeuo pipefail
 SCHEDULE="${VELERO_SCHEDULE:-protected-apps-daily}"
 MAX_AGE_HOURS="${MAX_VELERO_BACKUP_AGE_HOURS:-30}"
 NAMESPACE="${VELERO_NAMESPACE:-velero}"
+STORAGE_LOCATION="${VELERO_STORAGE_LOCATION:-garage}"
 
-location="$(kubectl -n "$NAMESPACE" get backupstoragelocation rustfs -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+location="$(kubectl -n "$NAMESPACE" get backupstoragelocation "$STORAGE_LOCATION" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
 [[ "$location" == "Available" ]] || {
-  echo "ERROR: Velero RustFS backup location is not available" >&2
+  echo "ERROR: Velero $STORAGE_LOCATION backup location is not available" >&2
   exit 1
 }
 
@@ -18,13 +19,15 @@ schedule_status="$(kubectl -n "$NAMESPACE" get schedules.velero.io "$SCHEDULE" -
 }
 
 backup_json="$(kubectl -n "$NAMESPACE" get backups.velero.io -l "velero.io/schedule-name=$SCHEDULE" -o json)"
-latest="$({ jq -r '
-  [.items[] | select(.status.phase == "Completed")]
+latest="$({ jq -r --arg location "$STORAGE_LOCATION" '
+  [.items[]
+    | select(.status.phase == "Completed")
+    | select(.spec.storageLocation == $location)]
   | sort_by(.status.completionTimestamp // "")
   | last // empty
 ' <<<"$backup_json"; })"
 [[ -n "$latest" ]] || {
-  echo "ERROR: no completed Velero backup exists for schedule $SCHEDULE" >&2
+  echo "ERROR: no completed Velero backup exists for schedule $SCHEDULE in $STORAGE_LOCATION" >&2
   exit 1
 }
 
@@ -43,6 +46,7 @@ ready="$(jq -r '.status.numberReady // 0' <<<"$agents")"
 }
 
 echo "==> Latest Velero backup: $name"
+echo "==> Velero storage location: $STORAGE_LOCATION"
 echo "==> Velero backup age: ${age_hours}h"
 echo "==> Velero node agents: ${ready}/${desired} Ready"
 

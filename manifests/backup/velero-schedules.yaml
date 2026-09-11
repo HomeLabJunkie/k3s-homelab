@@ -14,6 +14,5 @@ spec:
       - monitoring
       - logging
     snapshotMoveData: true
-    storageLocation: rustfs
+    storageLocation: garage
     ttl: 336h
-

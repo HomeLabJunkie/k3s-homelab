@@ -6,6 +6,7 @@ RESTORE_NAMESPACE="velero-canary-restore"
 BACKUP_NAME="velero-canary-$(date +%Y%m%d-%H%M%S)"
 RESTORE_NAME="${BACKUP_NAME}-restore"
 MARKER="velero-csi-data-mover-$(date +%s)"
+STORAGE_LOCATION="${VELERO_STORAGE_LOCATION:-garage}"
 
 cleanup() {
   kubectl delete namespace "$SOURCE_NAMESPACE" "$RESTORE_NAMESPACE" \
@@ -58,7 +59,7 @@ metadata:
 spec:
   includedNamespaces: [$SOURCE_NAMESPACE]
   snapshotMoveData: true
-  storageLocation: rustfs
+  storageLocation: $STORAGE_LOCATION
   ttl: 168h
 EOF
 kubectl -n velero wait --for=jsonpath='{.status.phase}'=Completed "backups.velero.io/$BACKUP_NAME" --timeout=30m
@@ -98,4 +99,3 @@ EOF
 kubectl -n "$RESTORE_NAMESPACE" wait --for=jsonpath='{.status.phase}'=Succeeded pod/canary-reader --timeout=300s
 
 echo "RESULT: VELERO CSI DATA MOVER RESTORE VERIFIED"
-
