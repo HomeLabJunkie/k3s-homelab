@@ -169,6 +169,11 @@ tar --exclude='.git' --exclude='logs' --exclude='*.tmp' \
 [[ -s "$STAGE_DEST/repo/k3s-repository.tar.gz" ]] ||
     fail "repository archive was not created"
 
+# Keep the encrypted SOPS file as a directly recoverable artifact. It is
+# ignored by Git and may not be present in sanitized repository exports.
+[[ -s "$REPO/.secrets.enc" ]] || fail "encrypted SOPS secrets file is missing"
+install -m 600 "$REPO/.secrets.enc" "$STAGE_DEST/repo/k3s-secrets.enc"
+
 echo "==> Saving cluster state..."
 kubectl get nodes -o yaml >"$STAGE_DEST/cluster-state/nodes.yaml"
 kubectl get namespaces -o yaml >"$STAGE_DEST/cluster-state/namespaces.yaml"

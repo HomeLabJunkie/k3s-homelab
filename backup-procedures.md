@@ -358,6 +358,24 @@ fails (and the DR monitor sends an alert) when free capacity falls below
 either `MIN_BACKUP_FREE_PERCENT` (default 10%) or `MIN_BACKUP_FREE_GIB`
 (default 100 GiB).
 
+## Encrypted-secrets recovery test
+
+Run the non-destructive secrets recovery check after changing SOPS recipients,
+rotating an age key, or quarterly:
+
+```bash
+./scripts/test-secrets-recovery.sh
+```
+
+The check decrypts `.secrets.enc` into a private temporary directory, confirms
+the required Velero, Garage, and Longhorn credentials exist without printing
+their values, and verifies the latest cluster bundle contains a directly
+recoverable encrypted secrets artifact. To rotate the age recipient, first add the new recipient with
+`sops updatekeys .secrets.enc`, confirm the recovery test passes using the new
+key, securely escrow the old key until the retention window expires, then
+remove the old recipient and rerun the test. Never commit plaintext secrets or
+delete the old key before a tested recovery path exists.
+
 Defaults:
 
 - cluster recovery bundles retained: 14
