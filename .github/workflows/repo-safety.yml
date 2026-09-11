@@ -23,5 +23,6 @@ jobs:
           ./tests/test-maintain-cluster.sh
           ./tests/test-workstation-readiness.sh
           ./tests/test-dr-monitor-bundle-age.sh
+          ./tests/test-backup-latest-symlink.sh
       - name: Secret/config scan
         run: ./scripts/scan-secrets.sh

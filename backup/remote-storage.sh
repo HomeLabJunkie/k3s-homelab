@@ -68,6 +68,47 @@ storage_root_script() {
     ssh "${STORAGE_SSH_OPTIONS[@]}" "$STORAGE_SSH_HOST" "$command_string"
 }
 
+storage_replace_symlink() {
+    local target="$1" link_path="$2"
+    storage_root_script "$target" "$link_path" <<'REMOTE'
+set -Eeuo pipefail
+target="$1"
+link_path="$2"
+link_dir="$(dirname -- "$link_path")"
+link_name="$(basename -- "$link_path")"
+temporary_link="${link_dir}/.${link_name}.tmp.$$"
+trap 'rm -f -- "$temporary_link"' EXIT
+ln -s -- "$target" "$temporary_link"
+mv -Tf -- "$temporary_link" "$link_path"
+REMOTE
+}
+
+storage_restore_symlink_if_current() {
+    local link_path="$1" expected_target="$2" previous_target="$3"
+    storage_root_script "$link_path" "$expected_target" "$previous_target" <<'REMOTE'
+set -Eeuo pipefail
+link_path="$1"
+expected_target="$2"
+previous_target="$3"
+current_target="$(readlink -- "$link_path" 2>/dev/null || true)"
+
+# A different publisher won the race; its link must not be overwritten.
+[[ "$current_target" == "$expected_target" ]] || exit 0
+
+if [[ -z "$previous_target" ]]; then
+    rm -f -- "$link_path"
+    exit 0
+fi
+
+link_dir="$(dirname -- "$link_path")"
+link_name="$(basename -- "$link_path")"
+temporary_link="${link_dir}/.${link_name}.rollback.$$"
+trap 'rm -f -- "$temporary_link"' EXIT
+ln -s -- "$previous_target" "$temporary_link"
+mv -Tf -- "$temporary_link" "$link_path"
+REMOTE
+}
+
 storage_mount() {
     local state
     state="$(

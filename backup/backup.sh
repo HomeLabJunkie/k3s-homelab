@@ -29,6 +29,10 @@ STAGE_ROOT=""
 STAGE_DEST=""
 REMOTE_DEST_CREATED=0
 BACKUP_COMPLETE=0
+LATEST_LINK=""
+LATEST_TARGET=""
+PREVIOUS_LATEST_TARGET=""
+LATEST_UPDATE_ATTEMPTED=0
 SNAPSHOT=""
 CONTROL_IP=""
 
@@ -51,8 +55,23 @@ on_error() {
 
 cleanup() {
     local rc=$?
+    local safe_to_remove=1
+    trap - ERR EXIT
+    set +e
+
+    if (( rc != 0 || BACKUP_COMPLETE == 0 )) &&
+       (( LATEST_UPDATE_ATTEMPTED == 1 )); then
+        if ! storage_restore_symlink_if_current \
+            "$LATEST_LINK" "$LATEST_TARGET" "$PREVIOUS_LATEST_TARGET"; then
+            echo "ERROR: unable to restore the previous latest backup symlink." >&2
+            echo "ERROR: preserving the new bundle so latest cannot become dangling." >&2
+            safe_to_remove=0
+        fi
+    fi
+
     if (( rc != 0 || BACKUP_COMPLETE == 0 )) &&
        (( REMOTE_DEST_CREATED == 1 )) &&
+       (( safe_to_remove == 1 )) &&
        [[ "$DEST" == "${STORAGE_MOUNT}/cluster/${HOST}/"* ]]; then
         echo "==> Removing incomplete remote backup bundle:"
         echo "    $DEST"
@@ -230,9 +249,21 @@ test -s cluster-state/pvc-volume-map.txt
 find etcd -maxdepth 1 -type f -size +0c -print -quit | grep -q .
 REMOTE
 
-storage_sudo ln -sfn "${HOST}/${STAMP}" "${STORAGE_MOUNT}/cluster/latest"
-LATEST_RESOLVED="$(storage_sudo readlink -f "${STORAGE_MOUNT}/cluster/latest")"
-[[ "$LATEST_RESOLVED" == "$DEST" ]] || fail "latest symlink does not resolve to new bundle"
+LATEST_LINK="${STORAGE_MOUNT}/cluster/latest"
+LATEST_TARGET="${HOST}/${STAMP}"
+if ! PREVIOUS_LATEST_TARGET="$(storage_sudo readlink -- "$LATEST_LINK" 2>/dev/null)"; then
+    PREVIOUS_LATEST_TARGET=""
+fi
+
+# Set this before publication so cleanup can safely roll back even when the
+# remote operation succeeds but its SSH session reports a failure afterward.
+LATEST_UPDATE_ATTEMPTED=1
+storage_replace_symlink "$LATEST_TARGET" "$LATEST_LINK"
+if ! PUBLISHED_LATEST_TARGET="$(storage_sudo readlink -- "$LATEST_LINK")"; then
+    fail "latest backup symlink cannot be read after publication"
+fi
+[[ "$PUBLISHED_LATEST_TARGET" == "$LATEST_TARGET" ]] ||
+    fail "latest backup symlink does not point to new bundle"
 
 BACKUP_COMPLETE=1
 prune_cluster_bundles
