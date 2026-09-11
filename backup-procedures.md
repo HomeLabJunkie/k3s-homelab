@@ -350,7 +350,13 @@ The defaults can be overridden for a single command when necessary:
 BACKUP_KEEP_COUNT=21 ./backup/backup.sh
 MAX_BACKUP_AGE_HOURS=36 ./backup/verify-backup.sh
 MAX_APP_BACKUP_AGE_HOURS=36 ./dr-status.sh
+MIN_BACKUP_FREE_PERCENT=5 MIN_BACKUP_FREE_GIB=50 ./backup/verify-backup.sh
 ```
+
+The verifier also checks free space on the cluster-backup NAS export. It
+fails (and the DR monitor sends an alert) when free capacity falls below
+either `MIN_BACKUP_FREE_PERCENT` (default 10%) or `MIN_BACKUP_FREE_GIB`
+(default 100 GiB).
 
 Defaults:
 

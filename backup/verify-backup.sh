@@ -18,6 +18,8 @@ source "$SCRIPT_DIR/remote-storage.sh"
 NAS="${NAS:-${BACKUP_NAS_IP:-${UNRAID_IP:-192.0.2.9}}}"
 EXPORT="${EXPORT:-${CLUSTER_BACKUP_EXPORT:-/mnt/user/K3S-Backup}}"
 MAX_BACKUP_AGE_HOURS="${MAX_BACKUP_AGE_HOURS:-30}"
+MIN_BACKUP_FREE_PERCENT="${MIN_BACKUP_FREE_PERCENT:-10}"
+MIN_BACKUP_FREE_GIB="${MIN_BACKUP_FREE_GIB:-100}"
 
 cleanup() {
     storage_unmount
@@ -26,6 +28,26 @@ trap cleanup EXIT
 
 storage_init
 storage_mount
+
+read -r _filesystem _total_kib _used_kib free_kib _used_percent _mount_path < <(
+    storage_sudo df -Pk "$STORAGE_MOUNT" | tail -1
+)
+[[ "$free_kib" =~ ^[0-9]+$ && "$_used_percent" =~ ^[0-9]+%$ ]] || {
+    echo "ERROR: unable to determine backup storage capacity." >&2
+    exit 1
+}
+free_gib=$(( free_kib / 1024 / 1024 ))
+used_percent="${_used_percent%%%}"
+free_percent=$(( 100 - used_percent ))
+echo "==> Backup storage free: ${free_gib} GiB (${free_percent}%)"
+(( free_percent >= MIN_BACKUP_FREE_PERCENT )) || {
+    echo "ERROR: backup storage free percentage is below ${MIN_BACKUP_FREE_PERCENT}%." >&2
+    exit 1
+}
+(( free_gib >= MIN_BACKUP_FREE_GIB )) || {
+    echo "ERROR: backup storage free space is below ${MIN_BACKUP_FREE_GIB} GiB." >&2
+    exit 1
+}
 
 LATEST="$(storage_sudo readlink -f "${STORAGE_MOUNT}/cluster/latest")"
 storage_sudo test -d "$LATEST" || {
