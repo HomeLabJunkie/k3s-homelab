@@ -316,11 +316,11 @@ Check timer state with:
 
 ```bash
 systemctl --user list-timers 'k3s-dr-*' --all
-systemctl --user is-enabled k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer
-systemctl --user is-active k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer
+systemctl --user is-enabled k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer k3s-dr-smtp-test.timer
+systemctl --user is-active k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer k3s-dr-smtp-test.timer
 ```
 
-Install all five timers from the ThinkPad checkout:
+Install all six timers from the ThinkPad checkout:
 
 ```bash
 cd ~/Work/k3s-homelab
@@ -341,6 +341,10 @@ the DR monitor. The monitor
 validates the bundle itself and warns at 24 hours, before the
 30-hour DR freshness limit. It also checks every protected Longhorn backup,
 timer enablement, timer activity, and failed backup/verification services.
+
+The first-of-month SMTP timer sends a clearly labeled test message through the
+same SOPS-backed notification path. A missing or failed message should be
+investigated before relying on DR alerts.
 
 ## Retention and freshness overrides
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=K3s disaster-recovery SMTP notification test
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+WorkingDirectory=%h/Work/k3s-homelab
+ExecStart=%h/Work/k3s-homelab/scripts/test-smtp-notification.sh
+TimeoutStartSec=5min

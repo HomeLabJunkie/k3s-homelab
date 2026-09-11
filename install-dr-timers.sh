@@ -16,6 +16,8 @@ UNITS=(
   k3s-dr-restore-canary.timer
   k3s-dr-longhorn-restore-canary.service
   k3s-dr-longhorn-restore-canary.timer
+  k3s-dr-smtp-test.service
+  k3s-dr-smtp-test.timer
 )
 
 for f in "${UNITS[@]}"; do
@@ -31,7 +33,8 @@ systemctl --user enable --now \
   k3s-dr-verify.timer \
   k3s-dr-monitor.timer \
   k3s-dr-restore-canary.timer \
-  k3s-dr-longhorn-restore-canary.timer
+  k3s-dr-longhorn-restore-canary.timer \
+  k3s-dr-smtp-test.timer
 
 echo
 systemctl --user list-timers 'k3s-dr-*'

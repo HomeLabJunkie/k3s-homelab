@@ -79,7 +79,8 @@ else
 fi
 
 for unit in k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer \
-            k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer; do
+            k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer \
+            k3s-dr-smtp-test.timer; do
   [[ "$(systemctl --user is-enabled "$unit" 2>/dev/null || true)" == "enabled" ]] || warn "$unit is not enabled"
   [[ "$(systemctl --user is-active "$unit" 2>/dev/null || true)" == "active" ]] || crit "$unit is not active"
 done

@@ -1,0 +1,11 @@
+[Unit]
+Description=Monthly K3s disaster-recovery SMTP notification test
+
+[Timer]
+OnCalendar=*-*-01 09:00:00
+Persistent=true
+RandomizedDelaySec=30m
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target
