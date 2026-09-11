@@ -78,12 +78,14 @@ else
   fi
 fi
 
-for unit in k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer; do
+for unit in k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer \
+            k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer; do
   [[ "$(systemctl --user is-enabled "$unit" 2>/dev/null || true)" == "enabled" ]] || warn "$unit is not enabled"
   [[ "$(systemctl --user is-active "$unit" 2>/dev/null || true)" == "active" ]] || crit "$unit is not active"
 done
 
-for unit in k3s-dr-backup.service k3s-dr-verify.service; do
+for unit in k3s-dr-backup.service k3s-dr-verify.service \
+            k3s-dr-restore-canary.service k3s-dr-longhorn-restore-canary.service; do
   [[ "$(systemctl --user is-failed "$unit" 2>/dev/null || true)" != "failed" ]] || crit "$unit is in failed state"
 done
 

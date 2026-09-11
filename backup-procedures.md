@@ -310,16 +310,17 @@ The repository contains user-systemd units with this intended order:
 | 05:15 plus random delay | `k3s-dr-verify.timer` | Verify the latest bundle |
 | 05:30 plus random delay | `k3s-dr-monitor.timer` | Check DR health and notifications |
 | Sunday 06:30 plus random delay | `k3s-dr-restore-canary.timer` | Back up and restore a disposable Velero canary |
+| Sunday 07:30 plus random delay | `k3s-dr-longhorn-restore-canary.timer` | Restore the smallest protected volume directly from Longhorn/CIFS |
 
 Check timer state with:
 
 ```bash
 systemctl --user list-timers 'k3s-dr-*' --all
-systemctl --user is-enabled k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer
-systemctl --user is-active k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer
+systemctl --user is-enabled k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer
+systemctl --user is-active k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer
 ```
 
-Install all four timers from the ThinkPad checkout:
+Install all five timers from the ThinkPad checkout:
 
 ```bash
 cd ~/Work/k3s-homelab
@@ -331,9 +332,12 @@ If the user manager was stopped at a scheduled time, systemd starts the missed
 job when the user session returns. Enable user lingering once if backups must
 run while logged out; a powered-off ThinkPad catches up after the next login.
 
-The weekly restore canary creates a disposable Longhorn PVC, moves it through
+The weekly Velero restore canary creates a disposable Longhorn PVC, moves it through
 Velero/Garage, restores it into a separate namespace, verifies a marker, and
-cleans up both namespaces. A failed canary triggers the DR monitor. The monitor
+cleans up both namespaces. The Longhorn-native canary restores the smallest
+protected volume directly from the CIFS target, mounts it read-only, verifies
+that it contains data, and removes all test resources. A failed canary triggers
+the DR monitor. The monitor
 validates the bundle itself and warns at 24 hours, before the
 30-hour DR freshness limit. It also checks every protected Longhorn backup,
 timer enablement, timer activity, and failed backup/verification services.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly K3s disaster-recovery Longhorn native restore canary
+
+[Timer]
+OnCalendar=Sun *-*-* 07:30:00
+Persistent=true
+RandomizedDelaySec=15m
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target
