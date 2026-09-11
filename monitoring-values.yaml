@@ -55,6 +55,7 @@ alertmanager:
   service:
     type: ClusterIP
   alertmanagerSpec:
+    configSecret: alertmanager-smtp
     replicas: 1
     storage:
       volumeClaimTemplate:

@@ -184,7 +184,12 @@ for var in \
   K3S_NODE_3 \
   K3S_NODE_4 \
   K3S_NODE_5 \
-  METALLB_IP_RANGE
+  METALLB_IP_RANGE \
+  BACKUP_NAS_IP \
+  BACKUP_NFS_VERSION \
+  CLUSTER_BACKUP_EXPORT \
+  LONGHORN_BACKUP_SHARE \
+  LONGHORN_BACKUP_CREDENTIAL_SECRET
 do
   require_var "$var"
 done
@@ -267,7 +272,9 @@ for var in \
   VAULTWARDEN_SMTP_USERNAME \
   VAULTWARDEN_SMTP_PASSWORD \
   VAULTWARDEN_YUBICO_SECRET_KEY \
-  GRAFANA_ADMIN_PASSWORD
+  GRAFANA_ADMIN_PASSWORD \
+  LONGHORN_CIFS_USERNAME \
+  LONGHORN_CIFS_PASSWORD
 do
   require_var "$var"
 done
@@ -463,6 +470,72 @@ kubectl -n longhorn-system wait \
   --all \
   --timeout=600s
 
+echo "==> Creating/updating Longhorn CIFS backup credentials..."
+kubectl create secret generic "$LONGHORN_BACKUP_CREDENTIAL_SECRET" \
+  --from-literal=CIFS_USERNAME="$LONGHORN_CIFS_USERNAME" \
+  --from-literal=CIFS_PASSWORD="$LONGHORN_CIFS_PASSWORD" \
+  --namespace longhorn-system \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==> Configuring Longhorn CIFS backup target..."
+LONGHORN_BACKUP_TARGET="cifs://${BACKUP_NAS_IP}/${LONGHORN_BACKUP_SHARE}?cifsOptions=vers%3D3.0"
+wait_longhorn_backup_target_available() {
+  local target_name="$1" target_label="$2" available i
+
+  for i in {1..60}; do
+    available="$(
+      kubectl -n longhorn-system get backuptarget "$target_name" \
+        -o jsonpath='{.status.available}' 2>/dev/null || true
+    )"
+    [[ "$available" == "true" ]] && return 0
+    sleep 5
+  done
+
+  echo "ERROR: Longhorn ${target_label} backup target did not become available."
+  kubectl -n longhorn-system get backuptarget "$target_name" -o yaml || true
+  return 1
+}
+
+CURRENT_LONGHORN_BACKUP_TARGET="$(
+  kubectl -n longhorn-system get backuptarget default \
+    -o jsonpath='{.spec.backupTargetURL}' 2>/dev/null || true
+)"
+
+# Validate a changed destination while the current default remains usable. The
+# probe must be removed before cutover because Longhorn requires target URLs to
+# be unique across BackupTarget objects.
+if [[ "$CURRENT_LONGHORN_BACKUP_TARGET" != "$LONGHORN_BACKUP_TARGET" ]]; then
+  LONGHORN_BACKUP_PROBE=default-migration-probe
+  python3 - "$LONGHORN_BACKUP_PROBE" "$LONGHORN_BACKUP_TARGET" \
+    "$LONGHORN_BACKUP_CREDENTIAL_SECRET" <<'PY_LONGHORN_PROBE' | kubectl apply -f -
+import json
+import sys
+
+name, url, secret = sys.argv[1:]
+print(json.dumps({
+    "apiVersion": "longhorn.io/v1beta2",
+    "kind": "BackupTarget",
+    "metadata": {"name": name, "namespace": "longhorn-system"},
+    "spec": {
+        "backupTargetURL": url,
+        "credentialSecret": secret,
+        "pollInterval": "30s",
+    },
+}))
+PY_LONGHORN_PROBE
+  wait_longhorn_backup_target_available "$LONGHORN_BACKUP_PROBE" "migration probe"
+  kubectl -n longhorn-system delete backuptarget "$LONGHORN_BACKUP_PROBE" --wait=true
+fi
+
+LONGHORN_BACKUP_PATCH="$(
+  python3 -c 'import json,sys; print(json.dumps({"spec":{"backupTargetURL":sys.argv[1],"credentialSecret":sys.argv[2]}}))' \
+    "$LONGHORN_BACKUP_TARGET" "$LONGHORN_BACKUP_CREDENTIAL_SECRET"
+)"
+kubectl -n longhorn-system patch backuptarget default \
+  --type=merge \
+  --patch "$LONGHORN_BACKUP_PATCH"
+wait_longhorn_backup_target_available default "CIFS"
+
 echo "==> Deploying Longhorn HTTPS ingress..."
 apply_manifest "$LONGHORN_INGRESS_MANIFEST"
 kubectl -n longhorn-system wait --for=condition=Ready certificate/tls-longhorn-ingress --timeout=300s
@@ -512,6 +585,12 @@ kubectl create secret generic grafana-admin \
   --namespace monitoring \
   --from-literal=admin-user=admin \
   --from-literal=admin-password="$GRAFANA_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==> Configuring Alertmanager SMTP delivery..."
+kubectl create secret generic alertmanager-smtp \
+  --namespace monitoring \
+  --from-file=alertmanager.yaml=<("$K3S_DIR/scripts/render-alertmanager-config.sh") \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Installing kube-prometheus-stack ${KUBE_PROMETHEUS_STACK_VERSION}..."
@@ -587,6 +666,7 @@ fi
 echo "==> Verifying Longhorn ServiceMonitor and baseline alert rules..."
 kubectl -n monitoring get servicemonitor longhorn-prometheus-servicemonitor
 kubectl -n monitoring get prometheusrule homelab-baseline-alerts
+kubectl -n monitoring get secret alertmanager-smtp >/dev/null
 
 echo "==> Monitoring stack is ready."
 

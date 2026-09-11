@@ -144,16 +144,29 @@ previous="$(cat "$STATUS_FILE" 2>/dev/null || echo UNKNOWN)"
   fi
 } >"$DETAIL_FILE"
 
+notification_sent=true
 if [[ "$current" != "$previous" ]]; then
   case "$current" in
     OK)
-      [[ "$previous" == "UNKNOWN" ]] || "$NOTIFY" "[RECOVERED] K3s DR status is OK" "$DETAIL_FILE" || true
+      if [[ "$previous" != "UNKNOWN" ]] &&
+         ! "$NOTIFY" "[RECOVERED] K3s DR status is OK" "$DETAIL_FILE"; then
+        notification_sent=false
+      fi
       ;;
-    WARNING) "$NOTIFY" "[WARNING] K3s DR needs attention" "$DETAIL_FILE" || true ;;
-    CRITICAL) "$NOTIFY" "[CRITICAL] K3s DR failure detected" "$DETAIL_FILE" || true ;;
+    WARNING)
+      "$NOTIFY" "[WARNING] K3s DR needs attention" "$DETAIL_FILE" || notification_sent=false
+      ;;
+    CRITICAL)
+      "$NOTIFY" "[CRITICAL] K3s DR failure detected" "$DETAIL_FILE" || notification_sent=false
+      ;;
   esac
 fi
 
-printf '%s\n' "$current" >"$STATUS_FILE"
 cat "$DETAIL_FILE"
+if [[ "$notification_sent" != true ]]; then
+  echo "ERROR: notification delivery failed; state transition was not persisted" >&2
+  exit 1
+fi
+
+printf '%s\n' "$current" >"$STATUS_FILE"
 [[ "$current" != "CRITICAL" ]]

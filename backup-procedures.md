@@ -9,18 +9,18 @@ a complete recovery point.
 | Layer | Protects | Destination | Primary command |
 | --- | --- | --- | --- |
 | Velero CSI Data Mover | Independent application data and Kubernetes resources | Dedicated Garage `k3s-velero` bucket | `protected-apps-daily` schedule |
-| Longhorn backups | Persistent application data | Configured Longhorn NFS backup target | Longhorn `backup-nightly` job |
+| Longhorn backups | Persistent application data | Configured Longhorn SMB/CIFS backup target | Longhorn `backup-nightly` job |
 | Cluster recovery bundle | Repository, Kubernetes state, Helm inventory, and etcd | Configured cluster-backup NFS export | `./backup/backup.sh` |
 
 The cluster recovery bundle records storage metadata but does not replace either
-application-data path. Velero/Garage is independent from Longhorn/NFS; verify all
+application-data path. Velero/Garage is independent from Longhorn/CIFS; verify all
 three layers before relying on a recovery point. See
 [Velero backup procedures](velero-backup-procedures.md) for installation, restore
 testing, and troubleshooting.
 
 ## Recommended backup order
 
-1. Confirm the cluster, Longhorn NFS target, and Velero Garage location are healthy.
+1. Confirm the cluster, Longhorn CIFS target, and Velero Garage location are healthy.
 2. Trigger or confirm a completed Velero backup for `protected-apps-daily`.
 3. Trigger or confirm fresh Longhorn backups for protected workloads.
 4. Check protected-workload backup coverage with `dr-status.sh`.
@@ -42,8 +42,11 @@ Confirm these local values are correct in `config/cluster.env`:
 
 ```text
 UNRAID_IP
+BACKUP_NAS_IP
+BACKUP_NFS_VERSION
 CLUSTER_BACKUP_EXPORT
-LONGHORN_BACKUP_EXPORT
+LONGHORN_BACKUP_SHARE
+LONGHORN_BACKUP_CREDENTIAL_SECRET
 ```
 
 The backup host also needs:

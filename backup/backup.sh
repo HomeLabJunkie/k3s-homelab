@@ -17,7 +17,7 @@ source "$SCRIPT_DIR/remote-storage.sh"
 
 REPO="${REPO:-$ROOT_DIR}"
 REPO="$(readlink -f "$REPO")"
-NAS="${NAS:-${UNRAID_IP:-192.0.2.9}}"
+NAS="${NAS:-${BACKUP_NAS_IP:-${UNRAID_IP:-192.0.2.9}}}"
 EXPORT="${EXPORT:-${CLUSTER_BACKUP_EXPORT:-/mnt/user/K3S-Backup}}"
 HOST="$(hostname -s)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -233,11 +233,11 @@ echo "==> Creating and verifying checksums..."
     sha256sum -c SHA256SUMS >/dev/null
 )
 
-echo "==> Publishing completed bundle to Unraid through ${STORAGE_SSH_HOST}..."
+echo "==> Publishing completed bundle to ${NAS}:${EXPORT} through ${STORAGE_SSH_HOST}..."
 storage_mount
 storage_sudo mkdir -p "$DEST"
 REMOTE_DEST_CREATED=1
-tar -C "$STAGE_DEST" -cf - . | storage_sudo tar -C "$DEST" -xf -
+tar -C "$STAGE_DEST" -cf - . | storage_sudo tar --no-same-owner -C "$DEST" -xf -
 storage_root_script "$DEST" <<'REMOTE'
 set -Eeuo pipefail
 destination="$1"
@@ -272,7 +272,7 @@ echo "==> Removing copied on-demand etcd snapshot from control node..."
 if ! ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
     "sudo -n k3s etcd-snapshot delete '${SNAPSHOT}'" >/dev/null 2>&1; then
     echo "WARNING: unable to delete control-node snapshot ${SNAPSHOT}."
-    echo "WARNING: backup on Unraid is intact."
+    echo "WARNING: the published NAS backup is intact."
 fi
 
 echo

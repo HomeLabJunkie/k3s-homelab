@@ -7,6 +7,7 @@
 
 STORAGE_SSH_HOST="${STORAGE_SSH_HOST:-}"
 STORAGE_MOUNT="${STORAGE_MOUNT:-${MOUNT:-/mnt/k3s-backup}}"
+NFS_VERSION="${NFS_VERSION:-${BACKUP_NFS_VERSION:-4.2}}"
 STORAGE_MOUNTED_BY_SCRIPT=0
 STORAGE_SSH_OPTIONS=(-o BatchMode=yes -o ConnectTimeout=10)
 
@@ -40,6 +41,7 @@ storage_init() {
     storage_validate_value "NAS host" "$NAS" '^[A-Za-z0-9._:-]+$'
     storage_validate_value "NFS export" "$EXPORT" '^/[A-Za-z0-9._/-]+$'
     storage_validate_value "storage mount" "$STORAGE_MOUNT" '^/[A-Za-z0-9._/-]+$'
+    storage_validate_value "NFS version" "$NFS_VERSION" '^(3|4|4[.]0|4[.]1|4[.]2)$'
 
     ssh "${STORAGE_SSH_OPTIONS[@]}" "$STORAGE_SSH_HOST" \
         'sudo -n true' >/dev/null ||
@@ -112,16 +114,22 @@ REMOTE
 storage_mount() {
     local state
     state="$(
-        storage_root_script "$STORAGE_MOUNT" "$NAS" "$EXPORT" <<'REMOTE'
+        storage_root_script "$STORAGE_MOUNT" "$NAS" "$EXPORT" "$NFS_VERSION" <<'REMOTE'
 set -Eeuo pipefail
 mount_point="$1"
 nas="$2"
 export_path="$3"
+nfs_version="$4"
 mkdir -p "$mount_point"
 if mountpoint -q "$mount_point"; then
+    source="$(findmnt -n -o SOURCE --target "$mount_point")"
+    [[ "$source" == "${nas}:${export_path}" ]] || {
+        echo "ERROR: ${mount_point} is mounted from unexpected source ${source}" >&2
+        exit 1
+    }
     printf '%s\n' existing
 else
-    mount -t nfs4 -o vers=4.2,proto=tcp "${nas}:${export_path}" "$mount_point"
+    mount -t nfs -o "vers=${nfs_version},proto=tcp" "${nas}:${export_path}" "$mount_point"
     printf '%s\n' mounted
 fi
 REMOTE

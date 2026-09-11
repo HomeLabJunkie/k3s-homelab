@@ -9,7 +9,8 @@ set -a
 # shellcheck source=/dev/null
 source "$ENV_FILE"
 set +a
-for v in BASE_DOMAIN ADMIN_EMAIL UNRAID_IP CLUSTER_BACKUP_EXPORT LONGHORN_BACKUP_EXPORT; do
+for v in BASE_DOMAIN ADMIN_EMAIL UNRAID_IP BACKUP_NAS_IP BACKUP_NFS_VERSION \
+  CLUSTER_BACKUP_EXPORT LONGHORN_BACKUP_SHARE LONGHORN_BACKUP_CREDENTIAL_SECRET; do
   [[ -n "${!v:-}" ]] || { echo "ERROR: $v is unset"; exit 1; }
 done
 command -v envsubst >/dev/null || { echo "Install gettext-base for envsubst"; exit 1; }

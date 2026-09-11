@@ -8,6 +8,7 @@ ENV_FILE="${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
 APPS_FILE="${APPS_FILE:-$ROOT_DIR/recovery/apps.conf}"
 BACKUP_VERIFY="${BACKUP_VERIFY:-$ROOT_DIR/backup/verify-backup.sh}"
 VELERO_VERIFY="${VELERO_VERIFY:-$ROOT_DIR/backup/verify-velero.sh}"
+NOTIFY_CHECK="${NOTIFY_CHECK:-$ROOT_DIR/monitoring/dr-notify.sh}"
 
 DR_HOST="${DR_HOST:-k3s-dr}"
 DR_PREFLIGHT="${DR_PREFLIGHT:-/usr/local/libexec/k3s-dr/dr-preflight.sh}"
@@ -41,6 +42,7 @@ Environment overrides:
   ENV_FILE                  Cluster environment file.
   APPS_FILE                 Protected application list.
   BACKUP_VERIFY             Production backup verifier.
+  NOTIFY_CHECK              SMTP notification configuration checker.
   DR_HOST                   SSH host/alias for DR server. Default: k3s-dr
   DR_PREFLIGHT              Protected DR preflight helper.
   MAX_BACKUP_AGE_HOURS      Max cluster recovery-bundle age. Default: 30
@@ -118,6 +120,12 @@ if [[ -r "$APPS_FILE" ]]; then
 else
     protected_count=0
     fail "Protected application inventory missing: $APPS_FILE"
+fi
+
+if [[ -x "$NOTIFY_CHECK" ]] && "$NOTIFY_CHECK" --check >/dev/null 2>&1; then
+    pass "SMTP notification configuration is ready"
+else
+    warn "SMTP notification configuration is unavailable"
 fi
 
 # ---------------------------------------------------------------------------

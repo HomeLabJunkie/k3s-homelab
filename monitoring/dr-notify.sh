@@ -2,32 +2,103 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EMAIL_ENV="${EMAIL_ENV:-$ROOT/config/email.env}"
+ENV_FILE="${ENV_FILE:-$ROOT/config/cluster.env}"
+CHECK_ONLY=false
+
+if [[ "${1:-}" == "--check" ]]; then
+  CHECK_ONLY=true
+  shift
+fi
+
 subject="${1:-K3s DR alert}"
 body_file="${2:-}"
 body="No additional details."
 [[ -n "$body_file" && -f "$body_file" ]] && body="$(cat "$body_file")"
-sent=0
 
-if command -v notify-send >/dev/null 2>&1; then
-  notify-send --urgency=critical "$subject" "$body" && sent=1 || true
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
 fi
 
-if [[ -f "$EMAIL_ENV" ]] && command -v msmtp >/dev/null 2>&1; then
+if [[ -f "$EMAIL_ENV" ]]; then
   set -a
   # shellcheck disable=SC1090
   source "$EMAIL_ENV"
   set +a
+fi
 
-  email_ready=1
-  for v in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD MAIL_FROM MAIL_TO; do
-    [[ -n "${!v:-}" ]] || email_ready=0
+if [[ -z "${SMTP_USER:-}" || -z "${SMTP_PASSWORD:-}" ]]; then
+  set -a
+  if [[ -f "$ROOT/.secrets.enc" ]]; then
+    command -v sops >/dev/null 2>&1 || {
+      echo "ERROR: sops is required to load SMTP credentials" >&2
+      exit 1
+    }
+    # shellcheck disable=SC1090
+    source <(sops --decrypt "$ROOT/.secrets.enc")
+  elif [[ -f "$ROOT/.secrets" ]]; then
+    # shellcheck disable=SC1091
+    source "$ROOT/.secrets"
+  fi
+  set +a
+fi
+
+SMTP_HOST="${SMTP_HOST:-smtp.gmail.com}"
+SMTP_PORT="${SMTP_PORT:-587}"
+SMTP_USER="${SMTP_USER:-${VAULTWARDEN_SMTP_USERNAME:-}}"
+SMTP_PASSWORD="${SMTP_PASSWORD:-${VAULTWARDEN_SMTP_PASSWORD:-}}"
+MAIL_FROM="${MAIL_FROM:-${ADMIN_EMAIL:-$SMTP_USER}}"
+MAIL_TO="${MAIL_TO:-${ADMIN_EMAIL:-}}"
+
+email_ready=1
+for var in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD MAIL_FROM MAIL_TO; do
+  [[ -n "${!var:-}" ]] || email_ready=0
+done
+
+if [[ "$CHECK_ONLY" == true ]]; then
+  (( email_ready == 1 )) || {
+    echo "ERROR: SMTP notification configuration is incomplete" >&2
+    exit 1
+  }
+  command -v curl >/dev/null 2>&1 || {
+    echo "ERROR: curl is required for SMTP notifications" >&2
+    exit 1
+  }
+  curl --version | grep -qE '^Protocols: .*smtp' || {
+    echo "ERROR: the installed curl does not support SMTP" >&2
+    exit 1
+  }
+  echo "SMTP notification configuration is ready for ${MAIL_TO}."
+  exit 0
+fi
+
+desktop_sent=0
+email_sent=0
+
+if command -v notify-send >/dev/null 2>&1; then
+  if notify-send --urgency=critical "$subject" "$body"; then
+    desktop_sent=1
+  fi
+fi
+
+if (( email_ready == 1 )); then
+  command -v curl >/dev/null 2>&1 || {
+    echo "ERROR: SMTP is configured but curl is unavailable" >&2
+    exit 1
+  }
+  for value in "$SMTP_HOST" "$SMTP_PORT" "$SMTP_USER" "$SMTP_PASSWORD" \
+               "$MAIL_FROM" "$MAIL_TO"; do
+    [[ "$value" != *$'\n'* && "$value" != *$'\r'* && "$value" != *'"'* ]] || {
+      echo "ERROR: SMTP configuration contains an unsupported character" >&2
+      exit 1
+    }
   done
-
-  if (( email_ready == 1 )); then
-    msg="$(mktemp)"
-    cfg="$(mktemp)"
-    trap 'rm -f "${msg:-}" "${cfg:-}"' EXIT
-    cat >"$msg" <<EOF
+  msg="$(mktemp)"
+  cfg="$(mktemp)"
+  trap 'rm -f "${msg:-}" "${cfg:-}"' EXIT
+  cat >"$msg" <<EOF
 From: ${MAIL_FROM}
 To: ${MAIL_TO}
 Subject: ${subject}
@@ -36,25 +107,26 @@ Content-Type: text/plain; charset=UTF-8
 
 ${body}
 EOF
-    cat >"$cfg" <<EOF
-defaults
-auth on
-tls on
-tls_starttls ${SMTP_STARTTLS:-on}
-account dr
-host ${SMTP_HOST}
-port ${SMTP_PORT}
-user ${SMTP_USER}
-password ${SMTP_PASSWORD}
-from ${MAIL_FROM}
-account default : dr
+  cat >"$cfg" <<EOF
+url = "smtp://${SMTP_HOST}:${SMTP_PORT}"
+ssl-reqd
+user = "${SMTP_USER}:${SMTP_PASSWORD}"
+mail-from = "${MAIL_FROM}"
+mail-rcpt = "${MAIL_TO}"
+upload-file = "${msg}"
+silent
+show-error
 EOF
-    chmod 600 "$cfg"
-    msmtp -C "$cfg" -t <"$msg" && sent=1
+  chmod 600 "$cfg"
+  if curl --config "$cfg"; then
+    email_sent=1
+  else
+    echo "ERROR: SMTP notification delivery failed" >&2
+    exit 1
   fi
 fi
 
-if (( sent == 0 )); then
+if (( desktop_sent == 0 && email_sent == 0 )); then
   echo "WARNING: no desktop or email notification channel was available" >&2
   exit 1
 fi

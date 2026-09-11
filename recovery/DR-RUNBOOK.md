@@ -95,7 +95,7 @@ Cluster backups contain:
 
 Production Longhorn backup target:
 
-    nfs://192.168.1.9:/mnt/user/K3S-Longhorn
+    cifs://<BACKUP_NAS_IP>/<LONGHORN_BACKUP_SHARE>
 
 Do NOT delete or modify the Longhorn backup target during DR testing.
 
@@ -841,7 +841,7 @@ Production cluster:
 
 Longhorn backup target:
 
-    nfs://192.168.1.9:/mnt/user/K3S-Longhorn
+    cifs://<BACKUP_NAS_IP>/<LONGHORN_BACKUP_SHARE>
 
 Validated applications:
 

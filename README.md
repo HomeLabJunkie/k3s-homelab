@@ -38,7 +38,7 @@ Core platform:
 | Metrics | kube-prometheus-stack |
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
-| Backup storage | NFS exports on NAS/Unraid |
+| Backup storage | Garage S3 on Unraid plus NFS and SMB on a separate NAS |
 | DR | Dedicated K3s DR host + automated rehearsal tooling |
 
 Environment-specific addresses, domains, email addresses, backup exports, and VIP ranges belong in `config/cluster.env` and local inventory/secrets rather than in this README.
@@ -431,6 +431,17 @@ Components include:
 - Prometheus Operator
 - Longhorn ServiceMonitor
 - homelab baseline alert rules
+
+Alertmanager routes warning and critical alerts through the SMTP credentials
+already stored in `.secrets.enc`. The configuration is rendered at deployment
+time, so SMTP passwords are never written to tracked files. The always-firing
+`Watchdog` alert is intentionally suppressed until an external dead-man
+receiver is configured.
+
+The workstation DR monitor uses the same credentials through
+`monitoring/dr-notify.sh`. Run `./monitoring/dr-notify.sh --check` to validate
+the configuration without sending mail. An optional `config/email.env` can
+override the shared account.
 - custom Grafana dashboards
 
 Persistent monitoring data is stored on Longhorn.
@@ -512,7 +523,7 @@ Bundles are stored on the configured NFS cluster-backup export and a `latest` sy
 
 ### 2. Longhorn Application Backups
 
-Application data is backed up through Longhorn to the configured NFS Longhorn backup target.
+Application data is backed up through Longhorn to the configured SMB/CIFS backup target. Cluster recovery bundles use the same NAS through its NFSv3 export.
 
 The current DR process requires every protected Longhorn PVC to have a fresh
 completed backup within the configured DR freshness threshold.
@@ -850,7 +861,7 @@ Populate local values for:
 - MetalLB range
 - Cloudflare origin address
 - NAS address
-- NFS backup exports
+- NFS cluster-backup export and Longhorn SMB share
 
 Sensitive values should be kept in the encrypted/local secrets workflow and not committed in plaintext.
 
@@ -870,6 +881,7 @@ Expected sensitive values include:
 - Vaultwarden SMTP username and password
 - Vaultwarden Yubico secret key, when Yubico OTP is enabled
 - Grafana admin password
+- dedicated Longhorn CIFS username and password
 
 The tracked Vaultwarden values template references Kubernetes Secrets and must
 not contain credential values directly. `deploy.sh` creates or updates

@@ -12,8 +12,9 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 
-NAS="${NAS:-${UNRAID_IP:-192.0.2.9}}"
+NAS="${NAS:-${BACKUP_NAS_IP:-${UNRAID_IP:-192.0.2.9}}}"
 EXPORT="${EXPORT:-${CLUSTER_BACKUP_EXPORT:-/mnt/user/K3S-Backup}}"
+NFS_VERSION="${NFS_VERSION:-${BACKUP_NFS_VERSION:-4.2}}"
 MOUNT="${MOUNT:-/mnt/k3s-restore}"
 DEST="${DEST:-$HOME/k3s-restored}"
 REPO="${REPO:-$ROOT_DIR}"
@@ -79,10 +80,14 @@ EOF
 }
 
 mount_backup() {
+  [[ "$NFS_VERSION" =~ ^(3|4|4[.]0|4[.]1|4[.]2)$ ]] || {
+    echo "ERROR: unsupported NFS version: $NFS_VERSION" >&2
+    return 1
+  }
   sudo mkdir -p "$MOUNT"
 
   if ! mountpoint -q "$MOUNT"; then
-    sudo mount -t nfs4 -o vers=4.2,proto=tcp "${NAS}:${EXPORT}" "$MOUNT"
+    sudo mount -t nfs -o "vers=${NFS_VERSION},proto=tcp" "${NAS}:${EXPORT}" "$MOUNT"
     MOUNTED_BY_SCRIPT=1
   fi
 

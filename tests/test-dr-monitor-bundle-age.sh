@@ -50,8 +50,14 @@ echo 'ERROR: latest cluster backup is too old.'
 exit 1
 EOF
 
+cat >"$TEST_ROOT/notify-failure" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+
 chmod +x "$TEST_ROOT/bin/kubectl" "$TEST_ROOT/bin/systemctl" \
-  "$TEST_ROOT/verify-warning" "$TEST_ROOT/verify-critical" "$TEST_ROOT/verify-velero"
+  "$TEST_ROOT/verify-warning" "$TEST_ROOT/verify-critical" \
+  "$TEST_ROOT/verify-velero" "$TEST_ROOT/notify-failure"
 
 run_monitor() {
   local verifier="$1" state="$2" output="$3"
@@ -78,4 +84,20 @@ set -e
 grep -qF 'Status: CRITICAL' "$critical_output"
 grep -qF 'CRITICAL: Cluster recovery bundle verification failed at age 31h' "$critical_output"
 
-echo 'PASS: DR monitor bundle-age warning and critical thresholds'
+notify_state="$TEST_ROOT/notify-state"
+notify_output="$TEST_ROOT/notify.out"
+set +e
+PATH="$TEST_ROOT/bin:$PATH" \
+  APPS_FILE="$TEST_ROOT/apps.conf" \
+  STATE_DIR="$notify_state" \
+  BACKUP_VERIFY="$TEST_ROOT/verify-warning" \
+  VELERO_VERIFY="$TEST_ROOT/verify-velero" \
+  NOTIFY="$TEST_ROOT/notify-failure" \
+  "$REPO_ROOT/monitoring/dr-monitor.sh" >"$notify_output" 2>&1
+notify_rc=$?
+set -e
+(( notify_rc == 1 ))
+[[ ! -e "$notify_state/last-status" ]]
+grep -qF 'notification delivery failed; state transition was not persisted' "$notify_output"
+
+echo 'PASS: DR monitor thresholds and notification retry behavior'

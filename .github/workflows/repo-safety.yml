@@ -23,6 +23,7 @@ jobs:
           ./tests/test-maintain-cluster.sh
           ./tests/test-workstation-readiness.sh
           ./tests/test-dr-monitor-bundle-age.sh
+          ./tests/test-alertmanager-config.sh
           ./tests/test-backup-latest-symlink.sh
           ./tests/test-verify-velero.sh
       - name: Secret/config scan

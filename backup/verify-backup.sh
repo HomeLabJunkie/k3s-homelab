@@ -15,7 +15,7 @@ fi
 # shellcheck source=backup/remote-storage.sh
 source "$SCRIPT_DIR/remote-storage.sh"
 
-NAS="${NAS:-${UNRAID_IP:-192.0.2.9}}"
+NAS="${NAS:-${BACKUP_NAS_IP:-${UNRAID_IP:-192.0.2.9}}}"
 EXPORT="${EXPORT:-${CLUSTER_BACKUP_EXPORT:-/mnt/user/K3S-Backup}}"
 MAX_BACKUP_AGE_HOURS="${MAX_BACKUP_AGE_HOURS:-30}"
 

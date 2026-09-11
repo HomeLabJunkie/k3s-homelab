@@ -196,7 +196,7 @@ bad_urls=0
 for url in "${URLS[@]}"; do
     [[ -n "$url" ]] || missing_urls=$((missing_urls + 1))
 
-    if [[ -n "$url" && ! "$url" =~ ^nfs://.+\?backup=.+\&volume=.+$ ]]; then
+    if [[ -n "$url" && ! "$url" =~ ^(nfs|cifs|s3)://.+\?backup=[^\&]+\&volume=.+$ ]]; then
         bad_urls=$((bad_urls + 1))
     fi
 done
@@ -208,7 +208,7 @@ else
 fi
 
 if (( bad_urls == 0 )); then
-    pass "All backup URLs have expected Longhorn NFS format"
+    pass "All backup URLs have a supported Longhorn backup-store format"
 else
     fail "$bad_urls backup URL(s) have unexpected format"
 fi
