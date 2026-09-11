@@ -376,6 +376,11 @@ key, securely escrow the old key until the retention window expires, then
 remove the old recipient and rerun the test. Never commit plaintext secrets or
 delete the old key before a tested recovery path exists.
 
+To rotate and automatically email the Bitwarden reminder, update `.sops.yaml`
+with the new public recipient and run `./scripts/rotate-sops-age-key.sh`.
+The wrapper only sends the reminder after the recipient set changes and the
+decryption/recovery test passes; no private key material is emailed.
+
 Defaults:
 
 - cluster recovery bundles retained: 14
