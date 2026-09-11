@@ -12,6 +12,8 @@ UNITS=(
   k3s-dr-verify.timer
   k3s-dr-monitor.service
   k3s-dr-monitor.timer
+  k3s-dr-restore-canary.service
+  k3s-dr-restore-canary.timer
 )
 
 for f in "${UNITS[@]}"; do
@@ -25,7 +27,8 @@ systemctl --user daemon-reload
 systemctl --user enable --now \
   k3s-dr-backup.timer \
   k3s-dr-verify.timer \
-  k3s-dr-monitor.timer
+  k3s-dr-monitor.timer \
+  k3s-dr-restore-canary.timer
 
 echo
 systemctl --user list-timers 'k3s-dr-*'

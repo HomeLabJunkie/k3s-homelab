@@ -815,7 +815,7 @@ See [`recovery/DR-RUNBOOK.md`](recovery/DR-RUNBOOK.md) for the complete procedur
 ├── manifests/backup/              # Longhorn snapshot class, recurring + Velero schedules
 ├── backup/                         # backup.sh, remote-storage.sh, verify-*.sh
 ├── monitoring/                     # dr-monitor.sh, dr-notify.sh
-├── systemd/                        # k3s-dr-{backup,monitor,verify} units + timers
+├── systemd/                        # k3s-dr backup/verify/monitor/canary units + timers
 ├── tests/                          # Shell safety tests run by repo-safety.yml
 ├── recovery/
 │   ├── DR-RUNBOOK.md

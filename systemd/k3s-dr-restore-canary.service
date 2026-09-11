@@ -1,0 +1,13 @@
+[Unit]
+Description=K3s disaster-recovery Velero restore canary
+After=network-online.target k3s-dr-monitor.service
+Wants=network-online.target
+OnFailure=k3s-dr-monitor.service
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+WorkingDirectory=%h/Work/k3s-homelab
+ExecStart=%h/Work/k3s-homelab/scripts/test-velero-backup.sh
+TimeoutStartSec=90min
