@@ -5,6 +5,7 @@ KUBECTL="${KUBECTL:-kubectl}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
+ASSUME_YES=false
 
 usage() {
     cat <<'EOF'
@@ -32,6 +33,8 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
     exit 0
 fi
+
+if [[ "${1:-}" == "--yes" ]]; then ASSUME_YES=true; shift; fi
 
 if (( $# != 0 )); then
     echo "ERROR: This script takes no positional arguments." >&2
@@ -156,13 +159,16 @@ echo
 echo "WARNING:"
 echo "This will remove ONLY the known DR validation/binding/restore resources."
 echo "Longhorn backups and the backup target are not deleted."
-printf 'Type CLEANUP exactly to continue: '
-read -r CONFIRM
-
-if [[ "$CONFIRM" != "CLEANUP" ]]; then
-    echo
-    echo "Confirmation not received. Nothing was deleted."
-    exit 0
+if [[ "$ASSUME_YES" != true ]]; then
+    printf 'Type CLEANUP exactly to continue: '
+    read -r CONFIRM
+    if [[ "$CONFIRM" != "CLEANUP" ]]; then
+        echo
+        echo "Confirmation not received. Nothing was deleted."
+        exit 0
+    fi
+else
+    echo "Explicit --yes supplied; continuing with cleanup."
 fi
 
 echo

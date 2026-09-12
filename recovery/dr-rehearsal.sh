@@ -175,7 +175,7 @@ fi
 
 echo
 echo "===== 9. LONGHORN RESTORE ====="
-"$SSH" -t "$DR_HOST" "sudo -n '$REMOTE_APPLY' --manifest '$REMOTE_RESTORE'" \
+"$SSH" -t "$DR_HOST" "sudo -n '$REMOTE_APPLY' --manifest '$REMOTE_RESTORE' --yes" \
   && RESULT[longhorn_restore]="PASS" \
   || fail_stage longhorn_restore "Restore failed or cancelled."
 
@@ -184,7 +184,7 @@ echo "===== 10. PV/PVC BINDING ====="
 echo "Remote generated bindings: $REMOTE_BINDINGS"
 
 "$SSH" -t "$DR_HOST" \
-  "sudo -n '$REMOTE_BIND' --manifest '$REMOTE_RESTORE' --output '$REMOTE_BINDINGS' --apply" \
+  "sudo -n '$REMOTE_BIND' --manifest '$REMOTE_RESTORE' --output '$REMOTE_BINDINGS' --apply --yes" \
   && RESULT[binding]="PASS" \
   || fail_stage binding "Binding failed or cancelled."
 
@@ -215,7 +215,7 @@ fi
 
 echo
 echo "===== 14. GUARDED CLEANUP ====="
-"$SSH" -t "$DR_HOST" "sudo -n '$REMOTE_CLEANUP'" \
+"$SSH" -t "$DR_HOST" "sudo -n '$REMOTE_CLEANUP' --yes" \
   && RESULT[cleanup]="PASS" \
   || fail_stage cleanup "Cleanup failed or cancelled."
 

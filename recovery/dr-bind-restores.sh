@@ -4,6 +4,7 @@ set -Eeuo pipefail
 MANIFEST=""
 OUTPUT="recovery/generated-latest-bindings.yaml"
 APPLY=0
+ASSUME_YES=false
 KUBECTL="${KUBECTL:-kubectl}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
 
@@ -35,6 +36,7 @@ while (( $# )); do
         -m|--manifest) MANIFEST="${2:?missing manifest}"; shift 2 ;;
         -o|--output) OUTPUT="${2:?missing output}"; shift 2 ;;
         --apply) APPLY=1; shift ;;
+        --yes) ASSUME_YES=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -172,11 +174,15 @@ done < "$TMP"
 echo
 echo "WARNING: this will create $COUNT static PV/PVC bindings."
 echo "It will NOT start applications."
-printf 'Type BIND exactly to continue: '
-read -r CONFIRM
-if [[ "$CONFIRM" != "BIND" ]]; then
-    echo "Confirmation not received. Nothing was applied."
-    exit 0
+if [[ "$ASSUME_YES" != true ]]; then
+    printf 'Type BIND exactly to continue: '
+    read -r CONFIRM
+    if [[ "$CONFIRM" != "BIND" ]]; then
+        echo "Confirmation not received. Nothing was applied."
+        exit 0
+    fi
+else
+    echo "Explicit --yes supplied; continuing with binding."
 fi
 
 $KUBECTL apply -f "$OUTPUT"

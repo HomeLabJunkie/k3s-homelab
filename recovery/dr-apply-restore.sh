@@ -9,11 +9,12 @@ POLL_SECONDS="${POLL_SECONDS:-10}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-3600}"
 API_GRACE_SECONDS="${API_GRACE_SECONDS:-180}"
 MANIFEST=""
+ASSUME_YES=false
 
 usage() {
 cat <<'EOF'
 Usage:
-  dr-apply-restore.sh --manifest FILE
+  dr-apply-restore.sh --manifest FILE [--yes]
 
 Environment:
   KUBECTL           Default: kubectl
@@ -31,7 +32,7 @@ Safety:
   - aborts on mismatched existing volumes
   - restores new volumes sequentially
   - tolerates transient API outages during heavy restores
-  - requires typing RESTORE exactly
+  - requires explicit --yes for unattended execution
   - does not create PVs/PVCs or start applications
 EOF
 }
@@ -39,6 +40,7 @@ EOF
 while (( $# )); do
   case "$1" in
     -m|--manifest) MANIFEST="${2:?missing manifest}"; shift 2 ;;
+    --yes) ASSUME_YES=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown option $1" >&2; exit 2 ;;
   esac
@@ -143,9 +145,13 @@ done
 TOTAL_GIB="$(awk -v B="$TOTAL_BYTES" 'BEGIN{printf "%.1f",B/1073741824}')"
 echo "Total capacity: ${TOTAL_GIB} GiB"
 echo
-printf 'Type RESTORE exactly to continue: '
-read -r CONFIRM
-[[ "$CONFIRM" == "RESTORE" ]] || { echo "Confirmation not received. Nothing new was applied."; exit 3; }
+if [[ "$ASSUME_YES" != true ]]; then
+  printf 'Type RESTORE exactly to continue: '
+  read -r CONFIRM
+  [[ "$CONFIRM" == "RESTORE" ]] || { echo "Confirmation not received. Nothing new was applied."; exit 3; }
+else
+  echo "Explicit --yes supplied; continuing with restore."
+fi
 
 wait_restore() {
   local NAME="$1" START NOW ELAPSED J STATE ROB RR NODE SSTAT SREASON SMSG STABLE=0
