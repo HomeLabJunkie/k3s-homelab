@@ -79,6 +79,10 @@ if [[ "$args" == *" get --raw=/readyz "* ]]; then
   exit 0
 fi
 
+if [[ "$args" == *" get pdb -A "* || "$args" == *" cordon "* || "$args" == *" drain "* || "$args" == *" uncordon "* ]]; then
+  exit 0
+fi
+
 if [[ "$args" == *" get nodes -o wide --no-headers "* ]]; then
   printf 'mock-node Ready none 1d v1 %s none Linux kernel runtime\n' "$MOCK_TARGET"
   exit 0

@@ -63,7 +63,7 @@ fi
 
 cd "$ROOT_DIR"
 
-for cmd in ansible-inventory python3 tee; do
+for cmd in ansible-inventory python3 tee kubectl; do
   command -v "$cmd" >/dev/null 2>&1 || fail "required command not found: $cmd"
 done
 
@@ -137,6 +137,14 @@ for entry in "${targets[@]}"; do
   IFS=$'\t' read -r node_type target <<<"$entry"
   printf '  %-14s %s\n' "$node_type" "$target"
 done
+
+if [[ "$APPLY" == true ]]; then
+  echo
+  echo "===== BACKUP / DR FRESHNESS GATE ====="
+  "$ROOT_DIR/backup/verify-backup.sh"
+  "$ROOT_DIR/backup/verify-velero.sh"
+  echo "Backup and DR freshness checks passed."
+fi
 
 if [[ "$APPLY" == true ]]; then
   echo

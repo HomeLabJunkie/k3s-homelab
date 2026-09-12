@@ -119,6 +119,11 @@ APPLY CLUSTER
 The wrapper repeats check mode before applying each node. It then validates the
 node and cluster before moving to the next target.
 
+Before changing a node, the wrapper verifies fresh cluster and Velero backups,
+cordons the node, and drains evictable workloads while honoring disruption
+budgets. The node is uncordoned only after post-maintenance validation passes;
+failures leave the rolling run stopped and attempt to restore schedulability.
+
 ### 5. Confirm the final result
 
 The run is successful only when it ends with:

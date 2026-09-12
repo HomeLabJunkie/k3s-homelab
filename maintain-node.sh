@@ -269,6 +269,30 @@ else
   echo "Explicit --apply --yes supplied; continuing non-interactively."
 fi
 
+NODE_CORDONED=false
+restore_schedulability() {
+  if [[ "$NODE_CORDONED" == true ]]; then
+    echo "==> Uncordoning $target_name..."
+    kubectl uncordon "$target_name" >/dev/null 2>&1 || \
+      echo "WARNING: failed to uncordon $target_name" >&2
+    NODE_CORDONED=false
+  fi
+}
+trap restore_schedulability EXIT
+
+echo
+echo "===== PRE-MAINTENANCE DRAIN ====="
+echo "==> Checking PodDisruptionBudgets and workloads before drain..."
+kubectl get pdb -A --no-headers 2>/dev/null || true
+kubectl cordon "$target_name"
+NODE_CORDONED=true
+kubectl drain "$target_name" \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --force \
+  --grace-period=60 \
+  --timeout=10m
+
 echo
 echo "===== LIVE SINGLE-NODE RECONCILIATION ====="
 
@@ -450,6 +474,8 @@ fi
 
 echo
 echo "POST-MAINTENANCE VALIDATION: PASS"
+
+restore_schedulability
 
 echo
 echo "===== QUICK REPOSITORY DOCTOR ====="
