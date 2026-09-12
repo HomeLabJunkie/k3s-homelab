@@ -141,6 +141,23 @@ Each applied node must pass:
 - all Longhorn volumes attached and healthy
 - the quick repository doctor
 
+### Failure and rollback handling
+
+If drain, Ansible reconciliation, or post-maintenance validation fails, the
+rolling run stops before touching another node. The wrapper attempts to
+uncordon the failed node, but confirm with:
+
+```bash
+kubectl get nodes
+kubectl describe node <NODE_NAME> | grep -E 'Unschedulable|Conditions:'
+```
+
+Do not continue the rolling run until the node is Ready, schedulable, and the
+cluster health checks pass. For a bad K3s binary or kernel, restore the prior
+package/kernel from the node's package manager or bootloader, rerun the
+single-node check, and only then resume the cluster wrapper. Never roll back
+two control-plane nodes at once; preserve at least two healthy etcd members.
+
 ## Single-node maintenance
 
 Use the single-node wrapper when troubleshooting or intentionally changing only
