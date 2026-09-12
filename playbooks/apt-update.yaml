@@ -1,6 +1,8 @@
 ---
 - name: Update Debian-family hosts
   hosts: "*"
+  serial: 1
+  any_errors_fatal: true
   become: true
   tasks:
     - name: Update apt cache and upgrade installed packages

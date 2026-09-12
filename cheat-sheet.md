@@ -19,6 +19,11 @@ require an explicit `--apply` before making changes.
 processed first, followed by control-plane nodes, and only one node is processed
 at a time. The rolling run stops immediately if any node fails.
 
+The standalone `playbooks/apt-update.yaml` and `reboot.yml` playbooks are also
+strictly serial (`serial: 1`) and stop on the first failure. Do not run package
+updates or reboots with an ad-hoc Ansible command that targets all six nodes in
+parallel.
+
 ## Workstation and DR-host handoff
 
 Before powering off or replacing the current operator workstation or DR host,
