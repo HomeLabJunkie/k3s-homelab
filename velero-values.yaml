@@ -8,7 +8,7 @@ initContainers:
   - name: velero-plugin-for-aws
     # v1.14.2 corrupts metadata on non-AWS S3 backends via SDK checksum
     # framing (velero-io/velero#9951). Keep v1.14.1 until v1.14.3 is stable.
-    image: docker.io/velero/velero-plugin-for-aws:v1.14.1
+    image: docker.io/velero/velero-plugin-for-aws:v1.14.2
     imagePullPolicy: IfNotPresent
     volumeMounts:
       - mountPath: /target
