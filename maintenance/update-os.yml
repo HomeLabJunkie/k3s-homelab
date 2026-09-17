@@ -44,7 +44,8 @@
       register: os_apt_dependency
       changed_when: false
       failed_when: os_apt_dependency.rc != 0 or os_apt_dependency.stdout != 'installed'
-    - name: Check existing K3s service
+    # Query only: do not start or reconcile the service during preflight.
+    - name: Check existing K3s service # noqa: command-instead-of-module
       ansible.builtin.command: "systemctl is-active {{ os_service }}"
       changed_when: false
     - name: Read K3s version before update
@@ -73,7 +74,8 @@
         auto_install_module_deps: false
         lock_timeout: 300
       when: os_refresh_cache | bool
-    - name: Preview updates using current package indexes
+    # Preserve APT's exact simulation output for the maintenance assessment.
+    - name: Preview updates using current package indexes # noqa: command-instead-of-module
       ansible.builtin.command: apt-get --simulate --with-new-pkgs --no-remove upgrade
       environment:
         LC_ALL: C
@@ -123,7 +125,8 @@
             post_reboot_delay: 15
           when: os_reboot_required.stat.exists
           register: os_reboot
-        - name: Wait for K3s service to be active
+        # Poll only: recovery must not start an unexpectedly stopped service.
+        - name: Wait for K3s service to be active # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl is-active {{ os_service }}"
           changed_when: false
           register: os_service_result
