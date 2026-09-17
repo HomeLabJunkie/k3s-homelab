@@ -202,7 +202,7 @@ toolchain against `config/toolchain.env`.
 Supported ranges:
 
 ```text
-ansible-core >= 2.21.3 and < 2.22.0
+ansible-core >= 2.21.4 and < 2.22.0
 Python       >= 3.11.0 and < 3.15.0
 ```
 
