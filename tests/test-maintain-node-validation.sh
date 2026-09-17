@@ -84,6 +84,19 @@ if [[ "$args" == *" get pdb -A "* || "$args" == *" cordon "* || "$args" == *" dr
 fi
 
 if [[ "$args" == *" get nodes -o wide --no-headers "* ]]; then
+  if [[ "$scenario" == "streamed-nodes" ]]; then
+    exec python3 - "$MOCK_TARGET" <<'PY'
+import signal
+import sys
+import time
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+print(f"mock-node Ready none 1d v1 {sys.argv[1]} none Linux kernel runtime", flush=True)
+time.sleep(0.05)
+for index in range(10000):
+    print(f"other-{index} Ready none 1d v1 192.0.2.99 none Linux kernel runtime")
+PY
+  fi
   printf 'mock-node Ready none 1d v1 %s none Linux kernel runtime\n' "$MOCK_TARGET"
   exit 0
 fi
@@ -176,6 +189,7 @@ run_case() {
 }
 
 run_case success success worker 0 'POST-MAINTENANCE VALIDATION: PASS'
+run_case streamed-nodes streamed-nodes worker 0 'POST-MAINTENANCE VALIDATION: PASS'
 run_case api-failure api worker 1 'FAIL: API /readyz'
 run_case node-failure node worker 1 'FAIL: Target node'
 run_case cilium-failure cilium worker 1 'FAIL: Cilium'

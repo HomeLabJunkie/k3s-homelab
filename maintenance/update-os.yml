@@ -1,0 +1,160 @@
+---
+- name: Update OS packages on exactly one existing node
+  hosts: "{{ target }}"
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    os_apply: false
+    os_refresh_cache: false
+    os_service: "{{ 'k3s' if inventory_hostname in groups['master'] else 'k3s-node' }}"
+  pre_tasks:
+    - name: Validate target and platform
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - inventory_hostname in groups['node'] or inventory_hostname in groups['master']
+          - ansible_facts['os_family'] == 'Debian'
+          - os_report_dir is defined
+    - name: Check Ubuntu release upgrade availability without upgrading
+      ansible.builtin.command:
+        argv: [timeout, '120', do-release-upgrade, --check-dist-upgrade-only]
+      environment:
+        LC_ALL: C
+      register: os_release_check
+      changed_when: false
+      failed_when: false
+      when: ansible_facts['distribution'] == 'Ubuntu'
+    - name: Save release upgrade check on workstation
+      ansible.builtin.copy:
+        content: >-
+          {{ {'distribution': ansible_facts['distribution'],
+              'version': ansible_facts['distribution_version'],
+              'rc': os_release_check.rc | default(-1),
+              'stdout': os_release_check.stdout | default(''),
+              'stderr': os_release_check.stderr | default(''),
+              'message': os_release_check.msg | default('')} | to_nice_json }}
+        dest: "{{ os_report_dir }}/release-check.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+    - name: Verify APT module dependency is already installed
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, '-f=${db:Status-Status}', python3-apt]
+      register: os_apt_dependency
+      changed_when: false
+      failed_when: os_apt_dependency.rc != 0 or os_apt_dependency.stdout != 'installed'
+    - name: Check existing K3s service
+      ansible.builtin.command: "systemctl is-active {{ os_service }}"
+      changed_when: false
+    - name: Read K3s version before update
+      ansible.builtin.command: k3s --version
+      register: os_k3s_before
+      changed_when: false
+    - name: Read installed packages before update
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, '-f=${binary:Package}\t${Version}\t${db:Status-Status}\n']
+      register: os_before
+      changed_when: false
+    - name: Write before snapshot on workstation
+      ansible.builtin.copy:
+        content: >-
+          {{ {'packages': os_before.stdout, 'kernel': ansible_facts['kernel'],
+              'distribution': ansible_facts['distribution_version'],
+              'k3s': os_k3s_before.stdout} | to_nice_json }}
+        dest: "{{ os_report_dir }}/before.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+  tasks:
+    - name: Refresh package indexes before deciding whether maintenance is needed
+      ansible.builtin.apt:
+        update_cache: true
+        auto_install_module_deps: false
+        lock_timeout: 300
+      when: os_refresh_cache | bool
+    - name: Preview updates using current package indexes
+      ansible.builtin.command: apt-get --simulate --with-new-pkgs --no-remove upgrade
+      environment:
+        LC_ALL: C
+      register: os_plan
+      changed_when: false
+    - name: Detect an already pending reboot
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: os_pending_reboot
+    - name: Save maintenance assessment
+      ansible.builtin.copy:
+        content: >-
+          {{ {'plan': os_plan.stdout, 'reboot_required': os_pending_reboot.stat.exists,
+              'indexes_refreshed': os_refresh_cache | bool} | to_nice_json }}
+        dest: "{{ os_report_dir }}/pending.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+    - name: Save package plan
+      ansible.builtin.copy:
+        content: "{{ os_plan.stdout }}\n"
+        dest: "{{ os_report_dir }}/plan.txt"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+    - name: Display package plan
+      ansible.builtin.debug:
+        var: os_plan.stdout_lines
+    - name: Apply OS maintenance
+      when: os_apply | bool
+      block:
+        - name: Upgrade without removing packages using the assessed package indexes
+          ansible.builtin.apt:
+            update_cache: false
+            upgrade: safe
+            force_apt_get: true
+            fail_on_autoremove: true
+            auto_install_module_deps: false
+            lock_timeout: 300
+        - name: Detect required reboot
+          ansible.builtin.stat:
+            path: /var/run/reboot-required
+          register: os_reboot_required
+        - name: Reboot when required and wait for SSH
+          ansible.builtin.reboot:
+            reboot_timeout: 900
+            post_reboot_delay: 15
+          when: os_reboot_required.stat.exists
+          register: os_reboot
+        - name: Wait for K3s service to be active
+          ansible.builtin.command: "systemctl is-active {{ os_service }}"
+          changed_when: false
+          register: os_service_result
+          until: os_service_result.rc == 0
+          retries: 30
+          delay: 10
+      always:
+        - name: Read installed packages after update including partial failures
+          ansible.builtin.command:
+            argv: [dpkg-query, -W, '-f=${binary:Package}\t${Version}\t${db:Status-Status}\n']
+          register: os_after
+          changed_when: false
+        - name: Read running kernel
+          ansible.builtin.command: uname -r
+          register: os_kernel
+          changed_when: false
+        - name: Read K3s version after update
+          ansible.builtin.command: k3s --version
+          register: os_k3s_after
+          changed_when: false
+        - name: Record held packages
+          ansible.builtin.command: apt-mark showhold
+          register: os_held
+          changed_when: false
+        - name: Write after snapshot on workstation
+          ansible.builtin.copy:
+            content: >-
+              {{ {'packages': os_after.stdout, 'kernel': os_kernel.stdout,
+                  'held': os_held.stdout_lines, 'k3s': os_k3s_after.stdout,
+                  'rebooted': (os_reboot | default({})).get('changed', false)} | to_nice_json }}
+            dest: "{{ os_report_dir }}/after.json"
+            mode: '0600'
+          delegate_to: localhost
+          become: false

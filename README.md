@@ -156,6 +156,16 @@ ansible-playbook \
 The maintenance playbook refuses non-master targets, requires an existing
 embedded-etcd member, and uses only the service reconciliation task file.
 
+### Rolling OS package updates
+
+Use `./update-os.sh` to preview Debian/Ubuntu OS package updates, then
+`./update-os.sh --apply` to update workers before control-plane nodes, one at a
+time. The updater drains each target, reboots when required, verifies K3s and
+Kubernetes recovery, and records package/kernel changes in `logs/os-updates/`.
+It stops on failure and leaves the affected drained node cordoned for recovery.
+See [the OS update runbook](cheat-sheet.md#rolling-os-package-updates) for setup,
+health gates, reports, and failure handling.
+
 ### Safe rolling cluster maintenance
 
 Use the rolling wrapper to reconcile the full cluster one node at a time.
@@ -338,6 +348,15 @@ METALLB_IP_RANGE
 Traefik is installed separately with Helm rather than using the K3s bundled Traefik.
 
 It handles application ingress and TLS-enabled service exposure.
+
+On 2026-09-17, the Helm chart was upgraded from `41.5.0` to `41.6.0`
+(release revision 14), retaining Traefik `v3.7.13` and the existing release
+values. `deploy.sh` defaults to the same chart version. Both replicas passed
+rollout verification, all six nodes remained Ready, and Rancher's `/ping`
+returned `pong` through the ingress service with HTTPS certificate validation.
+See the [upstream chart release](https://github.com/traefik/traefik-helm-chart/releases/tag/v41.6.0).
+Startup logs still warn about unset `aliasHeadersStrategy` and `SafeNaming`,
+and enabled cross-namespace references; these settings were preserved.
 
 ### cert-manager
 
@@ -920,6 +939,9 @@ healthy with warnings. The command is read-only and never reconciles,
 bootstraps, restores, or restarts the cluster.
 
 ## Operator Workstation Readiness
+
+For a new Omarchy laptop, follow [Operator laptop setup](operator-laptop-setup.md)
+to install the tools and provision local access before running these checks.
 
 Before retiring or replacing an operator workstation or DR host, run the
 complete ThinkPad/operator handoff check:
