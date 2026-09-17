@@ -21,6 +21,7 @@ jobs:
         run: |
           ./tests/test-maintain-node-validation.sh
           ./tests/test-maintain-cluster.sh
+          python3 tests/test-update-os.py
           ./tests/test-workstation-readiness.sh
           ./tests/test-dr-monitor-bundle-age.sh
           ./tests/test-alertmanager-config.sh

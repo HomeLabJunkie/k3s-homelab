@@ -9,6 +9,7 @@ require an explicit `--apply` before making changes.
 | Script | Purpose | Normal use |
 | --- | --- | --- |
 | `workstation-readiness.sh` | Validate the operator workstation, backups, and DR path | Before retiring or replacing the workstation/DR host |
+| `update-os.sh` | Rolling OS package updates with conditional reboots and reports | Routine Debian/Ubuntu OS patching |
 | `maintain-cluster.sh` | Safely reconcile the complete cluster | Preferred for routine maintenance |
 | `maintain-node.sh` | Safely reconcile exactly one inventory node | Troubleshooting or targeted maintenance |
 | `tests/test-workstation-readiness.sh` | Mock readiness success, warning, and failure | Run after editing the readiness wrapper |
@@ -23,6 +24,70 @@ The standalone `playbooks/apt-update.yaml` and `reboot.yml` playbooks are also
 strictly serial (`serial: 1`) and stop on the first failure. Do not run package
 updates or reboots with an ad-hoc Ansible command that targets all six nodes in
 parallel.
+
+## Rolling OS package updates
+
+`maintain-node.sh` and `maintain-cluster.sh` reconcile K3s; they do not upgrade
+OS packages. Use the dedicated updater for Debian/Ubuntu package maintenance:
+
+```bash
+cd ~/Work/k3s-homelab
+source .venv/bin/activate
+./update-os.sh
+./update-os.sh --apply
+```
+
+The default is a read-only remote preview using the nodes' existing APT indexes;
+it writes local plans and logs. Apply refreshes the indexes, so available updates
+may differ from the preview. Type `UPDATE OS` to confirm. Add
+`--ask-become-pass` if sudo needs a password (each Ansible invocation prompts).
+Explicit unattended runs can use `--apply --yes`.
+
+The updater discovers inventory workers first, then control-plane nodes, and:
+
+1. Checks inventory/node identity, roles, existing K3s service, API readiness,
+   all Node Ready conditions, Cilium, kube-vip, Longhorn volumes, and system controllers.
+2. In apply mode, refreshes APT indexes and assesses package work and pending
+   reboots before cordoning. Nodes with neither are reported as `UP-TO-DATE` and
+   skip backups, drain, upgrades, and recovery waits. If every node is up to date,
+   the run reports that no maintenance is needed and exits successfully.
+   A pending reboot still requires maintenance even when no packages need updating.
+   For nodes needing maintenance, checks cluster/Velero backup freshness.
+3. Cordons and drains one node, honoring disruption budgets. Drain deletes
+   `emptyDir` data; unmanaged pods block the run rather than being forcibly removed.
+4. Applies safe upgrades against the assessed indexes without package removals.
+   Reboots only when `/var/run/reboot-required` exists and waits for SSH and K3s.
+5. Waits for API, all nodes, Cilium and kube-vip; uncordons the target; then waits
+   for Longhorn volumes and system controllers to recover before the next node.
+6. Prints each node's result, exact package version changes, kernel/K3s versions,
+   reboot status, held packages, and distro upgrade availability.
+
+On Ubuntu, both preview and apply also run `do-release-upgrade --check-dist-upgrade-only`
+with a 120-second limit, honoring the node's configured release-upgrade policy
+(including LTS-only notifications). This may refresh release metadata caches but
+never installs a distro upgrade or opts into development releases. The summary
+reports `AVAILABLE` with the target release when supplied, `NONE`, `DISABLED`,
+or `UNKNOWN` for missing tools, network errors, or timeouts. Other distributions
+report `UNSUPPORTED`; release-check failures do not block routine package updates.
+Raw results are retained in each node's `release-check.json`.
+
+Reports are in `logs/os-updates/<timestamp>/`: `run.log`, `summary.txt`,
+`summary.json`, and numbered node directories containing `plan.txt` and package
+snapshots. Failed package operations attempt to capture partial changes. If the
+node is unreachable, the report explicitly says actual changes are unavailable.
+
+Any failure stops the run; later nodes are marked `SKIP`. A failed drained node
+stays cordoned. If full recovery fails after uncordoning, the script attempts to
+cordon it again. Inspect the log, repair the node, verify cluster health, then
+manually `kubectl uncordon <NODE_NAME>` before starting another run. Previously
+cordoned nodes block startup. There is no automatic package rollback.
+
+Recovery waits default to 3600 seconds (one hour) per phase; override with
+`--health-timeout <seconds>`. Reboot/SSH recovery has a separate 900-second timeout.
+The workstation requires the project Ansible toolchain, Python, `kubectl` with
+the production context, and backup verification access. Nodes need `python3-apt`
+already installed. This performs package updates within the current distribution,
+not distribution release upgrades or a K3s version upgrade.
 
 ## Workstation and DR-host handoff
 

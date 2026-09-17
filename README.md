@@ -156,6 +156,16 @@ ansible-playbook \
 The maintenance playbook refuses non-master targets, requires an existing
 embedded-etcd member, and uses only the service reconciliation task file.
 
+### Rolling OS package updates
+
+Use `./update-os.sh` to preview Debian/Ubuntu OS package updates, then
+`./update-os.sh --apply` to update workers before control-plane nodes, one at a
+time. The updater drains each target, reboots when required, verifies K3s and
+Kubernetes recovery, and records package/kernel changes in `logs/os-updates/`.
+It stops on failure and leaves the affected drained node cordoned for recovery.
+See [the OS update runbook](cheat-sheet.md#rolling-os-package-updates) for setup,
+health gates, reports, and failure handling.
+
 ### Safe rolling cluster maintenance
 
 Use the rolling wrapper to reconcile the full cluster one node at a time.
