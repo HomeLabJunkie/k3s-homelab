@@ -349,6 +349,15 @@ Traefik is installed separately with Helm rather than using the K3s bundled Trae
 
 It handles application ingress and TLS-enabled service exposure.
 
+On 2026-09-17, the Helm chart was upgraded from `41.5.0` to `41.6.0`
+(release revision 14), retaining Traefik `v3.7.13` and the existing release
+values. `deploy.sh` defaults to the same chart version. Both replicas passed
+rollout verification, all six nodes remained Ready, and Rancher's `/ping`
+returned `pong` through the ingress service with HTTPS certificate validation.
+See the [upstream chart release](https://github.com/traefik/traefik-helm-chart/releases/tag/v41.6.0).
+Startup logs still warn about unset `aliasHeadersStrategy` and `SafeNaming`,
+and enabled cross-namespace references; these settings were preserved.
+
 ### cert-manager
 
 cert-manager issues and renews certificates using the configured Let's Encrypt `ClusterIssuer`.
@@ -930,6 +939,9 @@ healthy with warnings. The command is read-only and never reconciles,
 bootstraps, restores, or restarts the cluster.
 
 ## Operator Workstation Readiness
+
+For a new Omarchy laptop, follow [Operator laptop setup](operator-laptop-setup.md)
+to install the tools and provision local access before running these checks.
 
 Before retiring or replacing an operator workstation or DR host, run the
 complete ThinkPad/operator handoff check:
