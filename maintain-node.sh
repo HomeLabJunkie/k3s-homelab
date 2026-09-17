@@ -206,7 +206,7 @@ readyz="$(kubectl get --raw=/readyz 2>/dev/null || true)"
 
 target_name="$(
   kubectl get nodes -o wide --no-headers 2>/dev/null |
-  awk -v ip="$TARGET" '$6 == ip {print $1; exit}'
+  awk -v ip="$TARGET" '$6 == ip && !found {print $1; found=1}'
 )"
 
 [[ -n "$target_name" ]] || fail "could not map target IP $TARGET to a Kubernetes node"
