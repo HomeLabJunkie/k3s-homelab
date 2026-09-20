@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-TARGET_URL='cifs://192.168.1.8/K3S-Backup/longhorn?cifsOptions=vers%3D3.0'
-SECRET='longhorn-backup-cifs'
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+set -a
+# shellcheck disable=SC1091
+source "${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
+set +a
+: "${BACKUP_NAS_IP:?BACKUP_NAS_IP is not set}"
+: "${LONGHORN_BACKUP_SHARE:?LONGHORN_BACKUP_SHARE is not set}"
+TARGET_URL="cifs://${BACKUP_NAS_IP}/${LONGHORN_BACKUP_SHARE}?cifsOptions=vers%3D3.0"
+SECRET="${LONGHORN_BACKUP_CREDENTIAL_SECRET:-longhorn-backup-cifs}"
 username=''; password=''
 while IFS='=' read -r key value; do
   case "$key" in

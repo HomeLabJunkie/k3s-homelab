@@ -15,7 +15,7 @@ spec:
     spec:
       initContainers:
       - name: git-clone
-        image: alpine/git:latest
+        image: alpine/git:v2.54.0
         command:
         - git
         - clone

@@ -104,7 +104,7 @@ Do NOT delete or modify the Longhorn backup target during DR testing.
 
 Before relying on a backup, run:
 
-    cd ~/k3s-git
+    cd ~/Work/k3s-homelab
     ./backup/verify-backup.sh
 
 Expected final result:
@@ -159,7 +159,7 @@ volume is still rebuilding or degraded. Wait for it to become healthy.
 Run:
 
 ```bash
-cd ~/k3s-git
+cd ~/Work/k3s-homelab
 ./backup/backup.sh
 ```
 
@@ -202,7 +202,7 @@ backup target.
 Run:
 
 ```bash
-cd ~/k3s-git
+cd ~/Work/k3s-homelab
 ./dr-status.sh
 ```
 
@@ -989,7 +989,7 @@ application/data level, and removed cleanly afterward.
 
 Before generating a recovery plan or executing a rehearsal, run:
 
-    cd ~/k3s-git
+    cd ~/Work/k3s-homelab
     ./dr-status.sh
 
 `dr-status.sh` is a read-only readiness gate.
@@ -1230,7 +1230,7 @@ The sequential restore helper avoids repeating that behavior.
 
 Readiness:
 
-    cd ~/k3s-git
+    cd ~/Work/k3s-homelab
     ./dr-status.sh
 
 Require:
@@ -1629,7 +1629,7 @@ and understanding each safety boundary.
 
 ## Step 0 - Check DR Readiness
 
-    cd ~/k3s-git
+    cd ~/Work/k3s-homelab
     ./dr-status.sh
 
 Preferred result:
@@ -1644,7 +1644,7 @@ understood and corrected or explicitly accepted for the exercise.
 
 ## Step 1 - Verify Production Backup
 
-    cd ~/k3s-git
+    cd ~/Work/k3s-homelab
     ./backup/verify-backup.sh
 
 Do not proceed unless the intended recovery point is valid.

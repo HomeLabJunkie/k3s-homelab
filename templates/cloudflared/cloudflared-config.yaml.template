@@ -5,7 +5,7 @@ metadata:
   namespace: cloudflared
 data:
   config.yaml: |
-    tunnel: 33474bac-6791-4d4f-94b9-a0ee54d537f8
+    tunnel: ${CLOUDFLARE_TUNNEL_ID}
     no-autoupdate: true
     ingress:
       - hostname: rancher.${BASE_DOMAIN}

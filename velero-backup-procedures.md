@@ -26,7 +26,8 @@ disposable restore test.
 
 ## Storage and credentials
 
-- Endpoint: `http://192.168.1.9:3900`
+- Endpoint: `http://<UNRAID_IP>:3900` (from `config/cluster.env`; injected by
+  `scripts/install-velero-backup.sh`, override with `GARAGE_S3_URL`)
 - Bucket: `k3s-velero`
 - Region: `garage`
 - Addressing: S3 path style

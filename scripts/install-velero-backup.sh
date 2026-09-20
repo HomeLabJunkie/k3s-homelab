@@ -19,8 +19,12 @@ done
 }
 
 set -a
+source "${ENV_FILE:-$ROOT/config/cluster.env}"
 source <(sops --decrypt "$SECRETS_FILE")
 set +a
+
+: "${UNRAID_IP:?UNRAID_IP is not set in config/cluster.env}"
+GARAGE_S3_URL="${GARAGE_S3_URL:-http://${UNRAID_IP}:3900}"
 
 for variable in VELERO_GARAGE_ACCESS_KEY VELERO_GARAGE_SECRET_KEY VELERO_REPOSITORY_PASSWORD; do
   [[ -n "${!variable:-}" ]] || {
@@ -59,6 +63,7 @@ helm upgrade --install velero vmware-tanzu/velero \
   --namespace velero \
   --version "$VELERO_CHART_VERSION" \
   --values "$ROOT/velero-values.yaml" \
+  --set "configuration.backupStorageLocation[0].config.s3Url=${GARAGE_S3_URL}" \
   --wait \
   --timeout 10m
 

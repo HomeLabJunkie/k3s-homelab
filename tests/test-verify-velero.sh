@@ -11,7 +11,7 @@ set -Eeuo pipefail
 
 case "$*" in
   *"get backupstoragelocation garage"*) printf '%s' Available ;;
-  *"get backupstoragelocation rustfs"*) printf '%s' Available ;;
+  *"get backupstoragelocation offsite"*) printf '%s' Available ;;
   *"get schedules.velero.io protected-apps-daily"*) printf '%s' Enabled ;;
   *"get backups.velero.io"*)
     printf '%s\n' "${BACKUPS_JSON:?}"
@@ -29,7 +29,7 @@ chmod +x "$TEST_ROOT/kubectl"
 
 completed="$(date -u -Iseconds)"
 export BACKUPS_JSON="$(jq -cn --arg completed "$completed" '{items:[
-  {metadata:{name:"newer-rustfs"},spec:{storageLocation:"rustfs"},status:{phase:"Completed",completionTimestamp:$completed}},
+  {metadata:{name:"newer-offsite"},spec:{storageLocation:"offsite"},status:{phase:"Completed",completionTimestamp:$completed}},
   {metadata:{name:"garage-current"},spec:{storageLocation:"garage"},status:{phase:"Completed",completionTimestamp:$completed}}
 ]}')"
 
@@ -37,9 +37,9 @@ output="$(PATH="$TEST_ROOT:$PATH" "$ROOT_DIR/backup/verify-velero.sh")"
 grep -q '^==> Latest Velero backup: garage-current$' <<<"$output"
 grep -q '^==> Velero storage location: garage$' <<<"$output"
 
-output="$(PATH="$TEST_ROOT:$PATH" VELERO_STORAGE_LOCATION=rustfs \
+output="$(PATH="$TEST_ROOT:$PATH" VELERO_STORAGE_LOCATION=offsite \
   "$ROOT_DIR/backup/verify-velero.sh")"
-grep -q '^==> Latest Velero backup: newer-rustfs$' <<<"$output"
-grep -q '^==> Velero storage location: rustfs$' <<<"$output"
+grep -q '^==> Latest Velero backup: newer-offsite$' <<<"$output"
+grep -q '^==> Velero storage location: offsite$' <<<"$output"
 
 echo "Velero storage-location verifier tests passed"

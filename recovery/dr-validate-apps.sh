@@ -3,7 +3,7 @@ set -u
 set -o pipefail
 
 KUBECTL="${KUBECTL:-kubectl}"
-CURL_IMAGE="${CURL_IMAGE:-curlimages/curl:latest}"
+CURL_IMAGE="${CURL_IMAGE:-curlimages/curl:8.22.0}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-180}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
 HTTP_RETRIES="${HTTP_RETRIES:-6}"
@@ -25,7 +25,7 @@ Usage:
 Environment overrides:
   KUBECTL          Kubernetes CLI command. Default: kubectl
   CURL_IMAGE       Curl image used for isolated HTTP checks.
-                   Default: curlimages/curl:latest
+                   Default: curlimages/curl:8.22.0
   TIMEOUT_SECONDS  Maximum wait per validation pod. Default: 180
   POLL_SECONDS     Seconds between readiness checks. Default: 5
   HTTP_RETRIES     HTTP retries for transient readiness failures. Default: 6

@@ -28,7 +28,8 @@ configuration:
         checksumAlgorithm: ""
         region: garage
         s3ForcePathStyle: "true"
-        s3Url: http://192.168.1.9:3900
+        # Placeholder; scripts/install-velero-backup.sh overrides this from UNRAID_IP.
+        s3Url: http://garage.example.invalid:3900
   volumeSnapshotLocation: []
   features: EnableCSI
   defaultBackupStorageLocation: garage

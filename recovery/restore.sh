@@ -310,7 +310,7 @@ http_health_check() {
 
   kubectl -n "$ns" run "$pod" \
     --restart=Never \
-    --image=curlimages/curl:latest \
+    --image=curlimages/curl:8.22.0 \
     --command -- sh -c "curl --connect-timeout 10 --max-time 30 -fsS '$url'" >/dev/null
 
   local deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
