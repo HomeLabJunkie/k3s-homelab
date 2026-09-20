@@ -4,6 +4,8 @@ Automated build, application deployment, observability, backup, and disaster-rec
 
 This repository has evolved well beyond the original K3s/Traefik/Longhorn bootstrap. It now manages the cluster from initial Ansible provisioning through application deployment, persistent storage, monitoring/logging, verified backups, and a tested end-to-end DR rehearsal.
 
+**New to all this?** Start with [How Our Home Cluster Works](docs/CLUSTER-STORY.md), a plain-English tour from six bare computers to the finished cluster.
+
 For the recommended maintenance commands and order of operations, see the
 [K3s maintenance cheat sheet](cheat-sheet.md).
 

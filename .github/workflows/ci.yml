@@ -12,7 +12,6 @@ on:
       - '**/.gitignore'
       - '**/FUNDING.yml'
       - '**/host.ini'
-      - '**/*.md'
       - '**/.editorconfig'
       - '**/ansible.example.cfg'
       - '**/LICENSE'
