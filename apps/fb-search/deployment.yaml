@@ -58,7 +58,7 @@ spec:
             - "*"
           env:
             - name: MARKETPLACE_LOCATION
-              value: bellevue
+              value: "Bellevue, NE"
             - name: PYTHONPATH
               value: /deps
           envFrom:
