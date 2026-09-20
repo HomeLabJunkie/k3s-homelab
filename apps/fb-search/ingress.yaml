@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fb-search
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: jeffriffle.com
+      http:
+        paths:
+          - path: /fb-search
+            pathType: Prefix
+            backend:
+              service:
+                name: fb-search
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - jeffriffle.com
+      secretName: tls-website

@@ -86,3 +86,6 @@ k3s-server-token.sha256
 
 # Generated DR restore manifests
 recovery/generated-*.yaml
+
+# fb-search app source (kept local; deployed via configMapGenerator)
+apps/fb-search/src/

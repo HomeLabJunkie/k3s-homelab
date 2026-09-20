@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fb-search
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: fb-search
+  endpoints:
+    - port: metrics
+      interval: 30s

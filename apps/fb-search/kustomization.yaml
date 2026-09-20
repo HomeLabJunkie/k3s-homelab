@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: website
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - servicemonitor.yaml
+# Hash-suffixed name: editing src/ changes the ConfigMap name, which rolls the Deployment automatically.
+configMapGenerator:
+  - name: fb-search-app
+    files:
+      - src/local_hunter.py
+      - src/scraper.py
+      - src/webapp.py

@@ -1,0 +1,107 @@
+# Requires Secret "fb-search" (APP_PASSWORD, SESSION_SECRET), created out of band and not stored in git.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fb-search
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fb-search
+  template:
+    metadata:
+      labels:
+        app: fb-search
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+        # Versions pinned so a PyPI release or outage cannot break a pod restart.
+        - name: deps
+          image: mcr.microsoft.com/playwright/python:v1.63.0-noble
+          command:
+            - pip
+            - install
+            - --no-cache-dir
+            - --target
+            - /deps
+            - playwright==1.63.0
+            - beautifulsoup4==4.15.0
+            - fastapi==0.141.1
+            - uvicorn==0.53.0
+            - itsdangerous==2.2.0
+            - python-multipart==0.0.32
+            - prometheus-client==0.26.0
+          env:
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+      containers:
+        - name: fb-search
+          image: mcr.microsoft.com/playwright/python:v1.63.0-noble
+          workingDir: /app
+          command:
+            - python
+            - -m
+            - uvicorn
+            - webapp:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+            - --proxy-headers
+            - --forwarded-allow-ips
+            - "*"
+          env:
+            - name: MARKETPLACE_LOCATION
+              value: bellevue
+            - name: PYTHONPATH
+              value: /deps
+          envFrom:
+            - secretRef:
+                name: fb-search
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: metrics
+              containerPort: 9100
+          readinessProbe:
+            httpGet:
+              path: /fb-search/healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          # A search holds a browser for up to ~a minute but healthz is served by a separate
+          # threadpool worker, so allow generous slack before restarting.
+          livenessProbe:
+            httpGet:
+              path: /fb-search/healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+              readOnly: true
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: deps
+          emptyDir: {}
+        - name: app
+          configMap:
+            name: fb-search-app

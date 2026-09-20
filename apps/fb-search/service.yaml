@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fb-search
+  labels:
+    app: fb-search
+spec:
+  selector:
+    app: fb-search
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+    # In-cluster only: the Ingress routes to port 80, so metrics are never public.
+    - name: metrics
+      port: 9100
+      targetPort: 9100
