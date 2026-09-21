@@ -32,6 +32,10 @@ ports:
     expose:
       default: true
     exposedPort: 80
+    http:
+      # Drop headers whose names alias another header (X_Auth_User for
+      # X-Auth-User) so clients cannot spoof headers Traefik manages.
+      aliasHeadersStrategy: delete
 
   websecure:
     # Internal Traefik entrypoint port.
@@ -39,6 +43,8 @@ ports:
     expose:
       default: true
     exposedPort: 443
+    http:
+      aliasHeadersStrategy: delete
 
   traefik:
     # Keep the management/dashboard entrypoint private.
@@ -46,8 +52,17 @@ ports:
     expose:
       default: false
     exposedPort: 9000
+    http:
+      aliasHeadersStrategy: delete
+
+  metrics:
+    http:
+      aliasHeadersStrategy: delete
 
 # Preserve the existing behavior for the Rancher backend.
 # NOTE: This is a broad TLS verification bypass for upstream connections.
 additionalArguments:
   - "--serversTransport.insecureSkipVerify=true"
+  # Set legacy naming explicitly to silence the startup warning (the chart omits
+  # the flag when false). true would rename routers/services: breaking.
+  - "--providers.kubernetescrd.safeNaming=false"
