@@ -357,8 +357,23 @@ values. `deploy.sh` defaults to the same chart version. Both replicas passed
 rollout verification, all six nodes remained Ready, and Rancher's `/ping`
 returned `pong` through the ingress service with HTTPS certificate validation.
 See the [upstream chart release](https://github.com/traefik/traefik-helm-chart/releases/tag/v41.6.0).
-Startup logs still warn about unset `aliasHeadersStrategy` and `SafeNaming`,
+Startup logs still warned about unset `aliasHeadersStrategy` and `SafeNaming`,
 and enabled cross-namespace references; these settings were preserved.
+
+On 2026-09-21, `traefik-values.yaml` was updated (release revision 15, same
+chart and Traefik version, PR #40):
+
+- `aliasHeadersStrategy: delete` on all four entrypoints (`web`, `websecure`,
+  `traefik`, `metrics`), so clients cannot spoof managed headers with aliased
+  names such as `X_Auth_User`. Apps that rely on underscore-style header names
+  would break; none were found.
+- `--providers.kubernetescrd.safeNaming=false` set explicitly through
+  `additionalArguments`, keeping the legacy naming scheme. The chart omits the
+  flag when the value is `false`, so it cannot be set through chart values.
+
+Both replicas rolled out cleanly and the ingress hosts still responded. The
+remaining startup warnings are the deliberate `allowCrossNamespace` setting and
+the encoded-characters default.
 
 ### cert-manager
 
