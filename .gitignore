@@ -86,5 +86,8 @@ k3s-server-token.sha256
 # Generated DR restore manifests
 recovery/generated-*.yaml
 
-# fb-search app source (kept local; deployed via configMapGenerator)
+# fb-search app source: deployed via configMapGenerator, deliberately not
+# published in this public repo. It automates a logged-in personal Facebook
+# session (a cloned Chrome profile), which Meta's terms do not permit. The
+# nightly backup/backup.sh bundle still includes it.
 apps/fb-search/src/
