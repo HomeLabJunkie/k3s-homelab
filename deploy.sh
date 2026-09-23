@@ -183,7 +183,7 @@ done
 
 echo "Deployment mode: $DEPLOY_MODE"
 
-for cmd in ansible ansible-playbook ansible-galaxy kubectl helm curl python3 envsubst openssl; do
+for cmd in ansible ansible-playbook ansible-galaxy kubectl helm curl python3 envsubst openssl argon2; do
   require_command "$cmd"
 done
 
@@ -1040,10 +1040,21 @@ done
 echo "==> Creating/updating Vaultwarden admin secret..."
 ensure_namespace vaultwarden
 
+# Store only an Argon2id PHC hash (Vaultwarden's "bitwarden" preset); the
+# /admin login still uses the plaintext VAULTWARDEN_ADMIN_TOKEN.
+VAULTWARDEN_ADMIN_TOKEN_HASH="$(
+  printf '%s' "$VAULTWARDEN_ADMIN_TOKEN" |
+    argon2 "$(openssl rand -base64 32)" -id -t 3 -k 65540 -p 4 -e
+)"
+[[ "$VAULTWARDEN_ADMIN_TOKEN_HASH" == '$argon2id$'* ]] || {
+  echo "ERROR: could not hash VAULTWARDEN_ADMIN_TOKEN with argon2."
+  exit 1
+}
 kubectl create secret generic vaultwarden-admin \
   --namespace vaultwarden \
-  --from-file=admin-token=<(printf '%s' "$VAULTWARDEN_ADMIN_TOKEN") \
+  --from-file=admin-token=<(printf '%s' "$VAULTWARDEN_ADMIN_TOKEN_HASH") \
   --dry-run=client -o yaml | kubectl apply -f -
+unset VAULTWARDEN_ADMIN_TOKEN_HASH
 
 echo "==> Creating/updating Vaultwarden integration secret..."
 kubectl create secret generic vaultwarden-integrations \

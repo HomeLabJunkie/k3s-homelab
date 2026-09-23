@@ -7,7 +7,7 @@ local configuration out of Git.
 ## Omarchy tools
 
 ```bash
-omarchy pkg add kubectl helm github-cli sops age direnv
+omarchy pkg add kubectl helm github-cli sops age direnv argon2
 cd ~/Work/k3s-homelab
 python -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
