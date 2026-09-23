@@ -1,0 +1,13 @@
+# Persistent pip target for the deps init container, so pod restarts reuse the
+# installed packages (~160Mi) instead of downloading them from PyPI each time.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fb-search-deps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
