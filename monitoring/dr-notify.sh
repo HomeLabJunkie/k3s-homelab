@@ -96,11 +96,17 @@ if (( email_ready == 1 )); then
   }
   for value in "$SMTP_HOST" "$SMTP_PORT" "$SMTP_USER" "$SMTP_PASSWORD" \
                "$MAIL_FROM" "$MAIL_TO"; do
-    [[ "$value" != *$'\n'* && "$value" != *$'\r'* && "$value" != *'"'* ]] || {
-      echo "ERROR: SMTP configuration contains an unsupported character" >&2
+    [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || {
+      echo "ERROR: SMTP configuration contains a line break" >&2
       exit 1
     }
   done
+  # curl's config parser treats \ as an escape inside double quotes, so escape
+  # backslashes and quotes; otherwise a password containing \ is silently altered.
+  cq() {
+    local v="${1//\\/\\\\}"
+    printf '%s' "${v//\"/\\\"}"
+  }
   msg="$(mktemp)"
   cfg="$(mktemp)"
   trap 'rm -f "${msg:-}" "${cfg:-}"' EXIT
@@ -114,12 +120,12 @@ Content-Type: text/plain; charset=UTF-8
 ${body}
 EOF
   cat >"$cfg" <<EOF
-url = "smtp://${SMTP_HOST}:${SMTP_PORT}"
+url = "$(cq "smtp://${SMTP_HOST}:${SMTP_PORT}")"
 ssl-reqd
-user = "${SMTP_USER}:${SMTP_PASSWORD}"
-mail-from = "${MAIL_FROM}"
-mail-rcpt = "${MAIL_TO}"
-upload-file = "${msg}"
+user = "$(cq "${SMTP_USER}:${SMTP_PASSWORD}")"
+mail-from = "$(cq "${MAIL_FROM}")"
+mail-rcpt = "$(cq "${MAIL_TO}")"
+upload-file = "$(cq "${msg}")"
 silent
 show-error
 EOF
