@@ -1290,9 +1290,17 @@ case "$MODE" in
     [[ ! -e "$DEST" ]] || { echo "ERROR: $DEST already exists"; exit 1; }
     tmpdir="$(mktemp -d)"
     trap 'rm -rf "$tmpdir"; cleanup' EXIT
-    sudo tar -xzf "$LATEST/repo/k3s-repository.tar.gz" -C "$tmpdir"
+    # Read with sudo (the NAS copy may be root-only) but extract as the invoking
+    # user, so restored files are theirs whatever UID made the backup.
+    sudo cat "$LATEST/repo/k3s-repository.tar.gz" | tar -xzf - -C "$tmpdir"
+    # backup.sh archives one top-level folder named after the repository.
+    mapfile -t repo_top < <(find "$tmpdir" -mindepth 1 -maxdepth 1)
+    [[ ${#repo_top[@]} -eq 1 && -d "${repo_top[0]}" ]] || {
+      echo "ERROR: expected exactly one top-level folder in the repository archive"
+      exit 1
+    }
     mkdir -p "$DEST"
-    cp -a "$tmpdir/k3s/." "$DEST/"
+    cp -a "${repo_top[0]}/." "$DEST/"
     echo "Repository restored to $DEST"
     ;;
   --list-longhorn)
