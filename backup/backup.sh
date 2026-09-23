@@ -163,8 +163,16 @@ chmod 700 "$STAGE_ROOT"
 echo "==> Staging repository backup locally..."
 REPO_PARENT="$(dirname "$REPO")"
 REPO_NAME="$(basename "$REPO")"
+# Leave out plaintext credentials (only .secrets.enc is kept, and it is also
+# copied separately below) and local tooling that is rebuilt from
+# requirements.txt / collections/requirements.yml and would not work at a
+# restored path anyway.
 tar --exclude='.git' --exclude='logs' --exclude='*.tmp' \
-    --exclude='recovery/state/*/archive' -C "$REPO_PARENT" \
+    --exclude='recovery/state/*/archive' \
+    --exclude='.venv' --exclude='.ansible' \
+    --exclude='kubeconfig' --exclude='*.kubeconfig' \
+    --exclude='.secrets' --exclude='config/email.env' \
+    -C "$REPO_PARENT" \
     -czf "$STAGE_DEST/repo/k3s-repository.tar.gz" "$REPO_NAME"
 [[ -s "$STAGE_DEST/repo/k3s-repository.tar.gz" ]] ||
     fail "repository archive was not created"
