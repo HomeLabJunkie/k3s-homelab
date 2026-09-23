@@ -79,7 +79,16 @@ if [[ "$args" == *" get --raw=/readyz "* ]]; then
   exit 0
 fi
 
-if [[ "$args" == *" get pdb -A "* || "$args" == *" cordon "* || "$args" == *" drain "* || "$args" == *" uncordon "* ]]; then
+if [[ "$args" == *" cordon "* || "$args" == *" drain "* || "$args" == *" uncordon "* ]]; then
+  echo "$1" >>"$MOCK_STATE_DIR/schedulability"
+  if [[ "$1" == "drain" && "$scenario" == "drain-failure" ]]; then
+    echo "error: cannot evict pod as it would violate the pod's disruption budget" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+if [[ "$args" == *" get pdb -A "* ]]; then
   exit 0
 fi
 
@@ -166,10 +175,11 @@ run_case() {
   local node_type="$3"
   local expected_rc="$4"
   local expected_text="$5"
+  local expected_uncordon="${6:-}"
   local output_file="$TEST_ROOT/$name.out"
-  local rc
+  local rc uncordoned
 
-  rm -f "$STATE_DIR/live"
+  rm -f "$STATE_DIR/live" "$STATE_DIR/schedulability"
 
   set +e
   PATH="$MOCK_BIN:$PATH" \
@@ -185,26 +195,34 @@ run_case() {
   rc=$?
   set -e
 
-  if (( rc == expected_rc )) && grep -qF "$expected_text" "$output_file"; then
+  uncordoned=no
+  grep -qx uncordon "$STATE_DIR/schedulability" 2>/dev/null && uncordoned=yes
+
+  if (( rc == expected_rc )) && grep -qF "$expected_text" "$output_file" &&
+     [[ -z "$expected_uncordon" || "$uncordoned" == "$expected_uncordon" ]]; then
     echo "PASS: $name"
     pass_count=$((pass_count + 1))
   else
-    echo "FAIL: $name (expected rc=$expected_rc and '$expected_text', got rc=$rc)"
+    echo "FAIL: $name (expected rc=$expected_rc, '$expected_text', uncordon=${expected_uncordon:-any}; got rc=$rc, uncordon=$uncordoned)"
     sed -n '1,260p' "$output_file"
     fail_count=$((fail_count + 1))
   fi
 }
 
-run_case success success worker 0 'POST-MAINTENANCE VALIDATION: PASS'
-run_case streamed-nodes streamed-nodes worker 0 'POST-MAINTENANCE VALIDATION: PASS'
-run_case api-failure api worker 1 'FAIL: API /readyz'
-run_case node-failure node worker 1 'FAIL: Target node'
-run_case cilium-failure cilium worker 1 'FAIL: Cilium'
-run_case kube-vip-failure kube-vip control-plane 1 'FAIL: kube-vip'
-run_case longhorn-failure longhorn worker 1 'FAIL: Longhorn volumes'
-run_case longhorn-detached-ok longhorn-detached worker 0 'POST-MAINTENANCE VALIDATION: PASS'
-run_case longhorn-faulted longhorn-faulted worker 1 'FAIL: Longhorn volumes'
-run_case longhorn-attaching longhorn-attaching worker 1 'FAIL: Longhorn volumes'
+run_case success success worker 0 'POST-MAINTENANCE VALIDATION: PASS' yes
+run_case streamed-nodes streamed-nodes worker 0 'POST-MAINTENANCE VALIDATION: PASS' yes
+run_case api-failure api worker 1 'FAIL: API /readyz' no
+run_case node-failure node worker 1 'FAIL: Target node' no
+run_case cilium-failure cilium worker 1 'FAIL: Cilium' no
+run_case kube-vip-failure kube-vip control-plane 1 'FAIL: kube-vip' no
+run_case longhorn-failure longhorn worker 1 'FAIL: Longhorn volumes' no
+run_case longhorn-detached-ok longhorn-detached worker 0 'POST-MAINTENANCE VALIDATION: PASS' yes
+run_case longhorn-faulted longhorn-faulted worker 1 'FAIL: Longhorn volumes' no
+run_case longhorn-attaching longhorn-attaching worker 1 'FAIL: Longhorn volumes' no
+# A failed validation leaves the changed node cordoned, with instructions.
+run_case left-cordoned-message node worker 1 'LEFT CORDONED' no
+# A failed drain changed nothing on the node, so it goes straight back into service.
+run_case drain-failure drain-failure worker 1 'cannot evict pod' yes
 
 echo
 echo "Validation tests: $pass_count passed, $fail_count failed"

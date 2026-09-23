@@ -273,6 +273,7 @@ else
 fi
 
 NODE_CORDONED=false
+NODE_CHANGED=false
 restore_schedulability() {
   if [[ "$NODE_CORDONED" == true ]]; then
     echo "==> Uncordoning $target_name..."
@@ -281,7 +282,21 @@ restore_schedulability() {
     NODE_CORDONED=false
   fi
 }
-trap restore_schedulability EXIT
+
+# Only return the node to service automatically if nothing on it changed (e.g.
+# the drain failed). Once reconciliation has started, a node that did not pass
+# validation stays cordoned so workloads are not scheduled onto it.
+on_exit_schedulability() {
+  [[ "$NODE_CORDONED" == true ]] || return 0
+  if [[ "$NODE_CHANGED" == true ]]; then
+    echo >&2
+    echo "WARNING: $target_name LEFT CORDONED: it was changed but did not pass validation." >&2
+    echo "         Repair it and confirm health, then run: kubectl uncordon $target_name" >&2
+  else
+    restore_schedulability
+  fi
+}
+trap on_exit_schedulability EXIT
 
 echo
 echo "===== PRE-MAINTENANCE DRAIN ====="
@@ -299,6 +314,7 @@ kubectl drain "$target_name" \
 echo
 echo "===== LIVE SINGLE-NODE RECONCILIATION ====="
 
+NODE_CHANGED=true
 ansible-playbook \
   -i "$INVENTORY" \
   "$PLAYBOOK" \
