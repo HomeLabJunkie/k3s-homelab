@@ -424,6 +424,7 @@ wait_restore_complete() {
 restore_app() {
   local app="$1"
   local ns pvc volume backup_line backup backup_url restore_vol pv pod cap size_bytes replicas frontend access_mode
+  local existing_source
 
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; exit 1; }
 
@@ -467,6 +468,19 @@ restore_app() {
   echo "    replicas: $replicas"
   echo "    frontend: $frontend"
   echo "    access:   $access_mode"
+
+  # Only resume a restore of the latest backup; an older one must not be
+  # reported as current and then promoted.
+  if kubectl -n longhorn-system get volume "$restore_vol" >/dev/null 2>&1; then
+    existing_source="$(kubectl -n longhorn-system get volume "$restore_vol" -o jsonpath='{.spec.fromBackup}')"
+    if [[ "$existing_source" != "$backup_url" ]]; then
+      echo "ERROR: $restore_vol was restored from a different backup than the latest."
+      echo "  existing: ${existing_source:-unknown}"
+      echo "  latest:   $backup_url"
+      echo "Inspect or promote the existing restore as-is, or discard it first: $0 --cleanup-test $app"
+      exit 1
+    fi
+  fi
 
   if kubectl -n "$ns" get pod "$pod" >/dev/null 2>&1 &&
      [[ "$(kubectl -n "$ns" get pod "$pod" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)" == "True" ]]; then
