@@ -931,16 +931,26 @@ if [[ -n "$LOGIN_TOKEN" ]]; then
 
   echo "==> Changing Rancher admin password for ${ADMIN_USER_ID}..."
 
-  kubectl create -f - <<EOF
-apiVersion: ext.cattle.io/v1
-kind: PasswordChangeRequest
-metadata:
-  generateName: admin-password-change-
-spec:
-  userID: "${ADMIN_USER_ID}"
-  currentPassword: "${ACTUAL_BOOTSTRAP}"
-  newPassword: "${RANCHER_ADMIN_PASSWORD}"
-EOF
+  # Serialize with json.dumps so quotes, backslashes, or newlines in a password
+  # cannot break or alter the manifest; env vars keep them out of ps output.
+  PCR_USER_ID="$ADMIN_USER_ID" \
+  PCR_CURRENT_PASSWORD="$ACTUAL_BOOTSTRAP" \
+  PCR_NEW_PASSWORD="$RANCHER_ADMIN_PASSWORD" \
+    python3 - <<'PY_PASSWORD_CHANGE' | kubectl create -f -
+import json
+import os
+
+print(json.dumps({
+    "apiVersion": "ext.cattle.io/v1",
+    "kind": "PasswordChangeRequest",
+    "metadata": {"generateName": "admin-password-change-"},
+    "spec": {
+        "userID": os.environ["PCR_USER_ID"],
+        "currentPassword": os.environ["PCR_CURRENT_PASSWORD"],
+        "newPassword": os.environ["PCR_NEW_PASSWORD"],
+    },
+}))
+PY_PASSWORD_CHANGE
 
   echo "==> Setting Rancher server URL..."
 
