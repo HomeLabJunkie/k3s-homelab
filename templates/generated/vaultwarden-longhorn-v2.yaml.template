@@ -55,6 +55,35 @@ spec:
                   key: admin-token
             - name: WEBSOCKET_ENABLED
               value: "true"
+            # Email (invitations, 2FA codes) and YubiKey OTP. Credentials come
+            # from vaultwarden-integrations, created by deploy.sh.
+            - name: SMTP_HOST
+              value: "smtp.gmail.com"
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_SECURITY
+              value: "starttls"
+            - name: SMTP_FROM
+              value: "${ADMIN_EMAIL}"
+            - name: SMTP_FROM_NAME
+              value: "Vaultwarden"
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-integrations
+                  key: SMTP_USERNAME
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-integrations
+                  key: SMTP_PASSWORD
+            - name: YUBICO_CLIENT_ID
+              value: "87641"
+            - name: YUBICO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-integrations
+                  key: YUBICO_SECRET_KEY
           volumeMounts:
             - name: data
               mountPath: /data
