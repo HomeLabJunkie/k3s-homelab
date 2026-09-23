@@ -5,6 +5,9 @@ metadata:
   name: fb-search
 spec:
   replicas: 1
+  # The deps volume is ReadWriteOnce; the old pod must release it first.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: fb-search
@@ -18,28 +21,33 @@ spec:
         runAsGroup: 1000
         fsGroup: 1000
       initContainers:
-        # Versions pinned so a PyPI release or outage cannot break a pod restart.
+        # Dependencies persist on the fb-search-deps volume. They are reinstalled
+        # (hash-verified) only when requirements.txt or the Python version
+        # changes, so ordinary restarts do not need PyPI at all.
         - name: deps
           image: mcr.microsoft.com/playwright/python:v1.63.0-noble
           command:
-            - pip
-            - install
-            - --no-cache-dir
-            - --target
-            - /deps
-            - playwright==1.63.0
-            - beautifulsoup4==4.15.0
-            - fastapi==0.141.1
-            - uvicorn==0.53.0
-            - itsdangerous==2.2.0
-            - python-multipart==0.0.32
-            - prometheus-client==0.26.0
+            - sh
+            - -c
+            - |
+              set -eu
+              want="$( { cat /req/requirements.txt; python --version; } | sha256sum | cut -d' ' -f1)"
+              if [ "$(cat /deps/.installed 2>/dev/null || true)" = "$want" ]; then
+                echo "dependencies already installed ($want)"
+                exit 0
+              fi
+              find /deps -mindepth 1 -delete
+              pip install --no-cache-dir --require-hashes --target /deps -r /req/requirements.txt
+              echo "$want" > /deps/.installed
           env:
             - name: HOME
               value: /tmp
           volumeMounts:
             - name: deps
               mountPath: /deps
+            - name: requirements
+              mountPath: /req
+              readOnly: true
       containers:
         - name: fb-search
           image: mcr.microsoft.com/playwright/python:v1.63.0-noble
@@ -101,7 +109,11 @@ spec:
               readOnly: true
       volumes:
         - name: deps
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: fb-search-deps
         - name: app
           configMap:
             name: fb-search-app
+        - name: requirements
+          configMap:
+            name: fb-search-requirements
