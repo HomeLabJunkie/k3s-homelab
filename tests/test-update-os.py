@@ -178,17 +178,33 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'timed out'):
                 os_update.wait_health(records(), 0)
 
-    def test_degraded_longhorn_blocks_progress(self):
+    def storage_health(self, *volume_states):
         nodes = [node('worker1'), node('worker2'), node('master1', True)]
         pods = [dict(node(n), spec={'nodeName': n}) for n in ('worker1', 'worker2', 'master1')]
         for pod in pods:
             pod['status']['phase'] = 'Running'
-        volumes = [{'metadata': {'name': 'data'}, 'status': {'state': 'attached', 'robustness': 'degraded'}}]
+        volumes = [{'metadata': {'name': f'vol{i}'}, 'status': {'state': s, 'robustness': r}}
+                   for i, (s, r) in enumerate(volume_states)]
+        empty = json.dumps({'items': []})
         responses = ['ok', json.dumps({'items': nodes}), json.dumps({'items': pods}),
-                     json.dumps({'items': [pods[-1]]}), json.dumps({'items': volumes})]
+                     json.dumps({'items': [pods[-1]]}), json.dumps({'items': volumes}), empty, empty]
         with patch.object(os_update, 'kube', side_effect=responses):
-            with self.assertRaisesRegex(RuntimeError, 'Longhorn'):
-                os_update.health(records())
+            os_update.health(records())
+
+    def test_degraded_longhorn_blocks_progress(self):
+        with self.assertRaisesRegex(RuntimeError, 'Longhorn'):
+            self.storage_health(('attached', 'degraded'))
+
+    def test_detached_longhorn_volume_does_not_block(self):
+        self.storage_health(('attached', 'healthy'), ('detached', 'unknown'))
+
+    def test_faulted_detached_longhorn_blocks_progress(self):
+        with self.assertRaisesRegex(RuntimeError, r'vol1 \(detached/faulted\)'):
+            self.storage_health(('attached', 'healthy'), ('detached', 'faulted'))
+
+    def test_transitioning_longhorn_blocks_progress(self):
+        with self.assertRaisesRegex(RuntimeError, r'vol0 \(attaching/unknown\)'):
+            self.storage_health(('attaching', 'unknown'))
 
     def release_check(self, rc, stdout='', stderr='', distribution='Ubuntu'):
         with tempfile.TemporaryDirectory() as tmp:
