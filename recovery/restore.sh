@@ -1274,9 +1274,16 @@ rollback_app() {
   esac
 }
 
-mount_backup
-LATEST="$(latest_bundle)"
-[[ -n "$LATEST" ]] || { echo "ERROR: no recovery bundle found"; exit 1; }
+# Only these modes read the NAS recovery bundle; the rest work from the cluster
+# or local state, so they must not need sudo or a reachable NAS (it may be the
+# thing that is down during a DR).
+case "$MODE" in
+  --preflight|--restore-repo|--show-etcd|--show-manifest)
+    mount_backup
+    LATEST="$(latest_bundle)"
+    [[ -n "$LATEST" ]] || { echo "ERROR: no recovery bundle found"; exit 1; }
+    ;;
+esac
 
 case "$MODE" in
   --preflight)
