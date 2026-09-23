@@ -35,6 +35,11 @@ before copying existing private credentials:
   `.secrets.enc`, and any locally configured email settings.
 - Helm repository configuration, including `https://traefik.github.io/charts`.
 
+After the one-time setup, the ignored repo files stay in step between laptops
+through the private companion repo `HomeLabJunkie/k3s-homelab-private`; its
+`GUIDE.md` covers the day-to-day `k3s-sync` workflow and which laptop is the
+DR home base. Credentials in the list above are still provisioned per laptop.
+
 Use mode `700` for credential directories and `600` for private keys and
 kubeconfig. Do not print credentials, commit them, or copy them into documentation.
 GitHub and Fortress access are separate capabilities; provision them separately
