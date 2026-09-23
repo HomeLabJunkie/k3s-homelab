@@ -77,6 +77,7 @@ done
 
 PF_PID=""
 VW_TMP=""
+DEPLOY_LOCK_HELD=false
 
 cleanup() {
   if [[ -n "${PF_PID:-}" ]]; then
@@ -88,8 +89,36 @@ cleanup() {
     rm -rf -- "$VW_TMP"
     VW_TMP=""
   fi
+  if [[ "$DEPLOY_LOCK_HELD" == true ]]; then
+    KUBECONFIG="$KUBECONFIG_TARGET" kubectl -n kube-system delete configmap deploy-lock \
+      --ignore-not-found >/dev/null 2>&1 ||
+      echo "WARNING: could not release the deploy lock; remove it with: kubectl -n kube-system delete configmap deploy-lock"
+    DEPLOY_LOCK_HELD=false
+  fi
 }
 trap cleanup EXIT
+
+# Only one workstation may change the cluster at a time. The lock lives in the
+# cluster, so every laptop sees it.
+acquire_deploy_lock() {
+  local output
+  if output="$(KUBECONFIG="$KUBECONFIG_TARGET" kubectl -n kube-system create configmap deploy-lock \
+      --from-literal=holder="$(uname -n)" \
+      --from-literal=since="$(date -Iseconds)" 2>&1)"; then
+    DEPLOY_LOCK_HELD=true
+    return 0
+  fi
+  if [[ "$output" == *AlreadyExists* ]]; then
+    echo "ERROR: another deployment is changing the cluster:"
+    KUBECONFIG="$KUBECONFIG_TARGET" kubectl -n kube-system get configmap deploy-lock \
+      -o jsonpath='  {.data.holder}, started {.data.since}{"\n"}' || true
+    echo "If that run is no longer active, release the lock with:"
+    echo "  kubectl -n kube-system delete configmap deploy-lock"
+  else
+    echo "ERROR: could not take the cluster deploy lock: $output"
+  fi
+  exit 1
+}
 
 on_error() {
   local line="$1"
@@ -400,6 +429,12 @@ if [[ "$PREFLIGHT_ONLY" == true ]]; then
   echo "============================================"
   echo "No cluster changes were made."
   exit 0
+fi
+
+# Bootstrap has no cluster to hold the lock yet.
+if [[ "$DEPLOY_MODE" == "existing" ]]; then
+  echo "==> Taking the cluster deploy lock..."
+  acquire_deploy_lock
 fi
 
 if [[ "$DEPLOY_MODE" == "bootstrap" ]]; then
