@@ -905,27 +905,52 @@ ACTUAL_BOOTSTRAP="$(
     2>/dev/null || printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD"
 )"
 
+# Sets LOGIN_TOKEN (empty on failure) and RANCHER_LOGIN_HTTP for password $1.
 # Secrets travel through the environment and stdin, never process arguments,
 # which any local user can read in ps.
-LOGIN_PAYLOAD="$(RANCHER_LOGIN_USER="$RANCHER_ADMIN_USER" RANCHER_LOGIN_PASSWORD="$ACTUAL_BOOTSTRAP" \
-  python3 -c 'import json,os; print(json.dumps({"username":os.environ["RANCHER_LOGIN_USER"],"password":os.environ["RANCHER_LOGIN_PASSWORD"]}))')"
-LOGIN_TOKEN=""
-
-for i in {1..20}; do
-  LOGIN_TOKEN="$(
+rancher_login() {
+  local payload response
+  payload="$(RANCHER_LOGIN_USER="$RANCHER_ADMIN_USER" RANCHER_LOGIN_PASSWORD="$1" \
+    python3 -c 'import json,os; print(json.dumps({"username":os.environ["RANCHER_LOGIN_USER"],"password":os.environ["RANCHER_LOGIN_PASSWORD"]}))')"
+  response="$(
     curl -sk -X POST \
       "https://localhost:8443/v3-public/localProviders/local?action=login" \
       -H "Content-Type: application/json" \
-      --data @- <<<"$LOGIN_PAYLOAD" 2>/dev/null \
-    | python3 -c 'import json,sys
+      -w '\n%{http_code}' \
+      --data @- <<<"$payload" 2>/dev/null || true
+  )"
+  RANCHER_LOGIN_HTTP="${response##*$'\n'}"
+  LOGIN_TOKEN="$(
+    printf '%s' "${response%$'\n'*}" | python3 -c 'import json,sys
 try:
     print(json.load(sys.stdin).get("token",""))
 except Exception:
     print("")' || true
   )"
+}
 
+# Redeploys: the admin password is already set and the bootstrap password is
+# stale, so try the configured password first instead of retrying for minutes.
+LOGIN_TOKEN=""
+RANCHER_PASSWORD_ALREADY_SET=false
+for i in {1..20}; do
+  rancher_login "$RANCHER_ADMIN_PASSWORD"
+  if [[ -n "$LOGIN_TOKEN" ]]; then
+    RANCHER_PASSWORD_ALREADY_SET=true
+    echo "  Rancher API ready; admin password already configured"
+    break
+  fi
+  admin_login_http="$RANCHER_LOGIN_HTTP"
+
+  rancher_login "$ACTUAL_BOOTSTRAP"
   if [[ -n "$LOGIN_TOKEN" ]]; then
     echo "  Rancher API ready"
+    break
+  fi
+
+  # A responding API that rejects both passwords will not change by waiting.
+  if [[ "$admin_login_http" == "401" && "$RANCHER_LOGIN_HTTP" == "401" ]]; then
+    echo "  Rancher rejected both RANCHER_ADMIN_PASSWORD and the bootstrap password."
     break
   fi
 
@@ -933,7 +958,9 @@ except Exception:
   sleep 15
 done
 
-if [[ -n "$LOGIN_TOKEN" ]]; then
+if [[ -n "$LOGIN_TOKEN" && "$RANCHER_PASSWORD_ALREADY_SET" == true ]]; then
+  echo "==> Rancher admin password already set; skipping password change"
+elif [[ -n "$LOGIN_TOKEN" ]]; then
   ADMIN_USER_ID="$(
     kubectl get users.management.cattle.io \
       -o jsonpath="{range .items[?(@.username==\"${RANCHER_ADMIN_USER}\")]}{.metadata.name}{\"\\n\"}{end}" \
@@ -967,7 +994,9 @@ print(json.dumps({
     },
 }))
 PY_PASSWORD_CHANGE
+fi
 
+if [[ -n "$LOGIN_TOKEN" ]]; then
   echo "==> Setting Rancher server URL..."
 
   SERVER_URL_PAYLOAD="$(
@@ -984,8 +1013,9 @@ PY_PASSWORD_CHANGE
 
   echo "==> Rancher admin credentials configured successfully"
 else
-  echo "WARNING: Could not configure Rancher credentials automatically."
-  echo "         Rancher itself remains installed; configure the admin account manually."
+  echo "WARNING: Could not log in to Rancher with RANCHER_ADMIN_PASSWORD or the bootstrap password."
+  echo "         Rancher itself remains installed; if the admin password was changed in the UI,"
+  echo "         update RANCHER_ADMIN_PASSWORD in .secrets.enc to match."
 fi
 
 cleanup
