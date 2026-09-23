@@ -65,11 +65,17 @@ MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashbo
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
 PF_PID=""
+VW_TMP=""
 
 cleanup() {
   if [[ -n "${PF_PID:-}" ]]; then
     kill "$PF_PID" 2>/dev/null || true
     wait "$PF_PID" 2>/dev/null || true
+  fi
+  # Holds the Vaultwarden admin session cookie; remove it on every exit path.
+  if [[ -n "${VW_TMP:-}" ]]; then
+    rm -rf -- "$VW_TMP"
+    VW_TMP=""
   fi
 }
 trap cleanup EXIT
@@ -460,7 +466,7 @@ kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --time
 
 echo "==> Creating/updating Cloudflare API token secret..."
 kubectl create secret generic cloudflare-api-token \
-  --from-literal=api-token="$CLOUDFLARE_API_TOKEN" \
+  --from-file=api-token=<(printf '%s' "$CLOUDFLARE_API_TOKEN") \
   --namespace cert-manager \
   --dry-run=client -o yaml | kubectl apply -f -
 
@@ -490,7 +496,7 @@ echo "==> Creating/updating admin UI basic-auth secret..."
 ADMIN_UI_HTPASSWD="${ADMIN_UI_USERNAME}:$(printf '%s' "$ADMIN_UI_PASSWORD" | openssl passwd -apr1 -stdin)"
 kubectl create secret generic admin-ui-basic-auth \
   --namespace traefik \
-  --from-literal=users="$ADMIN_UI_HTPASSWD" \
+  --from-file=users=<(printf '%s' "$ADMIN_UI_HTPASSWD") \
   --dry-run=client -o yaml | kubectl apply -f -
 unset ADMIN_UI_HTPASSWD
 
@@ -536,8 +542,8 @@ kubectl -n longhorn-system wait \
 
 echo "==> Creating/updating Longhorn CIFS backup credentials..."
 kubectl create secret generic "$LONGHORN_BACKUP_CREDENTIAL_SECRET" \
-  --from-literal=CIFS_USERNAME="$LONGHORN_CIFS_USERNAME" \
-  --from-literal=CIFS_PASSWORD="$LONGHORN_CIFS_PASSWORD" \
+  --from-file=CIFS_USERNAME=<(printf '%s' "$LONGHORN_CIFS_USERNAME") \
+  --from-file=CIFS_PASSWORD=<(printf '%s' "$LONGHORN_CIFS_PASSWORD") \
   --namespace longhorn-system \
   --dry-run=client -o yaml | kubectl apply -f -
 
@@ -648,7 +654,7 @@ ensure_namespace monitoring
 kubectl create secret generic grafana-admin \
   --namespace monitoring \
   --from-literal=admin-user=admin \
-  --from-literal=admin-password="$GRAFANA_ADMIN_PASSWORD" \
+  --from-file=admin-password=<(printf '%s' "$GRAFANA_ADMIN_PASSWORD") \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Configuring Alertmanager SMTP delivery..."
@@ -876,7 +882,7 @@ kubectl -n cattle-system get ingress rancher \
 echo "==> Deploying Cloudflare tunnel..."
 ensure_namespace cloudflared
 kubectl create secret generic tunnel-token \
-  --from-literal=token="$CLOUDFLARE_TUNNEL_TOKEN" \
+  --from-file=token=<(printf '%s' "$CLOUDFLARE_TUNNEL_TOKEN") \
   --namespace cloudflared \
   --dry-run=client -o yaml | kubectl apply -f -
 apply_manifest "$CLOUDFLARED_MANIFEST"
@@ -899,7 +905,10 @@ ACTUAL_BOOTSTRAP="$(
     2>/dev/null || printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD"
 )"
 
-LOGIN_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[2],"password":sys.argv[1]}))' "$ACTUAL_BOOTSTRAP" "$RANCHER_ADMIN_USER")"
+# Secrets travel through the environment and stdin, never process arguments,
+# which any local user can read in ps.
+LOGIN_PAYLOAD="$(RANCHER_LOGIN_USER="$RANCHER_ADMIN_USER" RANCHER_LOGIN_PASSWORD="$ACTUAL_BOOTSTRAP" \
+  python3 -c 'import json,os; print(json.dumps({"username":os.environ["RANCHER_LOGIN_USER"],"password":os.environ["RANCHER_LOGIN_PASSWORD"]}))')"
 LOGIN_TOKEN=""
 
 for i in {1..20}; do
@@ -907,7 +916,7 @@ for i in {1..20}; do
     curl -sk -X POST \
       "https://localhost:8443/v3-public/localProviders/local?action=login" \
       -H "Content-Type: application/json" \
-      -d "$LOGIN_PAYLOAD" 2>/dev/null \
+      --data @- <<<"$LOGIN_PAYLOAD" 2>/dev/null \
     | python3 -c 'import json,sys
 try:
     print(json.load(sys.stdin).get("token",""))
@@ -968,7 +977,7 @@ PY_PASSWORD_CHANGE
 
   curl -fsSk -X PUT \
     "https://localhost:8443/v3/settings/server-url" \
-    -H "Authorization: Bearer ${LOGIN_TOKEN}" \
+    -H @<(printf 'Authorization: Bearer %s\n' "$LOGIN_TOKEN") \
     -H "Content-Type: application/json" \
     -d "$SERVER_URL_PAYLOAD" \
     >/dev/null
@@ -1033,15 +1042,15 @@ ensure_namespace vaultwarden
 
 kubectl create secret generic vaultwarden-admin \
   --namespace vaultwarden \
-  --from-literal=admin-token="$VAULTWARDEN_ADMIN_TOKEN" \
+  --from-file=admin-token=<(printf '%s' "$VAULTWARDEN_ADMIN_TOKEN") \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Creating/updating Vaultwarden integration secret..."
 kubectl create secret generic vaultwarden-integrations \
   --namespace vaultwarden \
-  --from-literal=SMTP_USERNAME="$VAULTWARDEN_SMTP_USERNAME" \
-  --from-literal=SMTP_PASSWORD="$VAULTWARDEN_SMTP_PASSWORD" \
-  --from-literal=YUBICO_SECRET_KEY="$VAULTWARDEN_YUBICO_SECRET_KEY" \
+  --from-file=SMTP_USERNAME=<(printf '%s' "$VAULTWARDEN_SMTP_USERNAME") \
+  --from-file=SMTP_PASSWORD=<(printf '%s' "$VAULTWARDEN_SMTP_PASSWORD") \
+  --from-file=YUBICO_SECRET_KEY=<(printf '%s' "$VAULTWARDEN_YUBICO_SECRET_KEY") \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Deploying Vaultwarden with Longhorn storage..."
@@ -1106,22 +1115,22 @@ for i in {1..30}; do
   sleep 2
 done
 
-VW_COOKIE_JAR="$(mktemp)"
+VW_TMP="$(mktemp -d)"
+VW_COOKIE_JAR="$VW_TMP/cookies"
 VW_ADMIN_LOGIN_CODE="$(
   curl -sS \
-    -o /tmp/vaultwarden-admin-login.out \
+    -o "$VW_TMP/admin-login.out" \
     -w '%{http_code}' \
     -c "$VW_COOKIE_JAR" \
     -X POST \
     'http://127.0.0.1:8081/admin' \
     -H 'Content-Type: application/x-www-form-urlencoded' \
-    --data-urlencode "token=${VAULTWARDEN_ADMIN_TOKEN}"
+    --data-urlencode "token@-" < <(printf '%s' "$VAULTWARDEN_ADMIN_TOKEN")
 )"
 
 if [[ "$VW_ADMIN_LOGIN_CODE" != "200" && "$VW_ADMIN_LOGIN_CODE" != "302" ]]; then
   echo "ERROR: Vaultwarden admin login failed with HTTP ${VW_ADMIN_LOGIN_CODE}."
-  cat /tmp/vaultwarden-admin-login.out || true
-  rm -f "$VW_COOKIE_JAR" /tmp/vaultwarden-admin-login.out
+  cat "$VW_TMP/admin-login.out" || true
   exit 1
 fi
 
@@ -1132,7 +1141,7 @@ VW_INVITE_PAYLOAD="$(
 
 VW_INVITE_CODE="$(
   curl -sS \
-    -o /tmp/vaultwarden-invite.out \
+    -o "$VW_TMP/invite.out" \
     -w '%{http_code}' \
     -b "$VW_COOKIE_JAR" \
     -X POST \
@@ -1150,13 +1159,10 @@ case "$VW_INVITE_CODE" in
     ;;
   *)
     echo "ERROR: Vaultwarden invite failed with HTTP ${VW_INVITE_CODE}."
-    cat /tmp/vaultwarden-invite.out || true
-    rm -f "$VW_COOKIE_JAR" /tmp/vaultwarden-admin-login.out /tmp/vaultwarden-invite.out
+    cat "$VW_TMP/invite.out" || true
     exit 1
     ;;
 esac
-
-rm -f "$VW_COOKIE_JAR" /tmp/vaultwarden-admin-login.out /tmp/vaultwarden-invite.out
 
 cleanup
 PF_PID=""

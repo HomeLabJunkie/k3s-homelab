@@ -55,10 +55,10 @@ credentials="[default]
 aws_access_key_id=${VELERO_GARAGE_ACCESS_KEY}
 aws_secret_access_key=${VELERO_GARAGE_SECRET_KEY}"
 kubectl -n velero create secret generic velero-garage-credentials \
-  --from-literal=cloud="$credentials" \
+  --from-file=cloud=<(printf '%s' "$credentials") \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl -n velero create secret generic velero-repo-credentials \
-  --from-literal=repository-password="$VELERO_REPOSITORY_PASSWORD" \
+  --from-file=repository-password=<(printf '%s' "$VELERO_REPOSITORY_PASSWORD") \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 unset credentials
 
