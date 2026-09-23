@@ -475,6 +475,12 @@ restore_app() {
     return 0
   fi
 
+  # A completed or failed pod cannot be re-applied (its spec is immutable).
+  if kubectl -n "$ns" get pod "$pod" >/dev/null 2>&1; then
+    echo "==> Removing non-Ready inspection pod $ns/$pod before recreating it..."
+    kubectl -n "$ns" delete pod "$pod" --wait=true
+  fi
+
   if kubectl -n longhorn-system get volume "$restore_vol" >/dev/null 2>&1; then
     echo "==> Existing Longhorn restore volume found; resuming instead of recreating it."
   else
@@ -550,7 +556,9 @@ spec:
           echo
           echo "=== FILE TREE ==="
           find /restore -maxdepth 2 -print | head -100
-          sleep 3600
+          # Stay Ready until deleted (promotion requires it); exit promptly on TERM.
+          trap 'exit 0' TERM
+          while :; do sleep 3600 & wait \$!; done
       volumeMounts:
         - name: restored
           mountPath: /restore
