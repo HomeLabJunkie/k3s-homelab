@@ -2,3 +2,6 @@
 extra_agent_args: ""
 group_name_master: master
 systemd_dir: /etc/systemd/system
+# Root-only file the agent reads its join token from, instead of the unit's
+# world-readable command line.
+k3s_agent_token_file: /etc/rancher/k3s/agent-token
