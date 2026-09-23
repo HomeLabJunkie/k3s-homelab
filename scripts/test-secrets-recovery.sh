@@ -53,6 +53,23 @@ if [[ -n "$NAS" && -n "$EXPORT" ]]; then
     exit 1
   }
   echo "==> Recovery bundle contains encrypted secrets"
+
+  # Existence is not enough: after a key rotation the bundle may still be
+  # encrypted only to a key that is about to be discarded.
+  nas_copy="$TMP_DIR/k3s-secrets.enc"
+  nas_decrypted="$TMP_DIR/nas-secrets.env"
+  storage_sudo cat "$encrypted_copy" >"$nas_copy"
+  if ! sops -d "$nas_copy" >"$nas_decrypted"; then
+    echo "ERROR: the recovery bundle's secrets cannot be decrypted with the current key" >&2
+    echo "ERROR: bundle copy is encrypted to: $(jq -r '[.sops.age[]?.recipient] | join(", ")' "$nas_copy" 2>/dev/null || echo unknown)" >&2
+    echo "ERROR: run backup/backup.sh to publish a copy for the current recipients" >&2
+    exit 1
+  fi
+  chmod 600 "$nas_decrypted"
+  if ! cmp -s "$decrypted" "$nas_decrypted"; then
+    echo "WARNING: the recovery bundle's secrets differ from .secrets.enc; the next backup will refresh them" >&2
+  fi
+  echo "==> Recovery bundle secrets decrypt with the current key"
 fi
 
 echo "==> SOPS decryption succeeded"

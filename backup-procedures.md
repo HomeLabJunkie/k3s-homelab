@@ -373,8 +373,9 @@ rotating an age key, or quarterly:
 
 The check decrypts `.secrets.enc` into a private temporary directory, confirms
 the required Velero, Garage, and Longhorn credentials exist without printing
-their values, and verifies the latest cluster bundle contains a directly
-recoverable encrypted secrets artifact. To rotate the age recipient, first add the new recipient with
+their values, and verifies the latest cluster bundle's encrypted secrets copy
+decrypts with the current key (a copy that still needs a retired key fails the
+check). To rotate the age recipient, first add the new recipient with
 `sops updatekeys .secrets.enc`, confirm the recovery test passes using the new
 key, securely escrow the old key until the retention window expires, then
 remove the old recipient and rerun the test. Never commit plaintext secrets or
@@ -382,8 +383,9 @@ delete the old key before a tested recovery path exists.
 
 To rotate and automatically email the Bitwarden reminder, update `.sops.yaml`
 with the new public recipient and run `./scripts/rotate-sops-age-key.sh`.
-The wrapper only sends the reminder after the recipient set changes and the
-decryption/recovery test passes; no private key material is emailed.
+The wrapper publishes a fresh recovery bundle for the new recipients, and only
+sends the reminder after the recipient set changes and the decryption/recovery
+test passes against that bundle; no private key material is emailed.
 
 Defaults:
 
