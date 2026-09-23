@@ -24,7 +24,14 @@ RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.15.1}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 
 RANCHER_HOSTNAME="${RANCHER_HOSTNAME:-rancher.example.invalid}"
-RANCHER_ADMIN_USER="${RANCHER_ADMIN_USER:-admin}"
+# Rancher's bootstrap always creates the local admin as "admin"; the name is
+# not configurable, so refuse a different value instead of printing it.
+if [[ -n "${RANCHER_ADMIN_USER:-}" && "$RANCHER_ADMIN_USER" != "admin" ]]; then
+  echo "ERROR: RANCHER_ADMIN_USER=$RANCHER_ADMIN_USER is not supported: Rancher's bootstrap admin is always 'admin'."
+  echo "Remove RANCHER_ADMIN_USER from $ENV_FILE."
+  exit 1
+fi
+RANCHER_ADMIN_USER="admin"
 
 TRAEFIK_VALUES="${TRAEFIK_VALUES:-$K3S_DIR/traefik-values.yaml}"
 CLUSTERISSUER_MANIFEST="${CLUSTERISSUER_MANIFEST:-$K3S_DIR/clusterissuer-letsencrypt.yaml}"
@@ -892,7 +899,7 @@ ACTUAL_BOOTSTRAP="$(
     2>/dev/null || printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD"
 )"
 
-LOGIN_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"username":"admin","password":sys.argv[1]}))' "$ACTUAL_BOOTSTRAP")"
+LOGIN_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[2],"password":sys.argv[1]}))' "$ACTUAL_BOOTSTRAP" "$RANCHER_ADMIN_USER")"
 LOGIN_TOKEN=""
 
 for i in {1..20}; do
@@ -920,7 +927,7 @@ done
 if [[ -n "$LOGIN_TOKEN" ]]; then
   ADMIN_USER_ID="$(
     kubectl get users.management.cattle.io \
-      -o jsonpath='{range .items[?(@.username=="admin")]}{.metadata.name}{"\n"}{end}' \
+      -o jsonpath="{range .items[?(@.username==\"${RANCHER_ADMIN_USER}\")]}{.metadata.name}{\"\\n\"}{end}" \
     | head -n1
   )"
 
