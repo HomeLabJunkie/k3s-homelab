@@ -395,17 +395,19 @@ for (( attempt = 1; attempt <= POST_MAINTENANCE_VALIDATION_ATTEMPTS; attempt++ )
       -o custom-columns='STATE:.status.state,ROBUSTNESS:.status.robustness,NAME:.metadata.name' \
       2>/dev/null
   )"; then
-    bad_longhorn="$(awk '$1!="attached" || $2!="healthy" {print}' <<<"$longhorn_volumes")"
+    # Detached volumes (scaled-down workloads, DR restore tests) report
+    # robustness "unknown"; only attached volumes can prove replica health.
+    bad_longhorn="$(awk '!(($1=="attached" && $2=="healthy") || ($1=="detached" && $2!="faulted")) {print}' <<<"$longhorn_volumes")"
     if [[ -z "$bad_longhorn" ]]; then
       longhorn_ok=true
       if [[ -n "$longhorn_volumes" ]]; then
-        longhorn_detail="all Longhorn volumes are attached and healthy"
+        longhorn_detail="all attached Longhorn volumes are healthy; none faulted"
       else
         longhorn_detail="no Longhorn volumes found; nothing to validate"
       fi
     else
       longhorn_ok=false
-      longhorn_detail="unhealthy or detached Longhorn volume(s): ${bad_longhorn//$'\n'/; }"
+      longhorn_detail="unhealthy, faulted, or transitioning Longhorn volume(s): ${bad_longhorn//$'\n'/; }"
     fi
   else
     longhorn_ok=false

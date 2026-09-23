@@ -70,6 +70,15 @@ def ready(obj):
                for c in obj.get('status', {}).get('conditions', []))
 
 
+def longhorn_volume_ok(volume):
+    # Detached volumes (scaled-down workloads, DR restore tests) report
+    # robustness "unknown"; only attached volumes can prove replica health.
+    status = volume.get('status', {})
+    state, robustness = status.get('state'), status.get('robustness')
+    return ((state == 'attached' and robustness == 'healthy') or
+            (state == 'detached' and robustness != 'faulted'))
+
+
 def health(records, storage=True):
     if kube('get', '--raw=/readyz') != 'ok':
         raise RuntimeError('Kubernetes API /readyz is not ok')
@@ -89,11 +98,10 @@ def health(records, storage=True):
                 raise RuntimeError(f'{selector} is not healthy on {name}')
     if storage:
         volumes = json.loads(kube('-n', 'longhorn-system', 'get', 'volumes.longhorn.io', '-o', 'json'))['items']
-        bad = [v['metadata']['name'] for v in volumes if
-               v.get('status', {}).get('state') != 'attached' or
-               v.get('status', {}).get('robustness') != 'healthy']
+        bad = [f"{v['metadata']['name']} ({v.get('status', {}).get('state')}/{v.get('status', {}).get('robustness')})"
+               for v in volumes if not longhorn_volume_ok(v)]
         if bad:
-            raise RuntimeError(f'Longhorn volumes not attached/healthy: {", ".join(bad)}')
+            raise RuntimeError(f'Longhorn volumes unhealthy, faulted, or transitioning: {", ".join(bad)}')
         for namespace in ('kube-system', 'longhorn-system'):
             controllers = json.loads(kube('-n', namespace, 'get', 'deployments,daemonsets,statefulsets', '-o', 'json'))['items']
             for obj in controllers:

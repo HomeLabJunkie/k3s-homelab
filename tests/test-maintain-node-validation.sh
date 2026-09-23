@@ -133,6 +133,13 @@ if [[ "$args" == *" volumes.longhorn.io "* ]]; then
     echo 'attached degraded pvc-mock'
   else
     echo 'attached healthy pvc-mock'
+    if [[ "$live" == true ]]; then
+      case "$scenario" in
+        longhorn-detached) echo 'detached unknown restore-test-mock' ;;
+        longhorn-faulted) echo 'detached faulted pvc-faulted-mock' ;;
+        longhorn-attaching) echo 'attaching unknown pvc-attaching-mock' ;;
+      esac
+    fi
   fi
   exit 0
 fi
@@ -195,6 +202,9 @@ run_case node-failure node worker 1 'FAIL: Target node'
 run_case cilium-failure cilium worker 1 'FAIL: Cilium'
 run_case kube-vip-failure kube-vip control-plane 1 'FAIL: kube-vip'
 run_case longhorn-failure longhorn worker 1 'FAIL: Longhorn volumes'
+run_case longhorn-detached-ok longhorn-detached worker 0 'POST-MAINTENANCE VALIDATION: PASS'
+run_case longhorn-faulted longhorn-faulted worker 1 'FAIL: Longhorn volumes'
+run_case longhorn-attaching longhorn-attaching worker 1 'FAIL: Longhorn volumes'
 
 echo
 echo "Validation tests: $pass_count passed, $fail_count failed"
