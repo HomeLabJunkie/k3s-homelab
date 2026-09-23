@@ -64,6 +64,17 @@ LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
+# The hostname defaults are placeholders; scripts/run-deploy.sh derives the
+# real names from BASE_DOMAIN. Refuse to push a placeholder into the cluster.
+for hostname_var in RANCHER_HOSTNAME LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
+  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME PORTAINER_HOSTNAME; do
+  if [[ "${!hostname_var}" == *.invalid ]]; then
+    echo "ERROR: $hostname_var is the placeholder ${!hostname_var}."
+    echo "Run scripts/run-deploy.sh, or set $hostname_var in $ENV_FILE."
+    exit 1
+  fi
+done
+
 PF_PID=""
 VW_TMP=""
 
