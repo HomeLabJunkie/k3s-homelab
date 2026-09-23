@@ -159,7 +159,7 @@ done
 
 echo "Deployment mode: $DEPLOY_MODE"
 
-for cmd in ansible ansible-playbook ansible-galaxy kubectl helm curl python3 envsubst; do
+for cmd in ansible ansible-playbook ansible-galaxy kubectl helm curl python3 envsubst openssl; do
   require_command "$cmd"
 done
 
@@ -279,13 +279,25 @@ for var in \
   VAULTWARDEN_YUBICO_SECRET_KEY \
   GRAFANA_ADMIN_PASSWORD \
   LONGHORN_CIFS_USERNAME \
-  LONGHORN_CIFS_PASSWORD
+  LONGHORN_CIFS_PASSWORD \
+  ADMIN_UI_USERNAME \
+  ADMIN_UI_PASSWORD
 do
   require_var "$var"
 done
 
 if (( ${#RANCHER_ADMIN_PASSWORD} < 12 )); then
   echo "ERROR: RANCHER_ADMIN_PASSWORD must be at least 12 characters."
+  exit 1
+fi
+
+if (( ${#ADMIN_UI_PASSWORD} < 12 )); then
+  echo "ERROR: ADMIN_UI_PASSWORD must be at least 12 characters."
+  exit 1
+fi
+
+if [[ "$ADMIN_UI_USERNAME" == *:* ]]; then
+  echo "ERROR: ADMIN_UI_USERNAME must not contain ':'."
   exit 1
 fi
 
@@ -434,6 +446,14 @@ helm upgrade --install traefik traefik/traefik \
 
 kubectl -n traefik rollout status deployment/traefik --timeout=180s
 kubectl -n traefik get svc traefik
+
+echo "==> Creating/updating admin UI basic-auth secret..."
+ADMIN_UI_HTPASSWD="${ADMIN_UI_USERNAME}:$(printf '%s' "$ADMIN_UI_PASSWORD" | openssl passwd -apr1 -stdin)"
+kubectl create secret generic admin-ui-basic-auth \
+  --namespace traefik \
+  --from-literal=users="$ADMIN_UI_HTPASSWD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+unset ADMIN_UI_HTPASSWD
 
 echo "==> Deploying Traefik dashboard and certificate..."
 apply_manifest "$TRAEFIK_DASHBOARD_MANIFEST"

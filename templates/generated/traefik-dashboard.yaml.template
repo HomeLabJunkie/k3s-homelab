@@ -1,3 +1,17 @@
+# Shared HTTP basic auth for admin UIs without their own login (Traefik
+# dashboard, Longhorn). deploy.sh creates the admin-ui-basic-auth Secret from
+# ADMIN_UI_USERNAME / ADMIN_UI_PASSWORD. Other namespaces reference this as
+# traefik-admin-ui-auth@kubernetescrd.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: admin-ui-auth
+  namespace: traefik
+spec:
+  basicAuth:
+    secret: admin-ui-basic-auth
+    removeHeader: true
+---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -9,6 +23,8 @@ spec:
   routes:
     - match: Host(`traefik.${BASE_DOMAIN}`)
       kind: Rule
+      middlewares:
+        - name: admin-ui-auth
       services:
         - name: api@internal
           kind: TraefikService
