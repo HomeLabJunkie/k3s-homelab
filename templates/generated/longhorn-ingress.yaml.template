@@ -19,6 +19,8 @@ metadata:
   namespace: longhorn-system
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # Longhorn has no login of its own; see traefik-dashboard.yaml.template.
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:

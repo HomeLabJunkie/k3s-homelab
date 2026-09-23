@@ -918,6 +918,8 @@ Expected sensitive values include:
 - Vaultwarden Yubico secret key, when Yubico OTP is enabled
 - Grafana admin password
 - dedicated Longhorn CIFS username and password
+- `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` (12+ characters): basic-auth login
+  for the Traefik dashboard and Longhorn UI, which have no login of their own
 
 The tracked Vaultwarden values template references Kubernetes Secrets and must
 not contain credential values directly. `deploy.sh` creates or updates
