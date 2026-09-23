@@ -534,10 +534,12 @@ kubectl -n longhorn-system rollout status deployment/longhorn-driver-deployer --
 kubectl -n longhorn-system rollout status deployment/longhorn-ui --timeout=600s
 
 echo "==> Waiting for Longhorn pods to become Ready..."
+# Skip finished recurring-job pods (backups, snapshots); they never report Ready.
 kubectl -n longhorn-system wait \
   --for=condition=Ready \
   pod \
   --all \
+  --field-selector=status.phase!=Succeeded,status.phase!=Failed \
   --timeout=600s
 
 echo "==> Creating/updating Longhorn CIFS backup credentials..."
