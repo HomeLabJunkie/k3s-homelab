@@ -99,6 +99,17 @@ require_var() {
   }
 }
 
+verify_kubeconfig_server() {
+  local server
+  server="$(KUBECONFIG="$KUBECONFIG_TARGET" kubectl config view --minify \
+    -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+  [[ "$server" == "https://${KUBE_VIP}:6443" ]] || {
+    echo "ERROR: $KUBECONFIG_TARGET current context points to ${server:-nothing}, not https://${KUBE_VIP}:6443."
+    echo "Switch context with 'kubectl config use-context', or run --bootstrap to fetch a new kubeconfig."
+    exit 1
+  }
+}
+
 ensure_namespace() {
   local ns="$1"
   [[ -n "$ns" ]] || return 0
@@ -350,6 +361,14 @@ ansible-playbook   -i inventory/k3s-ansible/hosts.ini   /dev/stdin <<'ANSIBLE_PR
           - "service_join_args={{ expected_server_service_args }}"
 ANSIBLE_PREFLIGHT
 
+# Existing mode reuses the operator's kubeconfig (only bootstrap fetches a new
+# one), so check it before any node is touched.
+if [[ "$DEPLOY_MODE" == "existing" ]]; then
+  echo "==> Validating local kubeconfig..."
+  require_file "$KUBECONFIG_TARGET"
+  verify_kubeconfig_server
+fi
+
 if [[ "$PREFLIGHT_ONLY" == true ]]; then
   echo
   echo "============================================"
@@ -371,13 +390,26 @@ fi
 echo "==> Preparing all nodes for Longhorn..."
 ansible-playbook -i inventory/k3s-ansible/hosts.ini "$LONGHORN_HOST_PREP_PLAYBOOK"
 
-echo "==> Updating local kubeconfig..."
-mkdir -p "$(dirname "$KUBECONFIG_TARGET")"
-cp "$KUBECONFIG_SOURCE" "$KUBECONFIG_TARGET"
-chmod 600 "$KUBECONFIG_TARGET"
-sed -i -E \
-  "s#server: https://([0-9]{1,3}\.){3}[0-9]{1,3}:6443#server: https://${KUBE_VIP}:6443#" \
-  "$KUBECONFIG_TARGET"
+if [[ "$DEPLOY_MODE" == "bootstrap" ]]; then
+  echo "==> Installing kubeconfig fetched by bootstrap..."
+  require_file "$KUBECONFIG_SOURCE"
+  mkdir -p "$(dirname "$KUBECONFIG_TARGET")"
+  # Rewrite only the fresh copy, never other clusters in the existing target.
+  kubeconfig_tmp="$(mktemp "$(dirname "$KUBECONFIG_TARGET")/.kubeconfig.XXXXXX")"
+  sed -E \
+    "s#server: https://([0-9]{1,3}\.){3}[0-9]{1,3}:6443#server: https://${KUBE_VIP}:6443#" \
+    "$KUBECONFIG_SOURCE" >"$kubeconfig_tmp"
+  chmod 600 "$kubeconfig_tmp"
+  if [[ -e "$KUBECONFIG_TARGET" ]]; then
+    kubeconfig_backup="${KUBECONFIG_TARGET}.bak-$(date +%Y%m%d-%H%M%S)"
+    cp -p "$KUBECONFIG_TARGET" "$kubeconfig_backup"
+    echo "    previous kubeconfig saved to $kubeconfig_backup"
+  fi
+  mv -f "$kubeconfig_tmp" "$KUBECONFIG_TARGET"
+  verify_kubeconfig_server
+else
+  echo "==> Using existing kubeconfig: $KUBECONFIG_TARGET"
+fi
 export KUBECONFIG="$KUBECONFIG_TARGET"
 
 echo "==> Waiting for Kubernetes API..."
