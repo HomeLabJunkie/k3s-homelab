@@ -20,7 +20,12 @@ done
 
 set -a
 source "${ENV_FILE:-$ROOT/config/cluster.env}"
-source <(sops --decrypt "$SECRETS_FILE")
+decrypted_secrets="$(sops --decrypt "$SECRETS_FILE")" || {
+  echo "ERROR: sops could not decrypt $SECRETS_FILE" >&2
+  exit 1
+}
+source <(printf '%s\n' "$decrypted_secrets")
+unset decrypted_secrets
 set +a
 
 : "${UNRAID_IP:?UNRAID_IP is not set in config/cluster.env}"
