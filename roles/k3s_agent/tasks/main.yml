@@ -31,13 +31,33 @@
   ansible.builtin.include_tasks: http_proxy.yml
   when: proxy_env is defined
 
+- name: Create K3s config directory
+  ansible.builtin.file:
+    path: "{{ k3s_agent_token_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write agent join token
+  ansible.builtin.copy:
+    content: >-
+      {{ hostvars[groups[group_name_master | default('master')][0]]['token']
+      | default(k3s_token) | trim }}
+    dest: "{{ k3s_agent_token_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  register: k3s_agent_token
+  no_log: true
+
 - name: Configure the k3s service
   ansible.builtin.template:
     src: k3s.service.j2
     dest: "{{ systemd_dir }}/k3s-node.service"
     owner: root
     group: root
-    mode: "0755"
+    mode: "0644"
     validate: /usr/bin/systemd-analyze verify %s
   register: k3s_agent_service
 
@@ -49,6 +69,7 @@
     enabled: true
   when: >-
     k3s_agent_service.changed or
+    k3s_agent_token.changed or
     (k3s_binary_changed | default(false))
 
 - name: Ensure k3s agent is enabled and running
@@ -59,6 +80,7 @@
     enabled: true
   when:
     - not k3s_agent_service.changed
+    - not k3s_agent_token.changed
     - not (k3s_binary_changed | default(false))
 
 - name: Wait for k3s agent node to become Ready
