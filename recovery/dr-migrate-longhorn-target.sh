@@ -18,8 +18,8 @@ while IFS='=' read -r key value; do
 done
 [[ -n "$username" && -n "$password" ]] || { echo 'ERROR: missing Longhorn CIFS credentials' >&2; exit 1; }
 kubectl -n longhorn-system create secret generic "$SECRET" \
-  --from-literal=CIFS_USERNAME="$username" \
-  --from-literal=CIFS_PASSWORD="$password" \
+  --from-file=CIFS_USERNAME=<(printf '%s' "$username") \
+  --from-file=CIFS_PASSWORD=<(printf '%s' "$password") \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl -n longhorn-system patch backuptarget default --type merge \
   -p "{\"spec\":{\"backupTargetURL\":\"$TARGET_URL\",\"credentialSecret\":\"$SECRET\"}}" >/dev/null
