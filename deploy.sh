@@ -251,7 +251,12 @@ done
 echo "==> Loading secrets..."
 set -a
 if [[ -f "$K3S_DIR/.secrets.enc" ]]; then
-  source <(sops --decrypt "$K3S_DIR/.secrets.enc")
+  decrypted_secrets="$(sops --decrypt "$K3S_DIR/.secrets.enc")" || {
+    echo "ERROR: sops could not decrypt $K3S_DIR/.secrets.enc"
+    exit 1
+  }
+  source <(printf '%s\n' "$decrypted_secrets")
+  unset decrypted_secrets
 elif [[ -f "$K3S_DIR/.secrets" ]]; then
   source "$K3S_DIR/.secrets"
 else

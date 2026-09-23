@@ -125,8 +125,11 @@ source "$ENV_FILE"
 
 if [[ -f "$ROOT_DIR/.secrets.enc" ]]; then
   command -v sops >/dev/null 2>&1 || fail "sops is required"
+  decrypted_secrets="$(sops --decrypt "$ROOT_DIR/.secrets.enc")" ||
+    fail "sops could not decrypt $ROOT_DIR/.secrets.enc"
   # shellcheck disable=SC1090
-  source <(sops --decrypt "$ROOT_DIR/.secrets.enc")
+  source <(printf '%s\n' "$decrypted_secrets")
+  unset decrypted_secrets
 elif [[ -f "$ROOT_DIR/.secrets" ]]; then
   # shellcheck disable=SC1090,SC1091
   source "$ROOT_DIR/.secrets"

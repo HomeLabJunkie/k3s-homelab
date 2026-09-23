@@ -1,4 +1,15 @@
 ---
+- name: Validate agent join token before touching services
+  ansible.builtin.assert:
+    that:
+      - >-
+        (hostvars[groups[group_name_master | default('master')][0]]['token']
+        | default(k3s_token | default(''))) | trim | length > 0
+    fail_msg: >-
+      Refusing to configure the K3s agent because the join token is empty.
+      Verify that .secrets.enc decrypted and exported K3S_TOKEN.
+    quiet: true
+
 - name: Check for PXE-booted system
   block:
     - name: Check if system is PXE-booted

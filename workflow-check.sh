@@ -85,8 +85,13 @@ if [[ -f "$ROOT_DIR/.secrets.enc" ]]; then
     echo "ERROR: sops is required" >&2
     exit 1
   }
+  decrypted_secrets="$(sops --decrypt "$ROOT_DIR/.secrets.enc")" || {
+    echo "ERROR: sops could not decrypt $ROOT_DIR/.secrets.enc" >&2
+    exit 1
+  }
   # shellcheck disable=SC1090
-  source <(sops --decrypt "$ROOT_DIR/.secrets.enc")
+  source <(printf '%s\n' "$decrypted_secrets")
+  unset decrypted_secrets
 elif [[ -f "$ROOT_DIR/.secrets" ]]; then
   # shellcheck disable=SC1090
   source "$ROOT_DIR/.secrets"

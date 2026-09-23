@@ -36,8 +36,14 @@ if [[ -z "${SMTP_USER:-}" || -z "${SMTP_PASSWORD:-}" ]]; then
       echo "ERROR: sops is required to load SMTP credentials" >&2
       exit 1
     }
-    # shellcheck disable=SC1090
-    source <(sops --decrypt "$ROOT/.secrets.enc")
+    # Keep going on failure so the desktop notification can still be sent.
+    if decrypted_secrets="$(sops --decrypt "$ROOT/.secrets.enc")"; then
+      # shellcheck disable=SC1090
+      source <(printf '%s\n' "$decrypted_secrets")
+    else
+      echo "WARNING: sops could not decrypt SMTP credentials; email disabled" >&2
+    fi
+    unset decrypted_secrets
   elif [[ -f "$ROOT/.secrets" ]]; then
     # shellcheck disable=SC1091
     source "$ROOT/.secrets"
