@@ -57,7 +57,7 @@ that remains an explicit manifest step.
 `protected-apps-daily` runs daily at 01:17 `America/Chicago`, protects the
 namespaces represented
 in `recovery/apps.conf`, moves CSI snapshot data to Garage, and retains each
-backup for 14 days. Data-mover concurrency is one per node to limit storage and
+backup for 7 days. Data-mover concurrency is one per node to limit storage and
 network pressure. Temporary full-copy snapshot volumes use the dedicated
 `longhorn-velero-temp` storage class with one replica; production volumes keep
 their normal replica count. The first seed backup can take substantially longer
