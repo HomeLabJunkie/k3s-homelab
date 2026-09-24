@@ -1,3 +1,4 @@
+---
 # Prometheus scrape targets for components whose charts or manifests expose
 # metrics but do not create their own ServiceMonitor/PodMonitor.
 #
