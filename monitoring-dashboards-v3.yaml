@@ -97,12 +97,13 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    certificates.json: '{"title":"Homelab - Certificates","uid":"homelab-certs","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":3,"title":"Certificates
+    certificates.json: '{"title":"Homelab - Certificates","uid":"homelab-certs","schemaVersion":39,"version":3,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":3,"title":"Certificates
       Ready","type":"stat","gridPos":{"h":5,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(certmanager_certificate_ready_status{condition=\"True\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}},"overrides":[]}},{"id":4,"title":"Certificates
       Not Ready","type":"stat","gridPos":{"h":5,"w":6,"x":0,"y":5},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(certmanager_certificate_ready_status{condition!=\"True\"})
       or vector(0)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]}},"overrides":[]}},{"id":5,"title":"Days
       Until Expiry","type":"bargauge","gridPos":{"h":10,"w":9,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sort((certmanager_certificate_expiration_timestamp_seconds
-      - time()) / 86400)","legendFormat":"{{namespace}}/{{name}}","refId":"A","instant":true}],"options":{"orientation":"horizontal","displayMode":"basic"},"fieldConfig":{"defaults":{"unit":"d","decimals":0,"min":0,"max":90,"thresholds":{"mode":"absolute","steps":[{"color":"red","value":null},{"color":"orange","value":14},{"color":"green","value":30}]}},"overrides":[]}},{"id":1,"title":"Certificate
+      - time()) / 86400)","legendFormat":"{{namespace}}/{{name}}","refId":"A","instant":true}],"options":{"orientation":"horizontal","displayMode":"basic"},"fieldConfig":{"defaults":{"unit":"suffix:
+      days","decimals":0,"min":0,"max":90,"thresholds":{"mode":"absolute","steps":[{"color":"red","value":null},{"color":"orange","value":14},{"color":"green","value":30}]}},"overrides":[]}},{"id":1,"title":"Certificate
       Time Remaining","type":"timeseries","gridPos":{"h":10,"w":9,"x":15,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"certmanager_certificate_expiration_timestamp_seconds
       - time()","legendFormat":"{{namespace}}/{{name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}},{"id":2,"title":"cert-manager
       Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":13},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"cert-manager\"}
