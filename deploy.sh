@@ -101,17 +101,18 @@ trap cleanup EXIT
 # Only one workstation may change the cluster at a time. The lock lives in the
 # cluster, so every laptop sees it.
 acquire_deploy_lock() {
-  local output
+  local output holder
   if output="$(KUBECONFIG="$KUBECONFIG_TARGET" kubectl -n kube-system create configmap deploy-lock \
       --from-literal=holder="$(uname -n)" \
       --from-literal=since="$(date -Iseconds)" 2>&1)"; then
     DEPLOY_LOCK_HELD=true
     return 0
   fi
-  if [[ "$output" == *AlreadyExists* ]]; then
+  # Ask for the lock directly instead of matching kubectl's error wording.
+  if holder="$(KUBECONFIG="$KUBECONFIG_TARGET" kubectl -n kube-system get configmap deploy-lock \
+      -o jsonpath='{.data.holder}, started {.data.since}' 2>/dev/null)"; then
     echo "ERROR: another deployment is changing the cluster:"
-    KUBECONFIG="$KUBECONFIG_TARGET" kubectl -n kube-system get configmap deploy-lock \
-      -o jsonpath='  {.data.holder}, started {.data.since}{"\n"}' || true
+    echo "  $holder"
     echo "If that run is no longer active, release the lock with:"
     echo "  kubectl -n kube-system delete configmap deploy-lock"
   else
