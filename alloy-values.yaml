@@ -47,7 +47,21 @@ alloy:
 
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.process.drop_stale.receiver]
+      }
+
+      // On reconnect, loki.source.kubernetes resends the last line it read.
+      // For a pod that has been quiet longer than Loki's 168h
+      // reject_old_samples_max_age, Loki rejects that line and the whole
+      // batch is logged as dropped, on every reconnect. Drop such lines here,
+      // with an hour of margin for delivery delay.
+      loki.process "drop_stale" {
         forward_to = [loki.write.local.receiver]
+
+        stage.drop {
+          older_than          = "167h"
+          drop_counter_reason = "older_than_loki_max_age"
+        }
       }
 
       loki.write "local" {
