@@ -453,6 +453,16 @@ The admin token and initial invitation address come from local encrypted secrets
 
 General sign-up/invitation behavior is controlled by the deployment manifest rather than documented with real credentials here.
 
+On 2026-09-24, the image was upgraded from `vaultwarden/server:1.37.1` to
+`1.37.3`, after a Vaultwarden-only Velero backup (`vaultwarden-pre-1-37-3`).
+1.37.2 is required by Bitwarden clients 2026.8.0 and newer. 1.37.3 fixes
+password changes from the newer web vault, and it revokes remembered 2FA
+devices when credentials or 2FA settings change. The pod started cleanly and
+`/alive` returned 200. See the upstream
+[1.37.2](https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.2) and
+[1.37.3](https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.3)
+release notes.
+
 ## Monitoring
 
 The monitoring stack uses `kube-prometheus-stack`.

@@ -36,7 +36,7 @@ spec:
       enableServiceLinks: false
       containers:
         - name: vaultwarden
-          image: vaultwarden/server:1.37.1
+          image: vaultwarden/server:1.37.3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
