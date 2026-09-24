@@ -62,6 +62,7 @@ LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
 ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
+MONITORING_SCRAPE_TARGETS="${MONITORING_SCRAPE_TARGETS:-$K3S_DIR/monitoring-scrape-targets.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
 # The hostname defaults are placeholders; scripts/run-deploy.sh derives the
@@ -308,6 +309,7 @@ for file in \
   "$ALLOY_VALUES" \
   "$LOKI_DATASOURCE" \
   "$MONITORING_DASHBOARDS_V2" \
+  "$MONITORING_SCRAPE_TARGETS" \
   "$K3S_DIR/website.yaml"
 do
   require_file "$file"
@@ -936,6 +938,11 @@ kubectl create secret generic tunnel-token \
   --dry-run=client -o yaml | kubectl apply -f -
 apply_manifest "$CLOUDFLARED_MANIFEST"
 kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
+
+# Applied after cloudflared, the last component it scrapes, so every target
+# namespace exists.
+echo "==> Applying Prometheus scrape targets..."
+apply_manifest "$MONITORING_SCRAPE_TARGETS"
 
 echo "==> Configuring Rancher admin credentials..."
 kubectl port-forward -n cattle-system svc/rancher 8443:443 >/dev/null 2>&1 &

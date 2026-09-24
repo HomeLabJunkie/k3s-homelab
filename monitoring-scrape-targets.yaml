@@ -1,0 +1,166 @@
+---
+# Prometheus scrape targets for components whose charts or manifests expose
+# metrics but do not create their own ServiceMonitor/PodMonitor.
+#
+# PodMonitors are used throughout: several of these services either omit the
+# metrics port (Traefik) or have headless twins that would double-scrape (Loki).
+# Prometheus selects monitors in every namespace (see monitoring-values.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: traefik
+  namespace: traefik
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+---
+# Controller, cainjector and webhook all serve metrics on http-metrics (9402).
+# honorLabels keeps each certificate's own namespace label instead of
+# replacing it with the cert-manager pod's namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: cert-manager
+  podMetricsEndpoints:
+    - port: http-metrics
+      interval: 30s
+      honorLabels: true
+---
+# Controller and speakers.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: metallb
+  namespace: metallb-system
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: metallb
+  podMetricsEndpoints:
+    - port: monitoring
+      interval: 30s
+---
+# The Cilium agent does not serve metrics (no prometheus-serve-addr in
+# cilium-config); the operator and Envoy proxies do.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cilium-operator
+  namespace: kube-system
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      io.cilium/app: operator
+  podMetricsEndpoints:
+    - port: prometheus
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cilium-envoy
+  namespace: kube-system
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      k8s-app: cilium-envoy
+  podMetricsEndpoints:
+    - port: envoy-metrics
+      interval: 30s
+---
+# kube-vip and cloudflared declare no container ports, and portNumber only
+# matches declared ports, so these two set the scrape address from the pod IP.
+#
+# kube-vip runs on the host network; 2112 is its default Prometheus listener.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kube-vip
+  namespace: kube-system
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      name: kube-vip-ds
+  podMetricsEndpoints:
+    - interval: 30s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: __address__
+          replacement: $1:2112
+---
+# Loki single-binary and the loki-canary DaemonSet share instance labels;
+# both serve metrics on http-metrics.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: loki
+  namespace: logging
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: loki
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: [single-binary, canary]
+  podMetricsEndpoints:
+    - port: http-metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: alloy
+  namespace: logging
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  podMetricsEndpoints:
+    - port: http-metrics
+      interval: 30s
+---
+# cloudflared's built-in metrics server; the liveness probe uses the same
+# listener's /ready endpoint.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cloudflared
+  namespace: cloudflared
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: cloudflared
+  podMetricsEndpoints:
+    - interval: 30s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: __address__
+          replacement: $1:20241
