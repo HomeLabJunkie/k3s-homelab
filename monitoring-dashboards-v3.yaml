@@ -9,18 +9,19 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    executive-overview.json: '{"title":"Homelab - Executive Overview","uid":"homelab-exec","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Ready
-      Nodes","type":"stat","gridPos":{"h":5,"w":4,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":2,"title":"Running
-      Pods","type":"stat","gridPos":{"h":5,"w":4,"x":4,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_pod_status_phase{phase=\"Running\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":3,"title":"Unavailable
-      Deployments","type":"stat","gridPos":{"h":5,"w":4,"x":8,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_deployment_status_replicas_unavailable)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":4,"title":"Active
-      Alerts","type":"stat","gridPos":{"h":5,"w":4,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(ALERTS{alertstate=\"firing\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":5,"title":"Longhorn
-      Volumes","type":"stat","gridPos":{"h":5,"w":4,"x":16,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"count(longhorn_volume_capacity_bytes)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":6,"title":"PVCs","type":"stat","gridPos":{"h":5,"w":4,"x":20,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"count(kube_persistentvolumeclaim_info)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":7,"title":"Cluster
+    executive-overview.json: '{"title":"Homelab - Executive Overview","uid":"homelab-exec","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Ready
+      Nodes","type":"stat","gridPos":{"h":5,"w":4,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}},"overrides":[]}},{"id":2,"title":"Running
+      Pods","type":"stat","gridPos":{"h":5,"w":4,"x":4,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_pod_status_phase{phase=\"Running\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}},"overrides":[]}},{"id":3,"title":"Unavailable
+      Deployments","type":"stat","gridPos":{"h":5,"w":4,"x":8,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_deployment_status_replicas_unavailable)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]}},"overrides":[]}},{"id":4,"title":"Active
+      Alerts","type":"stat","gridPos":{"h":5,"w":4,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor\"})
+      or vector(0)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]}},"overrides":[]}},{"id":5,"title":"Longhorn
+      Volumes","type":"stat","gridPos":{"h":5,"w":4,"x":16,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"count(longhorn_volume_capacity_bytes)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}},"overrides":[]}},{"id":6,"title":"PVCs","type":"stat","gridPos":{"h":5,"w":4,"x":20,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"count(kube_persistentvolumeclaim_info)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}},"overrides":[]}},{"id":7,"title":"Cluster
       CPU %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":5},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100
       - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100","legendFormat":"CPU","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":8,"title":"Cluster
       Memory %","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":5},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100
       * (1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))","legendFormat":"Memory","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":9,"title":"Recent
       Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":13},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}
-      |~ \"(?i)error|fatal|panic\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+      | detected_level=~\"error|fatal|critical\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -45,14 +46,14 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    kubernetes-workloads.json: '{"title":"Homelab - Kubernetes Workloads","uid":"homelab-workloads-v2","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Unavailable
+    kubernetes-workloads.json: '{"title":"Homelab - Kubernetes Workloads","uid":"homelab-workloads-v2","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Unavailable
       Replicas","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
       by(namespace,deployment)(kube_deployment_status_replicas_unavailable)","legendFormat":"{{namespace}}/{{deployment}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":2,"title":"Restarts
       30m","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
       by(namespace,pod)(increase(kube_pod_container_status_restarts_total[30m]))","legendFormat":"{{namespace}}/{{pod}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short"},"overrides":[]}},{"id":3,"title":"PVC
       Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*kubelet_volume_stats_used_bytes/kubelet_volume_stats_capacity_bytes","legendFormat":"{{namespace}}/{{persistentvolumeclaim}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":4,"title":"Workload
       Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":16},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}
-      |~ \"(?i)error|exception|fatal|panic\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+      | detected_level=~\"error|fatal|critical\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -61,11 +62,11 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    longhorn-advanced.json: '{"title":"Homelab - Longhorn Advanced","uid":"homelab-longhorn-v2","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Volume
+    longhorn-advanced.json: '{"title":"Homelab - Longhorn Advanced","uid":"homelab-longhorn-v2","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Volume
       Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*longhorn_volume_usage_bytes/longhorn_volume_capacity_bytes","legendFormat":"{{volume}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":2,"title":"Node
       Storage Usage %","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"100*longhorn_node_storage_usage_bytes/longhorn_node_storage_capacity_bytes","legendFormat":"{{node}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},{"id":3,"title":"Longhorn
       Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":8},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"longhorn-system\"}
-      |~ \"(?i)error|failed|degraded\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+      | detected_level=~\"error|warn|fatal|critical\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -74,10 +75,19 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    traefik.json: '{"title":"Homelab - Traefik","uid":"homelab-traefik","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Requests/sec","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(traefik_service_requests_total[5m]))","legendFormat":"all","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},{"id":2,"title":"Status
+    traefik.json: '{"title":"Homelab - Traefik","uid":"homelab-traefik","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Requests/sec
+      by App","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"label_replace(sum
+      by(service)(rate(traefik_service_requests_total[5m])), \"app\", \"$1\", \"service\",
+      \"(.+?)@.*\")","legendFormat":"{{app}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},{"id":2,"title":"Status
       Codes","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum
-      by(code)(rate(traefik_service_requests_total[5m]))","legendFormat":"{{code}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},{"id":3,"title":"Traefik
-      Logs","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":8},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"traefik\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+      by(code)(rate(traefik_service_requests_total[5m]))","legendFormat":"{{code}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},{"id":4,"title":"5xx
+      Error Rate by App","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"label_replace(sum
+      by(service)(rate(traefik_service_requests_total{code=~\"5..\"}[5m])) / sum by(service)(rate(traefik_service_requests_total[5m])),
+      \"app\", \"$1\", \"service\", \"(.+?)@.*\")","legendFormat":"{{app}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percentunit"},"overrides":[]}},{"id":5,"title":"p95
+      Latency by App","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"label_replace(histogram_quantile(0.95,
+      sum by(service, le)(rate(traefik_service_request_duration_seconds_bucket[5m]))),
+      \"app\", \"$1\", \"service\", \"(.+?)@.*\")","legendFormat":"{{app}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}},{"id":3,"title":"Traefik
+      Logs","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":16},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"traefik\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -86,10 +96,16 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    certificates.json: '{"title":"Homelab - Certificates","uid":"homelab-certs","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"Certificate
-      Time Remaining","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"certmanager_certificate_expiration_timestamp_seconds-time()","legendFormat":"{{namespace}}/{{name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}},{"id":2,"title":"cert-manager
-      Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":8},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"cert-manager\"}
-      |~ \"(?i)error|failed|warning\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
+    certificates.json: '{"title":"Homelab - Certificates","uid":"homelab-certs","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":3,"title":"Certificates
+      Ready","type":"stat","gridPos":{"h":5,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(certmanager_certificate_ready_status{condition=\"True\"})","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}},"overrides":[]}},{"id":4,"title":"Certificates
+      Not Ready","type":"stat","gridPos":{"h":5,"w":6,"x":0,"y":5},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(certmanager_certificate_ready_status{condition!=\"True\"})
+      or vector(0)","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]}},"overrides":[]}},{"id":5,"title":"Days
+      Until Expiry","type":"bargauge","gridPos":{"h":10,"w":9,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sort((certmanager_certificate_expiration_timestamp_seconds
+      - time()) / 86400)","legendFormat":"{{namespace}}/{{name}}","refId":"A","instant":true}],"options":{"orientation":"horizontal","displayMode":"basic"},"fieldConfig":{"defaults":{"unit":"d","decimals":0,"min":0,"max":90,"thresholds":{"mode":"absolute","steps":[{"color":"red","value":null},{"color":"orange","value":14},{"color":"green","value":30}]}},"overrides":[]}},{"id":1,"title":"Certificate
+      Time Remaining","type":"timeseries","gridPos":{"h":10,"w":9,"x":15,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"certmanager_certificate_expiration_timestamp_seconds
+      - time()","legendFormat":"{{namespace}}/{{name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}},{"id":2,"title":"cert-manager
+      Errors","type":"logs","gridPos":{"h":10,"w":24,"x":0,"y":13},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"cert-manager\"}
+      | detected_level=~\"error|warn|fatal|critical\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -98,9 +114,9 @@ items:
     labels:
       grafana_dashboard: '1'
   data:
-    logs-events.json: '{"title":"Homelab - Logs & Events","uid":"homelab-logs","schemaVersion":39,"version":1,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"All
+    logs-events.json: '{"title":"Homelab - Logs & Events","uid":"homelab-logs","schemaVersion":39,"version":2,"timezone":"browser","tags":["homelab","k3s"],"time":{"from":"now-6h","to":"now"},"templating":{"list":[]},"panels":[{"id":1,"title":"All
       Cluster Logs","type":"logs","gridPos":{"h":14,"w":24,"x":0,"y":0},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":2,"title":"Errors
       / Fatal / Panic","type":"logs","gridPos":{"h":12,"w":24,"x":0,"y":14},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=~\".+\"}
-      |~ \"(?i)error|fatal|panic|exception\" != \"v1 Endpoints is deprecated in v1.33+\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":3,"title":"Storage
+      | detected_level=~\"error|fatal|critical\"","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":3,"title":"Storage
       Logs","type":"logs","gridPos":{"h":10,"w":12,"x":0,"y":26},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"longhorn-system\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}},{"id":4,"title":"Ingress
       Logs","type":"logs","gridPos":{"h":10,"w":12,"x":12,"y":26},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{namespace=\"traefik\"}","refId":"A"}],"options":{"showTime":true,"wrapLogMessage":true}}]}'
