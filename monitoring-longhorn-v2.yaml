@@ -98,3 +98,38 @@ spec:
           labels: {severity: critical}
           annotations:
             summary: Longhorn volume usage above 90%
+    # Let's Encrypt certificates renew at 30 days remaining, so these only
+    # fire after renewal has been failing for about two weeks. Metrics come
+    # from the cert-manager PodMonitor in monitoring-scrape-targets.yaml.
+    - name: homelab.certificate.rules
+      rules:
+        - alert: CertificateExpiringSoon
+          expr: certmanager_certificate_expiration_timestamp_seconds - time() < 14 * 86400
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: >-
+              Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in
+              {{ $value | humanizeDuration }}
+        - alert: CertificateExpiryCritical
+          expr: certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 86400
+          for: 1h
+          labels: {severity: critical}
+          annotations:
+            summary: >-
+              Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in
+              {{ $value | humanizeDuration }}
+        - alert: CertificateNotReady
+          expr: certmanager_certificate_ready_status{condition!="True"} == 1
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: >-
+              Certificate {{ $labels.namespace }}/{{ $labels.name }} is not
+              Ready ({{ $labels.condition }})
+        - alert: CertManagerMetricsMissing
+          expr: absent(certmanager_certificate_expiration_timestamp_seconds)
+          for: 30m
+          labels: {severity: warning}
+          annotations:
+            summary: No cert-manager certificate metrics; expiry alerts cannot fire

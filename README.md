@@ -493,6 +493,13 @@ The log panels on the homelab dashboards filter on Loki's `detected_level`
 rather than matching the word "error" in the line text, so INFO lines that
 mention error fields no longer appear.
 
+Certificate alerts (`homelab.certificate.rules` in
+`monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
+days left, a critical under 7 days, a warning when one stays not Ready for an
+hour, and a warning if cert-manager metrics disappear so the others would go
+silent. Let's Encrypt renews at 30 days, so expiry alerts mean renewal has been
+failing for about two weeks.
+
 Alertmanager routes warning and critical alerts through the SMTP credentials
 already stored in `.secrets.enc`. The configuration is rendered at deployment
 time, so SMTP passwords are never written to tracked files. The always-firing
@@ -526,6 +533,12 @@ Cluster logging uses:
 Loki storage is Longhorn-backed and is part of the tested DR recovery set.
 
 Alloy collects Kubernetes logs and sends them to Loki.
+
+Loki rejects entries older than 168h. Alloy resends the last line it read
+whenever it reconnects to a pod's log stream, so for a pod that has been quiet
+longer than that, Loki would reject the same stale line on every reconnect.
+Alloy's `drop_stale` stage drops lines older than 167h before sending them;
+`loki_process_dropped_lines_total` counts them.
 
 ## Protected Persistent Workloads
 
