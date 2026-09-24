@@ -15,4 +15,4 @@ spec:
       - logging
     snapshotMoveData: true
     storageLocation: garage
-    ttl: 336h
+    ttl: 168h

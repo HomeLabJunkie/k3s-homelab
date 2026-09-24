@@ -34,7 +34,7 @@ configuration:
   features: EnableCSI
   defaultBackupStorageLocation: garage
   defaultSnapshotMoveData: true
-  defaultBackupTTL: 336h
+  defaultBackupTTL: 168h
   defaultItemOperationTimeout: 6h
   uploaderType: kopia
   repositoryMaintenanceJob:
