@@ -350,7 +350,8 @@ for var in \
   LONGHORN_CIFS_USERNAME \
   LONGHORN_CIFS_PASSWORD \
   ADMIN_UI_USERNAME \
-  ADMIN_UI_PASSWORD
+  ADMIN_UI_PASSWORD \
+  WEBSITE_DEPLOY_KEY_B64
 do
   require_var "$var"
 done
@@ -1265,6 +1266,13 @@ esac
 
 cleanup
 PF_PID=""
+
+echo "==> Creating/updating jeffriffle.com git-sync deploy key..."
+ensure_namespace website
+kubectl create secret generic jeffriffle-git \
+  --namespace website \
+  --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Deploying application ingress and certificates..."
 apply_manifest "$K3S_DIR/website.yaml"

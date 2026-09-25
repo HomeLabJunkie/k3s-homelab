@@ -69,6 +69,15 @@ spec:
             name: website
             port:
               number: 80
+      # The new jeffriffle.com site (below) while it is being tested. To switch over,
+      # point / at jeffriffle and remove this path and the old website Deployment.
+      - path: /test
+        pathType: Prefix
+        backend:
+          service:
+            name: jeffriffle
+            port:
+              number: 80
   tls:
   - hosts:
     - ${BASE_DOMAIN}
@@ -126,3 +135,192 @@ spec:
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
+---
+# jeffriffle.com: the private HomeLabJunkie/jeffriffle.com repo builds the site onto its
+# `deploy` branch. git-sync keeps a checkout of that branch current (checking every 60s)
+# and nginx serves it, at / and at /test/. Edits made at /admin go live without a rollout.
+# deploy.sh creates the jeffriffle-git Secret (read-only deploy key) from WEBSITE_DEPLOY_KEY_B64.
+# No shell-style variables in this block: envsubst would replace them (nginx uses them too).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jeffriffle
+  namespace: website
+data:
+  # From https://api.github.com/meta (ssh_keys)
+  known_hosts: |
+    github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+    github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+    github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
+  default.conf: |
+    server {
+      listen 8080;
+      server_name _;
+      root /git/current;
+      index index.html;
+      # Traefik terminates TLS, so keep redirects relative
+      absolute_redirect off;
+      server_tokens off;
+
+      add_header X-Content-Type-Options nosniff always;
+      add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+      location = /healthz {
+        access_log off;
+        return 200 "ok";
+      }
+
+      # The git-sync worktree holds a .git pointer file; never serve dotfiles
+      location ~ /\. {
+        return 404;
+      }
+
+      # The editor itself holds no secrets (it signs in to GitHub with a token),
+      # but keep it out of caches and search results. Cloudflare Access guards the path.
+      location /admin/ {
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Cache-Control "no-store" always;
+      }
+
+      location = /test {
+        return 301 /test/;
+      }
+      location /test/ {
+        alias /git/current/;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jeffriffle
+  namespace: website
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: jeffriffle
+  template:
+    metadata:
+      labels:
+        app: jeffriffle
+    spec:
+      securityContext:
+        # git-sync runs as 65533; the group lets it read the deploy key
+        fsGroup: 65533
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      # First checkout, so nginx never starts with an empty directory
+      - name: git-sync-init
+        image: registry.k8s.io/git-sync/git-sync:v4.7.1
+        args:
+        - --repo=git@github.com:HomeLabJunkie/jeffriffle.com.git
+        - --ref=deploy
+        - --depth=1
+        - --root=/git
+        - --link=current
+        - --ssh-key-file=/etc/git-secret/ssh
+        - --ssh-known-hosts-file=/etc/git-known-hosts/known_hosts
+        - --one-time
+        volumeMounts: &gitsync-mounts
+        - name: git
+          mountPath: /git
+        - name: git-secret
+          mountPath: /etc/git-secret
+          readOnly: true
+        - name: config
+          mountPath: /etc/git-known-hosts
+          readOnly: true
+        # git-sync's HOME; it writes a gitconfig there
+        - name: git-sync-tmp
+          mountPath: /tmp
+        securityContext: &restricted
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources: &gitsync-resources
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+      # Native sidecar: keeps /git/current in step with the deploy branch
+      - name: git-sync
+        image: registry.k8s.io/git-sync/git-sync:v4.7.1
+        restartPolicy: Always
+        args:
+        - --repo=git@github.com:HomeLabJunkie/jeffriffle.com.git
+        - --ref=deploy
+        - --depth=1
+        - --root=/git
+        - --link=current
+        - --ssh-key-file=/etc/git-secret/ssh
+        - --ssh-known-hosts-file=/etc/git-known-hosts/known_hosts
+        - --period=60s
+        volumeMounts: *gitsync-mounts
+        securityContext: *restricted
+        resources: *gitsync-resources
+      containers:
+      - name: nginx
+        image: nginxinc/nginx-unprivileged:1.30-alpine
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: git
+          mountPath: /git
+          readOnly: true
+        - name: config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+          readOnly: true
+        - name: nginx-tmp
+          mountPath: /tmp
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 30
+        securityContext: *restricted
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            memory: 64Mi
+      volumes:
+      - name: git
+        emptyDir: {}
+      - name: nginx-tmp
+        emptyDir: {}
+      - name: git-sync-tmp
+        emptyDir: {}
+      - name: git-secret
+        secret:
+          secretName: jeffriffle-git
+          defaultMode: 0400
+      - name: config
+        configMap:
+          name: jeffriffle
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jeffriffle
+  namespace: website
+spec:
+  selector:
+    app: jeffriffle
+  ports:
+  - port: 80
+    targetPort: http
