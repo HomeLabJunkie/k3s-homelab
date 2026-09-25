@@ -463,6 +463,31 @@ devices when credentials or 2FA settings change. The pod started cleanly and
 [1.37.3](https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.3)
 release notes.
 
+### Website (jeffriffle.com)
+
+The `website` namespace runs two static sites, both from `website.yaml`:
+
+- `website`: the original page, cloned from the public `nginx-website` repo
+  when a pod starts. It serves `/`.
+- `jeffriffle`: the new site, from the private `HomeLabJunkie/jeffriffle.com`
+  repo. It is served at `/test/` until it replaces `website`.
+
+In the private repo, the text lives in content files that can be edited online
+at `/admin/` (Sveltia CMS). Each save commits to `main`, and a GitHub Action
+builds the site onto the `deploy` branch. Each `jeffriffle` pod runs
+[git-sync](https://github.com/kubernetes/git-sync) as a sidecar. It checks
+`deploy` every 60 seconds with a read-only deploy key, so edits go live without
+a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout.
+
+`deploy.sh` creates the `jeffriffle-git` Secret from `WEBSITE_DEPLOY_KEY_B64`
+(the base64-encoded private deploy key). Cloudflare Access, configured in the
+Cloudflare dashboard rather than in this repo, puts a login in front of
+`/admin/` and `/test/admin/`.
+
+To switch `/` over to the new site, point the `/` path of the `website`
+Ingress at the `jeffriffle` Service, then remove the `/test` path and the old
+`website` Deployment and Service.
+
 ## Monitoring
 
 The monitoring stack uses `kube-prometheus-stack`.
@@ -965,6 +990,8 @@ Expected sensitive values include:
 - dedicated Longhorn CIFS username and password
 - `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` (12+ characters): basic-auth login
   for the Traefik dashboard and Longhorn UI, which have no login of their own
+- `WEBSITE_DEPLOY_KEY_B64`: the jeffriffle.com repo's read-only deploy key
+  (private key, base64-encoded on one line), used by git-sync
 
 The tracked Vaultwarden values template references Kubernetes Secrets and must
 not contain credential values directly. `deploy.sh` creates or updates
