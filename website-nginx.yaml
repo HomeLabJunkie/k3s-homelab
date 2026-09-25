@@ -1,3 +1,4 @@
+---
 # nginx config and GitHub host keys for the jeffriffle Deployment (website.yaml).
 # Kept outside templates/ because envsubst would strip nginx's $variables.
 # deploy.sh restarts the Deployment when this changes, since nginx reads it at start-up.

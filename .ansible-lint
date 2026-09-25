@@ -43,6 +43,7 @@ exclude_paths:
   - portainer-ingress.yaml
   - portainer-values.yaml
   - traefik-dashboard-cert.yaml
+  - website-nginx.yaml
   - traefik-dashboard.yaml
   - traefik-values.yaml
   - trilium-cert.yaml
