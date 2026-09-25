@@ -1,0 +1,53 @@
+# nginx config and GitHub host keys for the jeffriffle Deployment (website.yaml).
+# Kept outside templates/ because envsubst would strip nginx's $variables.
+# deploy.sh restarts the Deployment when this changes, since nginx reads it at start-up.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jeffriffle
+  namespace: website
+data:
+  # From https://api.github.com/meta (ssh_keys)
+  known_hosts: |
+    github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+    github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+    github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
+  default.conf: |
+    # One JSON line per request, for the jeffriffle.com Grafana dashboard (Loki).
+    # Cloudflare adds CF-Connecting-IP (the visitor's address) and CF-IPCountry.
+    log_format site escape=json '{"time":"$time_iso8601","ip":"$http_cf_connecting_ip",'
+      '"country":"$http_cf_ipcountry","method":"$request_method","path":"$uri",'
+      '"status":$status,"bytes":$body_bytes_sent,"referer":"$http_referer",'
+      '"ua":"$http_user_agent","rt":$request_time}';
+
+    server {
+      listen 8080;
+      server_name _;
+      root /git/current;
+      index index.html;
+      # Traefik terminates TLS, so keep redirects relative
+      absolute_redirect off;
+      server_tokens off;
+      access_log /dev/stdout site;
+
+      add_header X-Content-Type-Options nosniff always;
+      add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+      location = /healthz {
+        access_log off;
+        return 200 "ok";
+      }
+
+      # The git-sync worktree holds a .git pointer file; never serve dotfiles
+      location ~ /\. {
+        return 404;
+      }
+
+      # The editor itself holds no secrets (it signs in to GitHub with a token),
+      # but keep it out of caches and search results. Cloudflare Access guards the path.
+      location /admin/ {
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Cache-Control "no-store" always;
+      }
+    }

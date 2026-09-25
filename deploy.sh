@@ -65,6 +65,7 @@ LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
 ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
+WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
 MONITORING_SCRAPE_TARGETS="${MONITORING_SCRAPE_TARGETS:-$K3S_DIR/monitoring-scrape-targets.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
@@ -312,7 +313,8 @@ for file in \
   "$LOKI_DATASOURCE" \
   "$MONITORING_DASHBOARDS_V2" \
   "$MONITORING_SCRAPE_TARGETS" \
-  "$K3S_DIR/website.yaml"
+  "$K3S_DIR/website.yaml" \
+  "$WEBSITE_NGINX"
 do
   require_file "$file"
 done
@@ -1274,8 +1276,20 @@ kubectl create secret generic jeffriffle-git \
   --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# nginx reads its config only at start-up, so restart the site when it changes.
+website_nginx_changed=false
+if ! kubectl diff -f "$WEBSITE_NGINX" >/dev/null 2>&1; then
+  website_nginx_changed=true
+fi
+apply_manifest "$WEBSITE_NGINX"
+
 echo "==> Deploying application ingress and certificates..."
 apply_manifest "$K3S_DIR/website.yaml"
+if [[ "$website_nginx_changed" == true ]]; then
+  echo "==> jeffriffle.com nginx config changed; restarting the site..."
+  kubectl -n website rollout restart deployment/jeffriffle
+  kubectl -n website rollout status deployment/jeffriffle --timeout=180s
+fi
 
 echo
 echo "===== NODES ====="

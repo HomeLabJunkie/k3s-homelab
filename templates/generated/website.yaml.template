@@ -2,52 +2,8 @@
 # `deploy` branch. git-sync keeps a checkout of that branch current (checking every 60s)
 # and nginx serves it. Edits made at /admin go live without a rollout.
 # deploy.sh creates the jeffriffle-git Secret (read-only deploy key) from WEBSITE_DEPLOY_KEY_B64.
-# No shell-style variables in this block: envsubst would replace them (nginx uses them too).
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: jeffriffle
-  namespace: website
-data:
-  # From https://api.github.com/meta (ssh_keys)
-  known_hosts: |
-    github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
-    github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
-    github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
-  # nginx reads this at start-up. After changing it:
-  #   kubectl -n website rollout restart deployment/jeffriffle
-  default.conf: |
-    server {
-      listen 8080;
-      server_name _;
-      root /git/current;
-      index index.html;
-      # Traefik terminates TLS, so keep redirects relative
-      absolute_redirect off;
-      server_tokens off;
-
-      add_header X-Content-Type-Options nosniff always;
-      add_header Referrer-Policy strict-origin-when-cross-origin always;
-
-      location = /healthz {
-        access_log off;
-        return 200 "ok";
-      }
-
-      # The git-sync worktree holds a .git pointer file; never serve dotfiles
-      location ~ /\. {
-        return 404;
-      }
-
-      # The editor itself holds no secrets (it signs in to GitHub with a token),
-      # but keep it out of caches and search results. Cloudflare Access guards the path.
-      location /admin/ {
-        add_header X-Content-Type-Options nosniff always;
-        add_header X-Robots-Tag "noindex, nofollow" always;
-        add_header Cache-Control "no-store" always;
-      }
-    }
----
+# The nginx config and GitHub host keys (ConfigMap jeffriffle) are in website-nginx.yaml,
+# outside templates/ so envsubst leaves nginx's variables alone.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
