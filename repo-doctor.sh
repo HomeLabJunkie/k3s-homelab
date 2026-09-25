@@ -53,7 +53,7 @@ Usage:
 Options:
   --quick         Skip DR readiness and deployment preflight.
   --no-dr         Skip ./dr-status.sh.
-  --no-preflight  Skip scripts/run-deploy.sh --preflight-only.
+  --no-preflight  Skip ./deploy.sh --preflight-only.
   -h, --help      Show this help.
 
 Exit codes:
@@ -238,11 +238,9 @@ fi
 section "4. DEPLOYMENT PREFLIGHT"
 
 if [[ "$RUN_PREFLIGHT" == true ]]; then
-  # Go through run-deploy.sh, which derives the ingress hostnames from
-  # BASE_DOMAIN; deploy.sh alone refuses its *.example.invalid placeholders.
-  if [[ -x "$ROOT_DIR/scripts/run-deploy.sh" && -x "$ROOT_DIR/deploy.sh" ]]; then
+  if [[ -x "$ROOT_DIR/deploy.sh" ]]; then
     set +e
-    preflight_output="$("$ROOT_DIR/scripts/run-deploy.sh" --preflight-only 2>&1)"
+    preflight_output="$("$ROOT_DIR/deploy.sh" --preflight-only 2>&1)"
     preflight_rc=$?
     set -e
     printf '%s\n' "$preflight_output"
@@ -251,7 +249,7 @@ if [[ "$RUN_PREFLIGHT" == true ]]; then
       && pass "Deployment preflight passed" \
       || fail_check "Deployment preflight failed"
   else
-    fail_check "deploy.sh or scripts/run-deploy.sh is missing or not executable"
+    fail_check "deploy.sh is missing or not executable"
   fi
 else
   skip "Deployment preflight skipped by request"

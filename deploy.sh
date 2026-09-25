@@ -23,7 +23,10 @@ TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.6.0}"
 RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.15.1}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 
-RANCHER_HOSTNAME="${RANCHER_HOSTNAME:-rancher.example.invalid}"
+# Ingress hostnames default to <app>.$BASE_DOMAIN from cluster.env. Without
+# BASE_DOMAIN they fall back to *.example.invalid, which the guard below refuses.
+HOSTNAME_DOMAIN="${BASE_DOMAIN:-example.invalid}"
+RANCHER_HOSTNAME="${RANCHER_HOSTNAME:-rancher.${HOSTNAME_DOMAIN}}"
 # Rancher's bootstrap always creates the local admin as "admin"; the name is
 # not configurable, so refuse a different value instead of printing it.
 if [[ -n "${RANCHER_ADMIN_USER:-}" && "$RANCHER_ADMIN_USER" != "admin" ]]; then
@@ -41,21 +44,21 @@ CLOUDFLARED_MANIFEST="${CLOUDFLARED_MANIFEST:-$K3S_DIR/cloudflared.yaml}"
 LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-host-prep.yml}"
 LONGHORN_VALUES="${LONGHORN_VALUES:-$K3S_DIR/longhorn-values.yaml}"
 LONGHORN_INGRESS_MANIFEST="${LONGHORN_INGRESS_MANIFEST:-$K3S_DIR/longhorn-ingress.yaml}"
-LONGHORN_HOSTNAME="${LONGHORN_HOSTNAME:-longhorn.example.invalid}"
+LONGHORN_HOSTNAME="${LONGHORN_HOSTNAME:-longhorn.${HOSTNAME_DOMAIN}}"
 TRILIUM_MANIFEST="${TRILIUM_MANIFEST:-$K3S_DIR/trilium-longhorn-v2.yaml}"
-TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.example.invalid}"
+TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
 VAULTWARDEN_MANIFEST="${VAULTWARDEN_MANIFEST:-$K3S_DIR/vaultwarden-longhorn-v2.yaml}"
-VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.example.invalid}"
+VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
 KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-87.21.0}"
 MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
 MONITORING_INGRESS="${MONITORING_INGRESS:-$K3S_DIR/monitoring-ingress.yaml}"
 MONITORING_LONGHORN="${MONITORING_LONGHORN:-$K3S_DIR/monitoring-longhorn-v2.yaml}"
 MONITORING_DASHBOARDS="${MONITORING_DASHBOARDS:-$K3S_DIR/monitoring-dashboards.yaml}"
-GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.example.invalid}"
+GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.${HOSTNAME_DOMAIN}}"
 PORTAINER_CHART_VERSION="${PORTAINER_CHART_VERSION:-245.0.0}"
 PORTAINER_VALUES="${PORTAINER_VALUES:-$K3S_DIR/portainer-values.yaml}"
 PORTAINER_INGRESS="${PORTAINER_INGRESS:-$K3S_DIR/portainer-ingress.yaml}"
-PORTAINER_HOSTNAME="${PORTAINER_HOSTNAME:-portainer.example.invalid}"
+PORTAINER_HOSTNAME="${PORTAINER_HOSTNAME:-portainer.${HOSTNAME_DOMAIN}}"
 LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-18.9.0}"
 ALLOY_CHART_VERSION="${ALLOY_CHART_VERSION:-1.11.1}"
 LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
@@ -65,13 +68,12 @@ MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashbo
 MONITORING_SCRAPE_TARGETS="${MONITORING_SCRAPE_TARGETS:-$K3S_DIR/monitoring-scrape-targets.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
-# The hostname defaults are placeholders; scripts/run-deploy.sh derives the
-# real names from BASE_DOMAIN. Refuse to push a placeholder into the cluster.
+# Refuse to push a placeholder hostname into the cluster.
 for hostname_var in RANCHER_HOSTNAME LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
   VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME PORTAINER_HOSTNAME; do
   if [[ "${!hostname_var}" == *.invalid ]]; then
     echo "ERROR: $hostname_var is the placeholder ${!hostname_var}."
-    echo "Run scripts/run-deploy.sh, or set $hostname_var in $ENV_FILE."
+    echo "Set BASE_DOMAIN (or $hostname_var) in $ENV_FILE."
     exit 1
   fi
 done
