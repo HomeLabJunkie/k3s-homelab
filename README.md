@@ -481,6 +481,14 @@ a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout.
 Cloudflare dashboard rather than in this repo, puts a login in front of
 `/admin/`.
 
+The nginx config lives in `website-nginx.yaml`, outside `templates/` so that
+`envsubst` doesn't strip nginx's `$variables`. `deploy.sh` restarts the site when
+it changes. nginx writes one JSON line per request, including Cloudflare's
+visitor IP and country, to Loki. The **jeffriffle.com - Website** Grafana
+dashboard (in `monitoring-dashboards-v3.yaml`) shows page views, unique
+visitors, countries, referrers, response times, and bot probes from those logs
+and Traefik's metrics.
+
 ## Monitoring
 
 The monitoring stack uses `kube-prometheus-stack`.
