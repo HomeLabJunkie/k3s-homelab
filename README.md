@@ -511,6 +511,14 @@ The workstation DR monitor uses the same credentials through
 the configuration without sending mail. An optional `config/email.env` can
 override the shared account.
 
+The Prometheus UI is at `prometheus.${BASE_DOMAIN}`, defined with Grafana's
+ingress in `monitoring-ingress.yaml`. Prometheus has no login of its own, so the
+ingress uses the same `admin-ui-auth` basic-auth middleware as the Traefik
+dashboard and Longhorn (`ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD`). The Cloudflare
+tunnel's hostnames are managed in the Zero Trust dashboard, so a new hostname
+also needs a public hostname entry there pointing at
+`https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, like the others.
+
 Persistent monitoring data is stored on Longhorn.
 
 Protected monitoring PVCs include:
