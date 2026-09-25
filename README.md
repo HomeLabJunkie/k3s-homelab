@@ -465,16 +465,13 @@ release notes.
 
 ### Website (jeffriffle.com)
 
-The `website` namespace runs two static sites, both from `website.yaml`:
+`website.yaml` runs the `jeffriffle` Deployment in the `website` namespace. It
+serves the site from the private `HomeLabJunkie/jeffriffle.com` repo at
+`${BASE_DOMAIN}`, and `www.${BASE_DOMAIN}` redirects there.
 
-- `website`: the original page, cloned from the public `nginx-website` repo
-  when a pod starts. It serves `/`.
-- `jeffriffle`: the new site, from the private `HomeLabJunkie/jeffriffle.com`
-  repo. It is served at `/test/` until it replaces `website`.
-
-In the private repo, the text lives in content files that can be edited online
-at `/admin/` (Sveltia CMS). Each save commits to `main`, and a GitHub Action
-builds the site onto the `deploy` branch. Each `jeffriffle` pod runs
+In that repo, the text lives in content files that can be edited online at
+`/admin/` (Sveltia CMS). Each save commits to `main`, and a GitHub Action builds
+the site onto the `deploy` branch. Each pod runs
 [git-sync](https://github.com/kubernetes/git-sync) as a sidecar. It checks
 `deploy` every 60 seconds with a read-only deploy key, so edits go live without
 a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout.
@@ -482,11 +479,7 @@ a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout.
 `deploy.sh` creates the `jeffriffle-git` Secret from `WEBSITE_DEPLOY_KEY_B64`
 (the base64-encoded private deploy key). Cloudflare Access, configured in the
 Cloudflare dashboard rather than in this repo, puts a login in front of
-`/admin/` and `/test/admin/`.
-
-To switch `/` over to the new site, point the `/` path of the `website`
-Ingress at the `jeffriffle` Service, then remove the `/test` path and the old
-`website` Deployment and Service.
+`/admin/`.
 
 ## Monitoring
 

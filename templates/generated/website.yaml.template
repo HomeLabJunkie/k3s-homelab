@@ -1,144 +1,6 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: website
-  namespace: website
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: website
-  template:
-    metadata:
-      labels:
-        app: website
-    spec:
-      initContainers:
-      - name: git-clone
-        image: alpine/git:v2.54.0
-        command:
-        - git
-        - clone
-        - https://github.com/HomeLabJunkie/nginx-website
-        - /usr/share/nginx/html
-        volumeMounts:
-        - name: html
-          mountPath: /usr/share/nginx/html
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        volumeMounts:
-        - name: html
-          mountPath: /usr/share/nginx/html
-      volumes:
-      - name: html
-        emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: website
-  namespace: website
-spec:
-  selector:
-    app: website
-  ports:
-  - port: 80
-    targetPort: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: website
-  namespace: website
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-spec:
-  ingressClassName: traefik
-  rules:
-  - host: ${BASE_DOMAIN}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: website
-            port:
-              number: 80
-      # The new jeffriffle.com site (below) while it is being tested. To switch over,
-      # point / at jeffriffle and remove this path and the old website Deployment.
-      - path: /test
-        pathType: Prefix
-        backend:
-          service:
-            name: jeffriffle
-            port:
-              number: 80
-  tls:
-  - hosts:
-    - ${BASE_DOMAIN}
-    secretName: tls-website
----
-# www.${BASE_DOMAIN} permanently redirects to the bare domain, keeping the path.
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: redirect-www
-  namespace: website
-spec:
-  redirectRegex:
-    regex: ^https?://www\.(.+)
-    replacement: https://${1}
-    permanent: true
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: website-www
-  namespace: website
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: website-redirect-www@kubernetescrd
-spec:
-  ingressClassName: traefik
-  rules:
-  - host: www.${BASE_DOMAIN}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: website
-            port:
-              number: 80
-  tls:
-  - hosts:
-    - www.${BASE_DOMAIN}
-    secretName: tls-website
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: tls-website
-  namespace: website
-spec:
-  secretName: tls-website
-  dnsNames:
-  - ${BASE_DOMAIN}
-  - www.${BASE_DOMAIN}
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
----
 # jeffriffle.com: the private HomeLabJunkie/jeffriffle.com repo builds the site onto its
 # `deploy` branch. git-sync keeps a checkout of that branch current (checking every 60s)
-# and nginx serves it, at / and at /test/. Edits made at /admin go live without a rollout.
+# and nginx serves it. Edits made at /admin go live without a rollout.
 # deploy.sh creates the jeffriffle-git Secret (read-only deploy key) from WEBSITE_DEPLOY_KEY_B64.
 # No shell-style variables in this block: envsubst would replace them (nginx uses them too).
 apiVersion: v1
@@ -152,6 +14,8 @@ data:
     github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
     github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
     github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
+  # nginx reads this at start-up. After changing it:
+  #   kubectl -n website rollout restart deployment/jeffriffle
   default.conf: |
     server {
       listen 8080;
@@ -181,15 +45,6 @@ data:
         add_header X-Content-Type-Options nosniff always;
         add_header X-Robots-Tag "noindex, nofollow" always;
         add_header Cache-Control "no-store" always;
-      }
-
-      location = /test {
-        return 301 /test/;
-      }
-      location /test/ {
-        alias /git/current/;
-        add_header X-Content-Type-Options nosniff always;
-        add_header X-Robots-Tag "noindex, nofollow" always;
       }
     }
 ---
@@ -324,3 +179,83 @@ spec:
   ports:
   - port: 80
     targetPort: http
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: website
+  namespace: website
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: ${BASE_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jeffriffle
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - ${BASE_DOMAIN}
+    secretName: tls-website
+---
+# www.${BASE_DOMAIN} permanently redirects to the bare domain, keeping the path.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-www
+  namespace: website
+spec:
+  redirectRegex:
+    regex: ^https?://www\.(.+)
+    replacement: https://${1}
+    permanent: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: website-www
+  namespace: website
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: website-redirect-www@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: www.${BASE_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jeffriffle
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - www.${BASE_DOMAIN}
+    secretName: tls-website
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-website
+  namespace: website
+spec:
+  secretName: tls-website
+  dnsNames:
+  - ${BASE_DOMAIN}
+  - www.${BASE_DOMAIN}
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
