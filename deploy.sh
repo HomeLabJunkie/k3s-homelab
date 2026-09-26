@@ -66,6 +66,7 @@ ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
+WEBSITE_DASHBOARD="${WEBSITE_DASHBOARD:-$K3S_DIR/dashboards/jeffriffle-website.json}"
 MONITORING_SCRAPE_TARGETS="${MONITORING_SCRAPE_TARGETS:-$K3S_DIR/monitoring-scrape-targets.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
@@ -258,7 +259,8 @@ for var in \
   BACKUP_NFS_VERSION \
   CLUSTER_BACKUP_EXPORT \
   LONGHORN_BACKUP_SHARE \
-  LONGHORN_BACKUP_CREDENTIAL_SECRET
+  LONGHORN_BACKUP_CREDENTIAL_SECRET \
+  CLOUDFLARE_ACCOUNT_ID
 do
   require_var "$var"
 done
@@ -314,7 +316,8 @@ for file in \
   "$MONITORING_DASHBOARDS_V2" \
   "$MONITORING_SCRAPE_TARGETS" \
   "$K3S_DIR/website.yaml" \
-  "$WEBSITE_NGINX"
+  "$WEBSITE_NGINX" \
+  "$WEBSITE_DASHBOARD"
 do
   require_file "$file"
 done
@@ -353,7 +356,8 @@ for var in \
   LONGHORN_CIFS_PASSWORD \
   ADMIN_UI_USERNAME \
   ADMIN_UI_PASSWORD \
-  WEBSITE_DEPLOY_KEY_B64
+  WEBSITE_DEPLOY_KEY_B64 \
+  CLOUDFLARE_ANALYTICS_TOKEN
 do
   require_var "$var"
 done
@@ -713,6 +717,12 @@ kubectl create secret generic grafana-admin \
   --from-file=admin-password=<(printf '%s' "$GRAFANA_ADMIN_PASSWORD") \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# Read-only Cloudflare Web Analytics token for Grafana's Infinity data source
+kubectl create secret generic grafana-cloudflare \
+  --namespace monitoring \
+  --from-file=token=<(printf '%s' "$CLOUDFLARE_ANALYTICS_TOKEN") \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo "==> Configuring Alertmanager SMTP delivery..."
 kubectl create secret generic alertmanager-smtp \
   --namespace monitoring \
@@ -822,6 +832,15 @@ helm upgrade --install alloy grafana/alloy \
 echo "==> Adding Loki datasource and expanded dashboards..."
 apply_manifest "$LOKI_DATASOURCE"
 apply_manifest "$MONITORING_DASHBOARDS_V2"
+
+# The website dashboard fills in only the account ID; Grafana's own $variables stay as-is.
+echo "==> Applying jeffriffle.com website dashboard..."
+kubectl create configmap grafana-jeffriffle-website \
+  --namespace monitoring \
+  --from-file=jeffriffle-website.json=<(envsubst '${CLOUDFLARE_ACCOUNT_ID}' < "$WEBSITE_DASHBOARD") \
+  --dry-run=client -o yaml \
+  | kubectl label --local -f - grafana_dashboard=1 -o yaml \
+  | kubectl apply -f -
 
 echo "==> Verifying Loki storage..."
 kubectl -n logging get pvc -o wide

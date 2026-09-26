@@ -5,6 +5,17 @@ grafana:
     existingSecret: grafana-admin
     userKey: admin-user
     passwordKey: admin-password
+  # Infinity queries web APIs; the jeffriffle.com dashboard uses it for Cloudflare
+  # Web Analytics (GraphQL). Grafana installs it at start-up (id@version).
+  plugins:
+    - yesoreyeram-infinity-datasource@4.0.0
+  # Read-only Cloudflare "Account Analytics" token for the Infinity data source.
+  # deploy.sh creates grafana-cloudflare from CLOUDFLARE_ANALYTICS_TOKEN.
+  envValueFrom:
+    CF_ANALYTICS_TOKEN:
+      secretKeyRef:
+        name: grafana-cloudflare
+        key: token
   persistence:
     enabled: true
     type: pvc
