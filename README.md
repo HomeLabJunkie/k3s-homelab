@@ -225,6 +225,11 @@ ansible-core to the supported 2.21.x series. The `ANSIBLE_CORE_*` bounds in
 
 Before Ansible can modify K3s, `deploy.sh`:
 
+- runs `k3s-sync check` (from the private companion repo) and stops if this
+  laptop's private files (`.secrets.enc`, `cluster.env`) or this checkout are
+  behind GitHub, so stale secrets never reach the cluster. It warns and continues
+  when GitHub is unreachable or `k3s-sync` isn't installed; `SKIP_SYNC_CHECK=true`
+  overrides it on purpose.
 - loads and exports `config/cluster.env`
 - requires all critical cluster environment values
 - requires `KUBE_VIP` to be a valid usable IPv4 address
