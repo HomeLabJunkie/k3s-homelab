@@ -239,6 +239,30 @@ echo "==> Validating Ansible/Python toolchain..."
 echo "==> Verifying project-local Ansible collections..."
 "$K3S_DIR/scripts/ensure-ansible-collections.sh"
 
+# Refuse to deploy from a laptop with old private files (secrets, cluster.env) or an
+# old checkout: an outdated .secrets.enc would push stale credentials to the cluster.
+# k3s-sync lives in the private companion repo (see its GUIDE.md).
+echo "==> Checking this laptop is up to date (k3s-sync check)..."
+K3S_SYNC="${K3S_SYNC:-$(command -v k3s-sync || echo "$K3S_DIR/../k3s-homelab-private/k3s-sync")}"
+if [[ "${SKIP_SYNC_CHECK:-false}" == true ]]; then
+  echo "  skipped (SKIP_SYNC_CHECK=true)"
+elif [[ ! -x "$K3S_SYNC" ]]; then
+  echo "  k3s-sync not found; skipping (set K3S_SYNC to its path to enable this check)"
+else
+  sync_rc=0
+  K3S_REPO="$K3S_DIR" "$K3S_SYNC" check || sync_rc=$?
+  case "$sync_rc" in
+    0) ;;
+    2) echo "  WARNING: this k3s-sync has no 'check' command yet; run k3s-sync pull to update it" ;;
+    3) echo "  WARNING: could not reach GitHub to confirm; continuing with this laptop's files" ;;
+    *)
+      echo "ERROR: this laptop is behind GitHub. Run k3s-sync pull, then deploy again."
+      echo "       (To deploy anyway: SKIP_SYNC_CHECK=true)"
+      exit 1
+      ;;
+  esac
+fi
+
 if [[ -f "$K3S_DIR/.secrets.enc" ]]; then
   require_command sops
 fi
