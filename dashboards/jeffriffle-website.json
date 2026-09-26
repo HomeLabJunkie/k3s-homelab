@@ -1,0 +1,1555 @@
+{
+  "title": "jeffriffle.com - Website",
+  "uid": "jeffriffle-website",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "tags": [
+    "homelab",
+    "website"
+  ],
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Visitors (Cloudflare Web Analytics)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "Page views",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 1, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}) { count } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {views: .count}]",
+          "columns": [
+            {
+              "selector": "views",
+              "text": "Page views",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "Page loads measured in visitors' browsers by Cloudflare, jeffriffle.com only (not /admin).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Visits",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 1, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}) { sum { visits } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {visits: .sum.visits}]",
+          "columns": [
+            {
+              "selector": "visits",
+              "text": "Visits",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "Page views that started a visit (arrived from another site or directly).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Page load (p75)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPerformanceEventsAdaptiveGroups(limit: 1, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}) { quantiles { pageLoadTimeP75 } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPerformanceEventsAdaptiveGroups[] | {v: .quantiles.pageLoadTimeP75}]",
+          "columns": [
+            {
+              "selector": "v",
+              "text": "Page load p75",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "75% of page loads finished faster than this.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Largest paint (p75)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumWebVitalsEventsAdaptiveGroups(limit: 1, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}) { quantiles { largestContentfulPaintP75 } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumWebVitalsEventsAdaptiveGroups[] | {v: .quantiles.largestContentfulPaintP75}]",
+          "columns": [
+            {
+              "selector": "v",
+              "text": "LCP p75",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "Largest Contentful Paint, a Core Web Vital. Under 2.5 s is good.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Interaction delay (p75)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumWebVitalsEventsAdaptiveGroups(limit: 1, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}) { quantiles { interactionToNextPaintP75 } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumWebVitalsEventsAdaptiveGroups[] | {v: .quantiles.interactionToNextPaintP75}]",
+          "columns": [
+            {
+              "selector": "v",
+              "text": "INP p75",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "Interaction to Next Paint, a Core Web Vital. Under 200 ms is good.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Layout shift (p75)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumWebVitalsEventsAdaptiveGroups(limit: 1, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}) { quantiles { cumulativeLayoutShiftP75 } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumWebVitalsEventsAdaptiveGroups[] | {v: .quantiles.cumulativeLayoutShiftP75}]",
+          "columns": [
+            {
+              "selector": "v",
+              "text": "CLS p75",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "Cumulative Layout Shift, a Core Web Vital. Under 0.1 is good.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Page views and visits per hour (Cloudflare)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 5000, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}, orderBy: [datetimeHour_ASC]) { count sum { visits } dimensions { datetimeHour } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {time: .dimensions.datetimeHour, views: .count, visits: .sum.visits}]",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "Time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "views",
+              "text": "Page views",
+              "type": "number"
+            },
+            {
+              "selector": "visits",
+              "text": "Visits",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Countries",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 15, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}, orderBy: [count_DESC]) { count dimensions { countryName } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {name: .dimensions.countryName, views: .count}]",
+          "columns": [
+            {
+              "selector": "name",
+              "text": "Country",
+              "type": "string"
+            },
+            {
+              "selector": "views",
+              "text": "Page views",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": true
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Referrers",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 13
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 15, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}, orderBy: [count_DESC]) { count dimensions { refererHost } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {name: .dimensions.refererHost, views: .count} | select(.name != \"\" and (.name | test(\"jeffriffle\\\\.com$\") | not))]",
+          "columns": [
+            {
+              "selector": "name",
+              "text": "Referrer",
+              "type": "string"
+            },
+            {
+              "selector": "views",
+              "text": "Page views",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "Sites visitors came from (excluding jeffriffle.com itself and direct visits).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": true
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Browsers",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 15, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}, orderBy: [count_DESC]) { count dimensions { userAgentBrowser } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {name: .dimensions.userAgentBrowser, views: .count}]",
+          "columns": [
+            {
+              "selector": "name",
+              "text": "Browser",
+              "type": "string"
+            },
+            {
+              "selector": "views",
+              "text": "Page views",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": true
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Devices",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 13
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "cloudflare"
+      },
+      "targets": [
+        {
+          "type": "graphql",
+          "source": "url",
+          "parser": "jq-backend",
+          "format": "table",
+          "url": "https://api.cloudflare.com/client/v4/graphql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "graphql",
+            "body_content_type": "application/json",
+            "body_graphql_query": "query($acc: string!, $from: Time!, $to: Time!) { viewer { accounts(filter: {accountTag: $acc}) { rumPageloadEventsAdaptiveGroups(limit: 15, filter: {AND: [{datetime_geq: $from}, {datetime_leq: $to}, {requestHost: \"jeffriffle.com\"}, {requestPath_notlike: \"/admin%\"}]}, orderBy: [count_DESC]) { count dimensions { deviceType } } } } }",
+            "body_graphql_variables": "{\"acc\": \"${CLOUDFLARE_ACCOUNT_ID}\", \"from\": \"${__from:date:iso}\", \"to\": \"${__to:date:iso}\"}"
+          },
+          "root_selector": "[.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups[] | {name: .dimensions.deviceType, views: .count}]",
+          "columns": [
+            {
+              "selector": "name",
+              "text": "Device",
+              "type": "string"
+            },
+            {
+              "selector": "views",
+              "text": "Page views",
+              "type": "number"
+            }
+          ],
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "cloudflare"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": true
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "Visitors (server logs, bots excluded)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": []
+    },
+    {
+      "id": 14,
+      "title": "Page views",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" [$__range]))",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "Loads of the page itself (not assets), excluding bots and scripts. Workspace switches are client-side and not counted here.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 15,
+      "title": "Unique visitors",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 22
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "count(sum by (ip) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" | ip!=\"\" [$__range])))",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "Distinct visitor IPs (from Cloudflare's CF-Connecting-IP) that loaded the page.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 16,
+      "title": "Countries",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 22
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "count(sum by (country) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" | country!=\"\" [$__range])))",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 17,
+      "title": "Requests (all)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(traefik_service_requests_total{service=\"website-jeffriffle-80@kubernetes\"}[$__range]))",
+          "instant": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "description": "Every request to the site, including assets and bots (Traefik).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 18,
+      "title": "Probes (404s)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 22
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | status=\"404\" [$__range]))",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "Requests for paths that don't exist: almost all are bots scanning for vulnerabilities.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 19,
+      "title": "Server errors (5xx)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(traefik_service_requests_total{service=\"website-jeffriffle-80@kubernetes\",code=~\"5..\"}[$__range])) or vector(0)",
+          "instant": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 20,
+      "title": "Page views over time",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 26
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" [$__interval]))",
+          "legendFormat": "page views",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        },
+        {
+          "expr": "count(sum by (ip) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" | ip!=\"\" [$__interval])))",
+          "legendFormat": "unique visitors",
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 21,
+      "title": "Top countries",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(15, sum by (country) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" | country!=\"\" [$__range])))",
+          "legendFormat": "{{country}}",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "Two-letter country codes from Cloudflare (CF-IPCountry).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "Top referrers",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (referer) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | path=\"/index.html\" | status=~\"200|304\" | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" | referer!=\"\" | referer!~\"https?://(www\\\\.)?jeffriffle\\\\.com.*\" [$__range])))",
+          "legendFormat": "{{referer}}",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "Where visitors came from, when their browser says.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "Top pages and files",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (path) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | ua!~\"(?i).*(bot|crawl|spider|slurp|curl|wget|python|go-http|scan|headless|monitor|uptime|zgrab|nmap|httpx|okhttp|java|libwww|preview|fetch).*\" | status=~\"200|304\" [$__range])))",
+          "legendFormat": "{{path}}",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "row",
+      "title": "Health (Traefik)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "panels": []
+    },
+    {
+      "id": 25,
+      "title": "Requests per second by status",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (code) (rate(traefik_service_requests_total{service=\"website-jeffriffle-80@kubernetes\"}[$__rate_interval]))",
+          "legendFormat": "{{code}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 26,
+      "title": "Response time",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(traefik_service_request_duration_seconds_bucket{service=\"website-jeffriffle-80@kubernetes\"}[$__rate_interval])))",
+          "legendFormat": "median",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(traefik_service_request_duration_seconds_bucket{service=\"website-jeffriffle-80@kubernetes\"}[$__rate_interval])))",
+          "legendFormat": "95th percentile",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 27,
+      "type": "row",
+      "title": "Bots and probes",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "panels": []
+    },
+    {
+      "id": 28,
+      "title": "Most-probed missing paths",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(15, sum by (path) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | status=\"404\" [$__range])))",
+          "legendFormat": "{{path}}",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "What scanners are looking for. Nothing here exists on a static site.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 29,
+      "title": "Top user agents (all traffic)",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (ua) (count_over_time({namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json [$__range])))",
+          "legendFormat": "{{ua}}",
+          "instant": true,
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 30,
+      "title": "Recent requests",
+      "type": "logs",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{namespace=\"website\", pod=~\"jeffriffle-.*\", container=\"nginx\"} |= \"{\\\"time\\\"\" | json | line_format \"{{.status}} {{.method}} {{.path}}  {{.country}}  {{.referer}}  {{.ua}}\"",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

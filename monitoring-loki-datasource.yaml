@@ -16,3 +16,30 @@ data:
         url: http://loki-gateway.logging.svc.cluster.local
         isDefault: false
         editable: false
+---
+# Cloudflare Web Analytics via the Infinity plugin (see monitoring-values.yaml).
+# Grafana expands ${CF_ANALYTICS_TOKEN} from its environment at start-up;
+# the token itself lives in the grafana-cloudflare Secret, never in this repo.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-cloudflare-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  cloudflare-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Cloudflare
+        type: yesoreyeram-infinity-datasource
+        uid: cloudflare
+        access: proxy
+        isDefault: false
+        editable: false
+        jsonData:
+          auth_method: bearerToken
+          allowedHosts:
+            - https://api.cloudflare.com
+        secureJsonData:
+          bearerToken: ${CF_ANALYTICS_TOKEN}
