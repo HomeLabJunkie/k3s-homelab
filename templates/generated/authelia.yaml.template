@@ -25,6 +25,10 @@ data:
     theme: auto
     server:
       address: tcp://:9091/
+      # Otherwise Authelia writes /app/.healthcheck.env for Docker's
+      # HEALTHCHECK, which fails on the read-only root filesystem and aborts
+      # startup with no reason logged. The probes call /api/health directly.
+      disable_healthcheck: true
     log:
       level: info
     totp:
@@ -112,8 +116,11 @@ spec:
         - name: authelia
           image: ghcr.io/authelia/authelia:4.39.28
           imagePullPolicy: IfNotPresent
+          # The image entrypoint only recognizes "--config" as its own argument;
+          # "--config=..." is run as a command.
           args:
-            - --config=/config/configuration.yml
+            - --config
+            - /config/configuration.yml
           ports:
             - name: http
               containerPort: 9091
