@@ -28,6 +28,7 @@ exclude_paths:
   - recovery/generated-*.yaml
   - collections/requirements.yml
   - alloy-values.yaml
+  - authelia.yaml
   - cloudflared-config.yaml
   - cloudflared.yaml
   - clusterissuer-letsencrypt.yaml

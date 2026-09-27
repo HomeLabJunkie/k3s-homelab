@@ -68,6 +68,7 @@ website.yaml
 clusterissuer-letsencrypt.yaml
 traefik-dashboard-cert.yaml
 trilium-longhorn.yaml
+authelia.yaml
 
 .ansible/
 
