@@ -1,0 +1,260 @@
+# Authelia: login portal with two-factor auth at auth.${BASE_DOMAIN}.
+#
+# The admin-ui-auth Middleware at the bottom replaces the old shared basic auth:
+# Traefik asks Authelia about every request to an admin UI without its own login
+# (Traefik dashboard, Longhorn, Prometheus). Authelia lets a logged-in member of
+# the admins group through and sends everyone else to the portal.
+#
+# deploy.sh creates the authelia-secrets Secret from .secrets.enc: session,
+# storage and JWT secrets, the SMTP login (shared with Alertmanager), and a users
+# file whose single admin is ADMIN_UI_USERNAME / ADMIN_UI_PASSWORD. Registered
+# TOTP and WebAuthn devices live in SQLite on the authelia-data PVC, encrypted
+# with AUTHELIA_STORAGE_ENCRYPTION_KEY: restoring the PVC needs that same key.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: authelia
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authelia-config
+  namespace: authelia
+data:
+  configuration.yml: |
+    theme: auto
+    server:
+      address: tcp://:9091/
+    log:
+      level: info
+    totp:
+      issuer: ${BASE_DOMAIN}
+    webauthn:
+      display_name: ${BASE_DOMAIN}
+    # The users file comes from a read-only Secret, so passwords are changed in
+    # .secrets.enc (ADMIN_UI_PASSWORD) and redeployed, not from the portal.
+    authentication_backend:
+      password_reset:
+        disable: true
+      password_change:
+        disable: true
+      file:
+        path: /secrets/users_database.yml
+        watch: false
+    access_control:
+      default_policy: deny
+      rules:
+        - domain:
+            - traefik.${BASE_DOMAIN}
+            - longhorn.${BASE_DOMAIN}
+            - prometheus.${BASE_DOMAIN}
+          subject: group:admins
+          policy: two_factor
+    # Sessions are kept in memory (one replica): an Authelia restart logs
+    # everyone out, but 2FA registrations persist in the database.
+    session:
+      cookies:
+        - domain: ${BASE_DOMAIN}
+          authelia_url: https://auth.${BASE_DOMAIN}
+    regulation:
+      max_retries: 5
+      find_time: 10m
+      ban_time: 30m
+    storage:
+      local:
+        path: /data/db.sqlite3
+    notifier:
+      smtp:
+        sender: Authelia <${ADMIN_EMAIL}>
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authelia-data
+  namespace: authelia
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authelia
+  namespace: authelia
+spec:
+  # SQLite on a ReadWriteOnce volume and in-memory sessions: exactly one pod.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: authelia
+  template:
+    metadata:
+      labels:
+        app: authelia
+    spec:
+      # Service links would inject AUTHELIA_* variables that Authelia reads as
+      # configuration and rejects.
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 8000
+        runAsGroup: 8000
+        runAsNonRoot: true
+        fsGroup: 8000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: authelia
+          image: ghcr.io/authelia/authelia:4.39.28
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/config/configuration.yml
+          ports:
+            - name: http
+              containerPort: 9091
+          env:
+            - name: AUTHELIA_SESSION_SECRET_FILE
+              value: /secrets/session-secret
+            - name: AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE
+              value: /secrets/storage-encryption-key
+            - name: AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE
+              value: /secrets/jwt-secret
+            - name: AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE
+              value: /secrets/smtp-password
+            - name: AUTHELIA_NOTIFIER_SMTP_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: authelia-secrets
+                  key: smtp-address
+            - name: AUTHELIA_NOTIFIER_SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: authelia-secrets
+                  key: smtp-username
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              # Each argon2id password check briefly needs 64Mi.
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: authelia-config
+        - name: secrets
+          secret:
+            secretName: authelia-secrets
+            defaultMode: 0440
+        - name: data
+          persistentVolumeClaim:
+            claimName: authelia-data
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authelia
+  namespace: authelia
+spec:
+  selector:
+    app: authelia
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-authelia-ingress
+  namespace: authelia
+spec:
+  secretName: tls-authelia-ingress
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - auth.${BASE_DOMAIN}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: authelia
+  namespace: authelia
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - auth.${BASE_DOMAIN}
+      secretName: tls-authelia-ingress
+  rules:
+    - host: auth.${BASE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: authelia
+                port:
+                  number: 80
+---
+# Other namespaces reference this as traefik-admin-ui-auth@kubernetescrd.
+# Traefik overwrites client-sent X-Forwarded-* headers, so trusting them here
+# only passes Traefik's own values on to Authelia.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: admin-ui-auth
+  namespace: traefik
+spec:
+  forwardAuth:
+    address: http://authelia.authelia.svc.cluster.local/api/authz/forward-auth
+    trustForwardHeader: true
+    authResponseHeaders:
+      - Remote-User
+      - Remote-Groups
+      - Remote-Email
+      - Remote-Name

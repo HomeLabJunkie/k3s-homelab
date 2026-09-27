@@ -10,6 +10,7 @@ spec:
     includedNamespaces:
       - trilium
       - vaultwarden
+      - authelia
       - portainer
       - monitoring
       - logging

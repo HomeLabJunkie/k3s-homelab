@@ -49,6 +49,8 @@ TRILIUM_MANIFEST="${TRILIUM_MANIFEST:-$K3S_DIR/trilium-longhorn-v2.yaml}"
 TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
 VAULTWARDEN_MANIFEST="${VAULTWARDEN_MANIFEST:-$K3S_DIR/vaultwarden-longhorn-v2.yaml}"
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
+AUTHELIA_MANIFEST="${AUTHELIA_MANIFEST:-$K3S_DIR/authelia.yaml}"
+AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
 KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-87.21.0}"
 MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
 MONITORING_INGRESS="${MONITORING_INGRESS:-$K3S_DIR/monitoring-ingress.yaml}"
@@ -72,7 +74,7 @@ LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}
 
 # Refuse to push a placeholder hostname into the cluster.
 for hostname_var in RANCHER_HOSTNAME LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
-  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME PORTAINER_HOSTNAME; do
+  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME PORTAINER_HOSTNAME AUTHELIA_HOSTNAME; do
   if [[ "${!hostname_var}" == *.invalid ]]; then
     echo "ERROR: $hostname_var is the placeholder ${!hostname_var}."
     echo "Set BASE_DOMAIN (or $hostname_var) in $ENV_FILE."
@@ -326,6 +328,7 @@ for file in \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
   "$LONGHORN_INGRESS_MANIFEST" \
+  "$AUTHELIA_MANIFEST" \
   "$TRILIUM_MANIFEST" \
   "$VAULTWARDEN_MANIFEST" \
   "$MONITORING_VALUES" \
@@ -380,6 +383,9 @@ for var in \
   LONGHORN_CIFS_PASSWORD \
   ADMIN_UI_USERNAME \
   ADMIN_UI_PASSWORD \
+  AUTHELIA_SESSION_SECRET \
+  AUTHELIA_STORAGE_ENCRYPTION_KEY \
+  AUTHELIA_JWT_SECRET \
   WEBSITE_DEPLOY_KEY_B64 \
   CLOUDFLARE_ANALYTICS_TOKEN
 do
@@ -400,6 +406,15 @@ if [[ "$ADMIN_UI_USERNAME" == *:* ]]; then
   echo "ERROR: ADMIN_UI_USERNAME must not contain ':'."
   exit 1
 fi
+
+for var in AUTHELIA_SESSION_SECRET AUTHELIA_STORAGE_ENCRYPTION_KEY AUTHELIA_JWT_SECRET; do
+  value="${!var}"
+  if (( ${#value} < 32 )); then
+    echo "ERROR: $var must be at least 32 characters (openssl rand -hex 32)."
+    exit 1
+  fi
+done
+unset value
 
 if [[ "$DEPLOY_MODE" == "bootstrap" ]]; then
   ANSIBLE_PLAYBOOK="site.yml"
@@ -574,14 +589,6 @@ helm upgrade --install traefik traefik/traefik \
 kubectl -n traefik rollout status deployment/traefik --timeout=180s
 kubectl -n traefik get svc traefik
 
-echo "==> Creating/updating admin UI basic-auth secret..."
-ADMIN_UI_HTPASSWD="${ADMIN_UI_USERNAME}:$(printf '%s' "$ADMIN_UI_PASSWORD" | openssl passwd -apr1 -stdin)"
-kubectl create secret generic admin-ui-basic-auth \
-  --namespace traefik \
-  --from-file=users=<(printf '%s' "$ADMIN_UI_HTPASSWD") \
-  --dry-run=client -o yaml | kubectl apply -f -
-unset ADMIN_UI_HTPASSWD
-
 echo "==> Deploying Traefik dashboard and certificate..."
 apply_manifest "$TRAEFIK_DASHBOARD_MANIFEST"
 apply_manifest "$TRAEFIK_DASHBOARD_CERT_MANIFEST"
@@ -727,6 +734,110 @@ if kubectl get storageclass local-path >/dev/null 2>&1; then
     --type merge \
     -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 fi
+
+# ------------------------------------------------------------------------------
+# Authelia - login portal with 2FA behind the admin-ui-auth middleware
+# ------------------------------------------------------------------------------
+
+echo "==> Creating/updating Authelia secrets..."
+ensure_namespace authelia
+
+# Derive the salt from the credentials so an unchanged password yields an
+# unchanged Secret, and Authelia is not restarted (logging everyone out) on
+# every deploy.
+AUTHELIA_ADMIN_SALT="$(
+  printf '%s:%s' "$ADMIN_UI_USERNAME" "$ADMIN_UI_PASSWORD" |
+    openssl dgst -sha256 -hmac "$AUTHELIA_SESSION_SECRET" -r | cut -c1-32
+)"
+AUTHELIA_ADMIN_HASH="$(
+  printf '%s' "$ADMIN_UI_PASSWORD" |
+    argon2 "$AUTHELIA_ADMIN_SALT" -id -t 3 -k 65536 -p 4 -l 32 -e
+)"
+[[ "$AUTHELIA_ADMIN_HASH" == '$argon2id$'* ]] || {
+  echo "ERROR: could not hash ADMIN_UI_PASSWORD with argon2."
+  exit 1
+}
+# JSON is valid YAML and quotes the username and hash safely.
+AUTHELIA_USERS_DATABASE="$(
+  AUTHELIA_ADMIN_HASH="$AUTHELIA_ADMIN_HASH" python3 -c '
+import json, os
+user = os.environ["ADMIN_UI_USERNAME"]
+print(json.dumps({"users": {user: {
+    "displayname": user,
+    "password": os.environ["AUTHELIA_ADMIN_HASH"],
+    "email": os.environ["ADMIN_EMAIL"],
+    "groups": ["admins"],
+}}}, indent=2))'
+)"
+
+# Same SMTP account and defaults as scripts/render-alertmanager-config.sh.
+AUTHELIA_SMTP_PORT="${SMTP_PORT:-587}"
+if [[ "$AUTHELIA_SMTP_PORT" == 465 ]]; then
+  AUTHELIA_SMTP_SCHEME=submissions
+else
+  AUTHELIA_SMTP_SCHEME=submission
+fi
+kubectl create secret generic authelia-secrets \
+  --namespace authelia \
+  --from-file=users_database.yml=<(printf '%s\n' "$AUTHELIA_USERS_DATABASE") \
+  --from-file=session-secret=<(printf '%s' "$AUTHELIA_SESSION_SECRET") \
+  --from-file=storage-encryption-key=<(printf '%s' "$AUTHELIA_STORAGE_ENCRYPTION_KEY") \
+  --from-file=jwt-secret=<(printf '%s' "$AUTHELIA_JWT_SECRET") \
+  --from-file=smtp-address=<(printf '%s://%s:%s' "$AUTHELIA_SMTP_SCHEME" "${SMTP_HOST:-smtp.gmail.com}" "$AUTHELIA_SMTP_PORT") \
+  --from-file=smtp-username=<(printf '%s' "${SMTP_USER:-$VAULTWARDEN_SMTP_USERNAME}") \
+  --from-file=smtp-password=<(printf '%s' "${SMTP_PASSWORD:-$VAULTWARDEN_SMTP_PASSWORD}") \
+  --dry-run=client -o yaml | kubectl apply -f -
+unset AUTHELIA_ADMIN_SALT AUTHELIA_ADMIN_HASH AUTHELIA_USERS_DATABASE \
+  AUTHELIA_SMTP_PORT AUTHELIA_SMTP_SCHEME
+
+echo "==> Deploying Authelia with Longhorn storage..."
+apply_manifest "$AUTHELIA_MANIFEST"
+
+# Authelia reads its configuration and secrets only at startup, so roll the pod
+# when either changes. kubectl apply leaves this annotation alone.
+AUTHELIA_CONFIG_HASH="$(
+  {
+    kubectl -n authelia get configmap authelia-config -o jsonpath='{.data}'
+    kubectl -n authelia get secret authelia-secrets -o jsonpath='{.data}'
+  } | sha256sum | cut -c1-16
+)"
+kubectl -n authelia patch deployment authelia --type merge \
+  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/config-hash\":\"${AUTHELIA_CONFIG_HASH}\"}}}}}"
+unset AUTHELIA_CONFIG_HASH
+
+echo "==> Waiting for Authelia deployment..."
+kubectl -n authelia rollout status deployment/authelia --timeout=600s
+
+echo "==> Waiting for Authelia TLS certificate..."
+kubectl -n authelia wait \
+  --for=condition=Ready \
+  certificate/tls-authelia-ingress \
+  --timeout=300s
+
+# admin-ui-auth now asks Authelia; the old basic-auth users are unused.
+kubectl -n traefik delete secret admin-ui-basic-auth --ignore-not-found
+
+echo "==> Verifying the admin UIs redirect anonymous visitors to Authelia..."
+for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
+  for i in {1..30}; do
+    auth_response="$(
+      curl -ks -o /dev/null -w '%{http_code} %{redirect_url}' \
+        --resolve "${protected_host}:443:${CLOUDFLARE_ORIGIN_IP}" \
+        "https://${protected_host}/" || true
+    )"
+    if [[ "$auth_response" == "302 https://${AUTHELIA_HOSTNAME}/"* ]]; then
+      break
+    fi
+    if [[ "$i" -eq 30 ]]; then
+      echo "ERROR: https://${protected_host}/ answered '${auth_response}', not a redirect to Authelia."
+      kubectl -n authelia get pods,svc,endpointslice -o wide || true
+      kubectl -n authelia logs deployment/authelia --tail=50 || true
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
+done
 
 # ------------------------------------------------------------------------------
 # Monitoring - kube-prometheus-stack
@@ -1359,6 +1470,11 @@ echo "===== RANCHER ====="
 kubectl -n cattle-system get pods,svc,ingress
 
 echo
+echo "===== AUTHELIA ====="
+kubectl -n authelia get pods,svc,pvc,ingress
+kubectl -n authelia get certificate tls-authelia-ingress
+
+echo
 echo "===== VAULTWARDEN ====="
 kubectl -n vaultwarden get pods,svc,pvc,ingress
 kubectl -n vaultwarden get certificate tls-vaultwarden-ingress
@@ -1415,6 +1531,7 @@ echo "==========================================================================
 echo " Kubernetes API: https://${KUBE_VIP}:6443"
 echo " Rancher:        https://${RANCHER_HOSTNAME}"
 echo " Longhorn:       https://${LONGHORN_HOSTNAME}"
+echo " Authelia:       https://${AUTHELIA_HOSTNAME}"
 echo " Trilium:        https://${TRILIUM_HOSTNAME}"
 echo " Vaultwarden:    https://${VAULTWARDEN_HOSTNAME}"
 echo " Grafana:        https://${GRAFANA_HOSTNAME}"
@@ -1448,6 +1565,16 @@ echo "   sops --decrypt ${K3S_DIR}/.secrets.enc | grep '^VAULTWARDEN_ADMIN_TOKEN
 echo
 echo " General signups:     DISABLED"
 echo " General invitations: DISABLED"
+echo "============================================================================"
+
+echo
+echo "============================================================================"
+echo " Authelia (login for Traefik dashboard, Longhorn, Prometheus)"
+echo "============================================================================"
+echo " Log in at https://${AUTHELIA_HOSTNAME} as ADMIN_UI_USERNAME / ADMIN_UI_PASSWORD."
+echo " These admin UIs require two-factor auth. On first login, register a TOTP"
+echo " app or security key: Authelia emails a one-time code to ${ADMIN_EMAIL}."
+echo " Change the password in .secrets.enc (ADMIN_UI_PASSWORD) and redeploy."
 echo "============================================================================"
 
 echo

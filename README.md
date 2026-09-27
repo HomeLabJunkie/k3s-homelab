@@ -32,6 +32,7 @@ Core platform:
 | Network observability | Hubble relay + UI |
 | Service load balancing | MetalLB Layer 2 |
 | Ingress | Traefik |
+| Admin UI login | Authelia (two-factor, Traefik forward-auth) |
 | TLS | cert-manager + Let's Encrypt |
 | External access | Cloudflare Tunnel |
 | Persistent storage | Longhorn |
@@ -392,6 +393,39 @@ A Cloudflare Tunnel provides external connectivity without exposing the Kubernet
 
 The tunnel token is injected into a Kubernetes Secret during deployment.
 
+### Authelia
+
+Authelia (`authelia.yaml`, namespace `authelia`) is the login portal at
+`auth.${BASE_DOMAIN}` for admin UIs that have no login of their own: the
+Traefik dashboard, Longhorn, and Prometheus. Their routes use the shared
+`admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd` from
+other namespaces), which asks Authelia about each request. Anyone not logged in
+is redirected to the portal; access needs a password and a second factor (TOTP
+app or security key), and only the `admins` group is allowed. Any other
+hostname sent through the middleware is denied.
+
+- **Users:** one admin, `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` from
+  `.secrets.enc`. `deploy.sh` writes an argon2id-hashed users file into the
+  `authelia-secrets` Secret. Password reset and change in the portal are
+  disabled; change `ADMIN_UI_PASSWORD` and redeploy instead.
+- **Second factor:** on first login, register a TOTP app or security key.
+  Authelia confirms by emailing a one-time code to `ADMIN_EMAIL`, using the
+  same SMTP account as Alertmanager.
+- **Storage:** registered devices live in SQLite on the 1Gi `authelia-data`
+  Longhorn PVC, encrypted with `AUTHELIA_STORAGE_ENCRYPTION_KEY`. A restored
+  PVC is only readable with that same key. Sessions are in memory, so an
+  Authelia restart logs everyone out; `deploy.sh` restarts it only when its
+  configuration or secrets change.
+- **Protecting another app:** add its hostname to `access_control` in
+  `templates/generated/authelia.yaml.template` and the annotation
+  `traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd`
+  to its ingress. Avoid it for apps whose own clients talk to the API
+  (Vaultwarden, Trilium sync), which cannot follow the login redirect.
+- **Cloudflare:** like the other hostnames, `auth.${BASE_DOMAIN}` needs a
+  public hostname in the tunnel's Zero Trust dashboard pointing at
+  `https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, or logins only work on
+  the LAN.
+
 ## Longhorn Storage
 
 Longhorn is the default Kubernetes StorageClass.
@@ -555,8 +589,8 @@ override the shared account.
 
 The Prometheus UI is at `prometheus.${BASE_DOMAIN}`, defined with Grafana's
 ingress in `monitoring-ingress.yaml`. Prometheus has no login of its own, so the
-ingress uses the same `admin-ui-auth` basic-auth middleware as the Traefik
-dashboard and Longhorn (`ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD`). The Cloudflare
+ingress uses the same `admin-ui-auth` Authelia middleware as the Traefik
+dashboard and Longhorn (see [Authelia](#authelia)). The Cloudflare
 tunnel's hostnames are managed in the Zero Trust dashboard, so a new hostname
 also needs a public hostname entry there pointing at
 `https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, like the others.
@@ -592,12 +626,13 @@ Alloy's `drop_stale` stage drops lines older than 167h before sending them;
 
 ## Protected Persistent Workloads
 
-The DR configuration in `recovery/apps.conf` currently protects seven persistent workloads:
+The DR configuration in `recovery/apps.conf` currently protects eight persistent workloads:
 
 | Application | Namespace | Persistent data |
 | --- | --- | --- |
 | Trilium | `trilium` | `trilium-data` |
 | Vaultwarden | `vaultwarden` | `vaultwarden-data` |
+| Authelia | `authelia` | `authelia-data` |
 | Portainer | `portainer` | `portainer` |
 | Grafana | `monitoring` | `monitoring-grafana` |
 | Loki | `logging` | `storage-loki-0` |
@@ -1005,8 +1040,12 @@ Expected sensitive values include:
 - Vaultwarden Yubico secret key, when Yubico OTP is enabled
 - Grafana admin password
 - dedicated Longhorn CIFS username and password
-- `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` (12+ characters): basic-auth login
-  for the Traefik dashboard and Longhorn UI, which have no login of their own
+- `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` (12+ characters): the Authelia
+  admin login for the Traefik dashboard, Longhorn and Prometheus, which have no
+  login of their own
+- `AUTHELIA_SESSION_SECRET`, `AUTHELIA_STORAGE_ENCRYPTION_KEY`,
+  `AUTHELIA_JWT_SECRET` (32+ characters each, `openssl rand -hex 32`). Never
+  rotate the storage key casually: it decrypts the registered 2FA devices
 - `WEBSITE_DEPLOY_KEY_B64`: the jeffriffle.com repo's read-only deploy key
   (private key, base64-encoded on one line), used by git-sync
 
