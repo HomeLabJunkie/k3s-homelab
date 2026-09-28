@@ -431,10 +431,17 @@ keep their own logins behind Authelia; Grafana signs in through Authelia too.
   `templates/generated/authelia.yaml.template` and the annotation
   `traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd`
   to its ingress. Clients that call an app's API directly cannot follow the
-  login redirect: keep Vaultwarden out of Authelia. Trilium's desktop sync and
-  ETAPI clients are blocked too; if you need them, add an Authelia `bypass`
-  rule for Trilium's `^/api/sync` and `^/etapi` paths, which Trilium
-  authenticates itself.
+  login redirect: keep Vaultwarden out of Authelia.
+- **Trilium sync and ETAPI:** the desktop app's sync and ETAPI clients cannot
+  follow a login redirect either, so Authelia bypasses just the paths they use
+  and Trilium guards each itself: `/api/login/sync` (HMAC of the document
+  secret), the `/api/sync/*` routes the client calls (the session that login
+  creates), `GET /api/setup/sync-seed` (the Trilium password), and `/etapi`
+  (an API token). The web UI and every other path still need Authelia. If a
+  desktop app syncing through Cloudflare fails with error 1010, Cloudflare's
+  bot check is rejecting it (it blocks non-browser clients); add a WAF skip
+  rule for `trilium.${BASE_DOMAIN}` with paths starting `/api/sync`,
+  `/api/login/sync`, `/api/setup/sync-seed` and `/etapi`.
 - **Cloudflare:** `auth.${BASE_DOMAIN}` needs a public hostname in the tunnel
   pointing at `https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, or logins
   only work on the LAN. The Authelia-protected hostnames are not in a

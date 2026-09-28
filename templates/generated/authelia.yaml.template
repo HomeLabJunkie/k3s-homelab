@@ -49,6 +49,27 @@ data:
     access_control:
       default_policy: deny
       rules:
+        # Trilium desktop sync and ETAPI clients cannot follow a login redirect.
+        # These paths skip Authelia because Trilium guards each one itself:
+        # /api/login/sync (HMAC of the document secret, rate limited),
+        # /api/sync/* (the session that login creates), /etapi (API token, or
+        # the Trilium password at /etapi/auth/login). /api/sync/stats has no
+        # auth of its own, so it is deliberately not listed.
+        - domain: trilium.${BASE_DOMAIN}
+          resources:
+            - '^/etapi([/?].*)?$'
+            - '^/api/login/sync([?].*)?$'
+            - '^/api/sync/(check|changed|update|finished|check-entity-changes|queue-sector/[^/?]+/[^/?]+)([?].*)?$'
+          policy: bypass
+        # Connecting a new desktop: GET needs the Trilium password and is rate
+        # limited. POST only works on an uninitialized server, so it stays behind
+        # Authelia.
+        - domain: trilium.${BASE_DOMAIN}
+          resources:
+            - '^/api/setup/sync-seed([?].*)?$'
+          methods:
+            - GET
+          policy: bypass
         - domain:
             - traefik.${BASE_DOMAIN}
             - longhorn.${BASE_DOMAIN}
