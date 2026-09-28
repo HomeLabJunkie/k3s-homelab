@@ -16,6 +16,36 @@ grafana:
       secretKeyRef:
         name: grafana-cloudflare
         key: token
+  # Single sign-on through Authelia (OIDC). deploy.sh creates grafana-oidc with
+  # the domain-specific settings: GF_SERVER_ROOT_URL, the Authelia endpoint
+  # URLs, the sign-out redirect and the client secret.
+  envFromSecret: grafana-oidc
+  grafana.ini:
+    auth:
+      # Never attach an SSO sign-in to an existing user by matching email.
+      oauth_allow_insecure_email_lookup: false
+    auth.generic_oauth:
+      enabled: true
+      name: Authelia
+      icon: signin
+      client_id: grafana
+      scopes: openid profile email groups
+      empty_scopes: false
+      use_pkce: true
+      # Go straight to Authelia. The local admin login is the break-glass way
+      # in: /login?disableAutoLogin=true with GRAFANA_ADMIN_PASSWORD.
+      auto_login: true
+      allow_sign_up: true
+      # The email is the login, so the SSO user never collides with the local
+      # "admin" user (the Authelia username is also admin).
+      login_attribute_path: email
+      email_attribute_path: email
+      name_attribute_path: name
+      groups_attribute_path: groups
+      # Only Authelia's admins group gets in, as Grafana server admins.
+      role_attribute_path: contains(groups[*], 'admins') && 'GrafanaAdmin' || ''
+      role_attribute_strict: true
+      allow_assign_grafana_admin: true
   persistence:
     enabled: true
     type: pvc
