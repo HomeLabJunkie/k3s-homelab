@@ -110,6 +110,8 @@ metadata:
   namespace: trilium
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # Trilium keeps its own login behind Authelia; see authelia.yaml.template.
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:

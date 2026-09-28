@@ -396,13 +396,14 @@ The tunnel token is injected into a Kubernetes Secret during deployment.
 ### Authelia
 
 Authelia (`authelia.yaml`, namespace `authelia`) is the login portal at
-`auth.${BASE_DOMAIN}` for admin UIs that have no login of their own: the
-Traefik dashboard, Longhorn, and Prometheus. Their routes use the shared
-`admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd` from
-other namespaces), which asks Authelia about each request. Anyone not logged in
-is redirected to the portal; access needs a password and a second factor (TOTP
-app or security key), and only the `admins` group is allowed. Any other
-hostname sent through the middleware is denied.
+`auth.${BASE_DOMAIN}` in front of the admin UIs: the Traefik dashboard,
+Longhorn, Prometheus, Grafana, Portainer and Trilium. Their routes use the
+shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
+from other namespaces), which asks Authelia about each request. Anyone not
+logged in is redirected to the portal; access needs a password and a second
+factor (TOTP app or security key), and only the `admins` group is allowed. Any
+other hostname sent through the middleware is denied. Grafana, Portainer and
+Trilium keep their own logins behind Authelia.
 
 - **Users:** one admin, `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` from
   `.secrets.enc`. `deploy.sh` writes an argon2id-hashed users file into the
@@ -419,12 +420,18 @@ hostname sent through the middleware is denied.
 - **Protecting another app:** add its hostname to `access_control` in
   `templates/generated/authelia.yaml.template` and the annotation
   `traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd`
-  to its ingress. Avoid it for apps whose own clients talk to the API
-  (Vaultwarden, Trilium sync), which cannot follow the login redirect.
-- **Cloudflare:** like the other hostnames, `auth.${BASE_DOMAIN}` needs a
-  public hostname in the tunnel's Zero Trust dashboard pointing at
-  `https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, or logins only work on
-  the LAN.
+  to its ingress. Clients that call an app's API directly cannot follow the
+  login redirect: keep Vaultwarden out of Authelia. Trilium's desktop sync and
+  ETAPI clients are blocked too; if you need them, add an Authelia `bypass`
+  rule for Trilium's `^/api/sync` and `^/etapi` paths, which Trilium
+  authenticates itself.
+- **Cloudflare:** `auth.${BASE_DOMAIN}` needs a public hostname in the tunnel
+  pointing at `https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, or logins
+  only work on the LAN. The Authelia-protected hostnames are not in a
+  Cloudflare Access application and do not enforce Access JWT validation on
+  their tunnel routes; either one would put a second login in front of
+  Authelia, or return 403. Rancher and `${BASE_DOMAIN}/admin` still use
+  Cloudflare Access.
 
 ## Longhorn Storage
 

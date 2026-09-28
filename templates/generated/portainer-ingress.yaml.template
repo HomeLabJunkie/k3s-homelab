@@ -19,6 +19,8 @@ metadata:
   namespace: portainer
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # Portainer keeps its own login behind Authelia; see authelia.yaml.template.
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
