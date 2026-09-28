@@ -386,6 +386,9 @@ for var in \
   AUTHELIA_SESSION_SECRET \
   AUTHELIA_STORAGE_ENCRYPTION_KEY \
   AUTHELIA_JWT_SECRET \
+  AUTHELIA_OIDC_HMAC_SECRET \
+  AUTHELIA_OIDC_JWKS_KEY_B64 \
+  GRAFANA_OIDC_CLIENT_SECRET \
   WEBSITE_DEPLOY_KEY_B64 \
   CLOUDFLARE_ANALYTICS_TOKEN
 do
@@ -407,7 +410,8 @@ if [[ "$ADMIN_UI_USERNAME" == *:* ]]; then
   exit 1
 fi
 
-for var in AUTHELIA_SESSION_SECRET AUTHELIA_STORAGE_ENCRYPTION_KEY AUTHELIA_JWT_SECRET; do
+for var in AUTHELIA_SESSION_SECRET AUTHELIA_STORAGE_ENCRYPTION_KEY AUTHELIA_JWT_SECRET \
+  AUTHELIA_OIDC_HMAC_SECRET GRAFANA_OIDC_CLIENT_SECRET; do
   value="${!var}"
   if (( ${#value} < 32 )); then
     echo "ERROR: $var must be at least 32 characters (openssl rand -hex 32)."
@@ -415,6 +419,13 @@ for var in AUTHELIA_SESSION_SECRET AUTHELIA_STORAGE_ENCRYPTION_KEY AUTHELIA_JWT_
   fi
 done
 unset value
+
+if ! printf '%s' "$AUTHELIA_OIDC_JWKS_KEY_B64" | base64 -d 2>/dev/null |
+  openssl pkey -noout 2>/dev/null; then
+  echo "ERROR: AUTHELIA_OIDC_JWKS_KEY_B64 is not a base64-encoded private key."
+  echo "  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | base64 -w0"
+  exit 1
+fi
 
 if [[ "$DEPLOY_MODE" == "bootstrap" ]]; then
   ANSIBLE_PLAYBOOK="site.yml"
@@ -770,6 +781,19 @@ print(json.dumps({"users": {user: {
 }}}, indent=2))'
 )"
 
+# Grafana's OIDC client secret, stored as a digest like the admin password and
+# with the same stable salt, so an unchanged secret does not restart Authelia.
+AUTHELIA_GRAFANA_CLIENT_DIGEST="$(
+  printf '%s' "$GRAFANA_OIDC_CLIENT_SECRET" |
+    argon2 "$(printf 'grafana:%s' "$GRAFANA_OIDC_CLIENT_SECRET" |
+      openssl dgst -sha256 -hmac "$AUTHELIA_SESSION_SECRET" -r | cut -c1-32)" \
+      -id -t 3 -k 65536 -p 4 -l 32 -e
+)"
+[[ "$AUTHELIA_GRAFANA_CLIENT_DIGEST" == '$argon2id$'* ]] || {
+  echo "ERROR: could not hash GRAFANA_OIDC_CLIENT_SECRET with argon2."
+  exit 1
+}
+
 # Same SMTP account and defaults as scripts/render-alertmanager-config.sh.
 AUTHELIA_SMTP_PORT="${SMTP_PORT:-587}"
 if [[ "$AUTHELIA_SMTP_PORT" == 465 ]]; then
@@ -786,9 +810,12 @@ kubectl create secret generic authelia-secrets \
   --from-file=smtp-address=<(printf '%s://%s:%s' "$AUTHELIA_SMTP_SCHEME" "${SMTP_HOST:-smtp.gmail.com}" "$AUTHELIA_SMTP_PORT") \
   --from-file=smtp-username=<(printf '%s' "${SMTP_USER:-$VAULTWARDEN_SMTP_USERNAME}") \
   --from-file=smtp-password=<(printf '%s' "${SMTP_PASSWORD:-$VAULTWARDEN_SMTP_PASSWORD}") \
+  --from-file=oidc-hmac-secret=<(printf '%s' "$AUTHELIA_OIDC_HMAC_SECRET") \
+  --from-file=oidc-jwks-key.pem=<(printf '%s' "$AUTHELIA_OIDC_JWKS_KEY_B64" | base64 -d) \
+  --from-file=oidc-grafana-client-secret=<(printf '%s' "$AUTHELIA_GRAFANA_CLIENT_DIGEST") \
   --dry-run=client -o yaml | kubectl apply -f -
 unset AUTHELIA_ADMIN_SALT AUTHELIA_ADMIN_HASH AUTHELIA_USERS_DATABASE \
-  AUTHELIA_SMTP_PORT AUTHELIA_SMTP_SCHEME
+  AUTHELIA_SMTP_PORT AUTHELIA_SMTP_SCHEME AUTHELIA_GRAFANA_CLIENT_DIGEST
 
 echo "==> Deploying Authelia with Longhorn storage..."
 apply_manifest "$AUTHELIA_MANIFEST"
@@ -858,6 +885,22 @@ kubectl create secret generic grafana-cloudflare \
   --from-file=token=<(printf '%s' "$CLOUDFLARE_ANALYTICS_TOKEN") \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# Single sign-on through Authelia (see auth.generic_oauth in monitoring-values.yaml).
+# Grafana reads these as environment variables; the hash below restarts it when
+# they change, since envFrom is only read at start-up.
+kubectl create secret generic grafana-oidc \
+  --namespace monitoring \
+  --from-literal=GF_SERVER_ROOT_URL="https://${GRAFANA_HOSTNAME}/" \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_AUTH_URL="https://${AUTHELIA_HOSTNAME}/api/oidc/authorization" \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_TOKEN_URL="https://${AUTHELIA_HOSTNAME}/api/oidc/token" \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_API_URL="https://${AUTHELIA_HOSTNAME}/api/oidc/userinfo" \
+  --from-literal=GF_AUTH_SIGNOUT_REDIRECT_URL="https://${AUTHELIA_HOSTNAME}/logout?rd=https%3A%2F%2F${GRAFANA_HOSTNAME}%2F" \
+  --from-file=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=<(printf '%s' "$GRAFANA_OIDC_CLIENT_SECRET") \
+  --dry-run=client -o yaml | kubectl apply -f -
+GRAFANA_OIDC_HASH="$(
+  kubectl -n monitoring get secret grafana-oidc -o jsonpath='{.data}' | sha256sum | cut -c1-16
+)"
+
 echo "==> Configuring Alertmanager SMTP delivery..."
 kubectl create secret generic alertmanager-smtp \
   --namespace monitoring \
@@ -865,11 +908,16 @@ kubectl create secret generic alertmanager-smtp \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> Installing kube-prometheus-stack ${KUBE_PROMETHEUS_STACK_VERSION}..."
+# hostAliases sends Grafana's server-side OIDC calls (token, userinfo) for the
+# Authelia hostname straight to Traefik on the LAN instead of out through
+# Cloudflare, whose bot check can reject non-browser clients.
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --version "$KUBE_PROMETHEUS_STACK_VERSION" \
   --namespace monitoring \
   --create-namespace \
   --values "$MONITORING_VALUES" \
+  --set-string "grafana.podAnnotations.homelab/oidc-config-hash=${GRAFANA_OIDC_HASH}" \
+  --set-json "grafana.hostAliases=[{\"ip\":\"${CLOUDFLARE_ORIGIN_IP}\",\"hostnames\":[\"${AUTHELIA_HOSTNAME}\"]}]" \
   --wait \
   --timeout=900s
 

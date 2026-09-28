@@ -402,8 +402,8 @@ shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
 from other namespaces), which asks Authelia about each request. Anyone not
 logged in is redirected to the portal; access needs a password and a second
 factor (TOTP app or security key), and only the `admins` group is allowed. Any
-other hostname sent through the middleware is denied. Grafana, Portainer and
-Trilium keep their own logins behind Authelia.
+other hostname sent through the middleware is denied. Portainer and Trilium
+keep their own logins behind Authelia; Grafana signs in through Authelia too.
 
 - **Users:** one admin, `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` from
   `.secrets.enc`. `deploy.sh` writes an argon2id-hashed users file into the
@@ -417,6 +417,16 @@ Trilium keep their own logins behind Authelia.
   PVC is only readable with that same key. Sessions are in memory, so an
   Authelia restart logs everyone out; `deploy.sh` restarts it only when its
   configuration or secrets change.
+- **Grafana single sign-on:** Authelia is also an OpenID Connect provider with
+  one client, `grafana`. Grafana (`auth.generic_oauth` in
+  `monitoring-values.yaml`) redirects straight to Authelia and signs in as the
+  Authelia user, keyed by email, as a Grafana server admin; only the `admins`
+  group is accepted. `deploy.sh` puts the Authelia URLs, `GF_SERVER_ROOT_URL`
+  and the client secret in the `grafana-oidc` Secret, and maps the Authelia
+  hostname to Traefik on the LAN (`hostAliases`), so Grafana's server-side
+  token and userinfo calls never go through Cloudflare. The local `admin`
+  login is the break-glass way in: `/login?disableAutoLogin=true` with
+  `GRAFANA_ADMIN_PASSWORD`. Signing out of Grafana also signs out of Authelia.
 - **Protecting another app:** add its hostname to `access_control` in
   `templates/generated/authelia.yaml.template` and the annotation
   `traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd`
@@ -1053,6 +1063,11 @@ Expected sensitive values include:
 - `AUTHELIA_SESSION_SECRET`, `AUTHELIA_STORAGE_ENCRYPTION_KEY`,
   `AUTHELIA_JWT_SECRET` (32+ characters each, `openssl rand -hex 32`). Never
   rotate the storage key casually: it decrypts the registered 2FA devices
+- `AUTHELIA_OIDC_HMAC_SECRET` and `GRAFANA_OIDC_CLIENT_SECRET`
+  (`openssl rand -hex 32`), and `AUTHELIA_OIDC_JWKS_KEY_B64`, Authelia's OIDC
+  signing key (`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | base64 -w0`)
+- Values are read with bash `source`: single-quote any value containing shell
+  characters such as `&`, `;`, `|`, `$`, spaces or `#` after a space
 - `WEBSITE_DEPLOY_KEY_B64`: the jeffriffle.com repo's read-only deploy key
   (private key, base64-encoded on one line), used by git-sync
 
