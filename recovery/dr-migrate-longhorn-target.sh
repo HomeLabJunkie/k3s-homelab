@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 set -a
-# shellcheck disable=SC1091
+# shellcheck disable=SC1090,SC1091
 source "${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
 set +a
 : "${BACKUP_NAS_IP:?BACKUP_NAS_IP is not set}"

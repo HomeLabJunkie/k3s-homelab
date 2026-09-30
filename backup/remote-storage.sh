@@ -54,6 +54,7 @@ storage_command() {
         printf -v quoted '%q' "$arg"
         command_string+="${command_string:+ }${quoted}"
     done
+    # shellcheck disable=SC2029 # arguments are %q-quoted above
     ssh "${STORAGE_SSH_OPTIONS[@]}" "$STORAGE_SSH_HOST" "$command_string"
 }
 
@@ -67,6 +68,7 @@ storage_root_script() {
         printf -v quoted '%q' "$arg"
         command_string+=" ${quoted}"
     done
+    # shellcheck disable=SC2029 # arguments are %q-quoted above
     ssh "${STORAGE_SSH_OPTIONS[@]}" "$STORAGE_SSH_HOST" "$command_string"
 }
 

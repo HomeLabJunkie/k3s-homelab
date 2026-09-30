@@ -11,6 +11,7 @@ WARN=0
 FAIL=0
 
 pass() { printf 'PASS: %s\n' "$*"; PASS=$((PASS + 1)); }
+# shellcheck disable=SC2317 # kept alongside pass/fail; no check warns yet
 warn() { printf 'WARN: %s\n' "$*"; WARN=$((WARN + 1)); }
 fail() { printf 'FAIL: %s\n' "$*"; FAIL=$((FAIL + 1)); }
 
