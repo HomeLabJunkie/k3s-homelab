@@ -114,6 +114,7 @@ if [[ -r "$APPS_FILE" ]]; then
         ' "$APPS_FILE"
     )"
     echo "Protected workloads: $protected_count"
+    # shellcheck disable=SC2015 # pass() cannot fail
     (( protected_count > 0 )) \
         && pass "Protected application inventory is readable" \
         || fail "Protected application inventory is empty"
@@ -251,7 +252,7 @@ backupvolumes_json="$(
     kubectl -n longhorn-system get backupvolumes.longhorn.io -o json 2>/dev/null || echo '{"items":[]}'
 )"
 
-while IFS='|' read -r app ns pvc kind workload service ingress; do
+while IFS='|' read -r app ns pvc _; do
     [[ -z "$app" || "$app" == \#* ]] && continue
     coverage_total=$((coverage_total + 1))
 

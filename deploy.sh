@@ -12,6 +12,7 @@ fi
 
 # Export cluster configuration for Ansible lookup('env', ...) expressions.
 set -a
+# shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
 
@@ -179,10 +180,10 @@ ensure_namespace() {
 
 apply_manifest() {
   local file="$1"
-  local output ns attempt
+  local output ns
   require_file "$file"
 
-  for attempt in {1..10}; do
+  for _ in {1..10}; do
     if output="$(kubectl apply -f "$file" 2>&1)"; then
       printf '%s\n' "$output"
       return 0
@@ -356,9 +357,11 @@ if [[ -f "$K3S_DIR/.secrets.enc" ]]; then
     echo "ERROR: sops could not decrypt $K3S_DIR/.secrets.enc"
     exit 1
   }
+  # shellcheck disable=SC1090
   source <(printf '%s\n' "$decrypted_secrets")
   unset decrypted_secrets
 elif [[ -f "$K3S_DIR/.secrets" ]]; then
+  # shellcheck disable=SC1090,SC1091
   source "$K3S_DIR/.secrets"
 else
   echo "ERROR: neither $K3S_DIR/.secrets.enc nor $K3S_DIR/.secrets exists"
@@ -767,6 +770,7 @@ AUTHELIA_ADMIN_HASH="$(
   printf '%s' "$ADMIN_UI_PASSWORD" |
     argon2 "$AUTHELIA_ADMIN_SALT" -id -t 3 -k 65536 -p 4 -l 32 -e
 )"
+# shellcheck disable=SC2016 # literal hash prefix
 [[ "$AUTHELIA_ADMIN_HASH" == '$argon2id$'* ]] || {
   echo "ERROR: could not hash ADMIN_UI_PASSWORD with argon2."
   exit 1
@@ -792,6 +796,7 @@ AUTHELIA_GRAFANA_CLIENT_DIGEST="$(
       openssl dgst -sha256 -hmac "$AUTHELIA_SESSION_SECRET" -r | cut -c1-32)" \
       -id -t 3 -k 65536 -p 4 -l 32 -e
 )"
+# shellcheck disable=SC2016 # literal hash prefix
 [[ "$AUTHELIA_GRAFANA_CLIENT_DIGEST" == '$argon2id$'* ]] || {
   echo "ERROR: could not hash GRAFANA_OIDC_CLIENT_SECRET with argon2."
   exit 1
@@ -1024,6 +1029,7 @@ apply_manifest "$MONITORING_DASHBOARDS_V2"
 
 # The website dashboard fills in only the account ID; Grafana's own $variables stay as-is.
 echo "==> Applying jeffriffle.com website dashboard..."
+# shellcheck disable=SC2016 # envsubst takes the variable name literally
 kubectl create configmap grafana-jeffriffle-website \
   --namespace monitoring \
   --from-file=jeffriffle-website.json=<(envsubst '${CLOUDFLARE_ACCOUNT_ID}' < "$WEBSITE_DASHBOARD") \
@@ -1345,6 +1351,7 @@ VAULTWARDEN_ADMIN_TOKEN_HASH="$(
   printf '%s' "$VAULTWARDEN_ADMIN_TOKEN" |
     argon2 "$(openssl rand -base64 32)" -id -t 3 -k 65540 -p 4 -e
 )"
+# shellcheck disable=SC2016 # literal hash prefix
 [[ "$VAULTWARDEN_ADMIN_TOKEN_HASH" == '$argon2id$'* ]] || {
   echo "ERROR: could not hash VAULTWARDEN_ADMIN_TOKEN with argon2."
   exit 1

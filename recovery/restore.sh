@@ -7,6 +7,7 @@ fi
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
+  # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
 fi
@@ -665,7 +666,7 @@ print(json.dumps(ops,separators=(",",":")))
 
 wait_deployment_scaled_zero() {
   local ns="$1" deploy="$2"
-  for i in {1..60}; do
+  for _ in {1..60}; do
     local replicas ready
     replicas="$(kubectl -n "$ns" get deployment "$deploy" -o jsonpath='{.status.replicas}' 2>/dev/null || true)"
     ready="$(kubectl -n "$ns" get deployment "$deploy" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
@@ -680,7 +681,7 @@ wait_deployment_scaled_zero() {
 
 wait_longhorn_detached() {
   local vol="$1"
-  for i in {1..90}; do
+  for _ in {1..90}; do
     local state
     state="$(kubectl -n longhorn-system get volume "$vol" -o jsonpath='{.status.state}' 2>/dev/null || true)"
     [[ "$state" == "detached" ]] && return 0
@@ -836,7 +837,7 @@ EOF
   kubectl -n "$ns" get deployment "$workload"
   kubectl -n "$ns" get pvc "$pvc" "$restore_vol" -o wide
   verify_service_endpoints "$ns" "$service" || true
-  [[ -n "$ingress" ]] && kubectl -n "$ns" get ingress "$ingress" || true
+  if [[ -n "$ingress" ]]; then kubectl -n "$ns" get ingress "$ingress" || true; fi
 
   echo
   echo "Rollback state: $state_dir"
@@ -844,6 +845,7 @@ EOF
   echo "Rollback: $0 --rollback-app $app --confirm"
 }
 
+# shellcheck disable=SC2153 # upper-case state vars come from state.env
 rollback_deployment_app() {
   local app="$1" confirm="${2:-}"
   [[ "$confirm" == "--confirm" ]] || {
@@ -859,7 +861,7 @@ rollback_deployment_app() {
     exit 1
   }
 
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1090,SC1091
   source "$dir/state.env"
 
   [[ "$STATUS" == "promoted" || "$STATUS" == "patched" ]] || {
@@ -892,7 +894,7 @@ rollback_deployment_app() {
 
 wait_statefulset_scaled_zero() {
   local ns="$1" sts="$2"
-  for i in {1..90}; do
+  for _ in {1..90}; do
     local current ready
     current="$(kubectl -n "$ns" get statefulset "$sts" -o jsonpath='{.status.currentReplicas}' 2>/dev/null || true)"
     ready="$(kubectl -n "$ns" get statefulset "$sts" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
@@ -907,7 +909,7 @@ wait_statefulset_scaled_zero() {
 
 wait_pv_phase() {
   local pv="$1" desired="$2"
-  for i in {1..60}; do
+  for _ in {1..60}; do
     local phase
     phase="$(kubectl get pv "$pv" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
     [[ "$phase" == "$desired" ]] && return 0
@@ -919,7 +921,7 @@ wait_pv_phase() {
 
 wait_pvc_bound_to_pv() {
   local ns="$1" pvc="$2" pv="$3"
-  for i in {1..90}; do
+  for _ in {1..90}; do
     local phase bound
     phase="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
     bound="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)"
@@ -1189,6 +1191,7 @@ EOF
   echo "Rollback: $0 --rollback-app $app --confirm"
 }
 
+# shellcheck disable=SC2153 # upper-case state vars come from state.env
 rollback_stateful_app() {
   local app="$1" confirm="${2:-}"
   [[ "$confirm" == "--confirm" ]] || {
@@ -1203,7 +1206,7 @@ rollback_stateful_app() {
     exit 1
   }
 
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1090,SC1091
   source "$dir/state.env"
 
   [[ "$KIND" == "statefulset" ]] || {

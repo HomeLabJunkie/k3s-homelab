@@ -112,6 +112,7 @@ cat > "$OUTPUT" <<EOF
 #
 EOF
 
+# shellcheck disable=SC2129 # the manifest is built in sections
 cat >> "$OUTPUT" <<EOF
 apiVersion: v1
 kind: ConfigMap
