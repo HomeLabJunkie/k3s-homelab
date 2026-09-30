@@ -7,7 +7,8 @@
 # Grafana, Portainer and Trilium keep their own logins behind it.
 #
 # deploy.sh creates the authelia-secrets Secret from .secrets.enc: session,
-# storage and JWT secrets, the SMTP login (shared with Alertmanager), and a users
+# storage and JWT secrets, the SMTP login (shared with Alertmanager), the Duo
+# API credentials, and a users
 # file whose single admin is ADMIN_UI_USERNAME / ADMIN_UI_PASSWORD. Registered
 # TOTP and WebAuthn devices live in SQLite on the authelia-data PVC, encrypted
 # with AUTHELIA_STORAGE_ENCRYPTION_KEY: restoring the PVC needs that same key.
@@ -36,6 +37,12 @@ data:
       issuer: ${BASE_DOMAIN}
     webauthn:
       display_name: ${BASE_DOMAIN}
+    # Duo Push: the same Duo Auth API application deployrr's Authelia uses.
+    # Duo matches the Authelia username to a Duo user, who needs an enrolled
+    # device. The hostname and keys come from authelia-secrets.
+    duo_api:
+      disable: false
+      enable_self_enrollment: false
     # The users file comes from a read-only Secret, so passwords are changed in
     # .secrets.enc (ADMIN_UI_PASSWORD) and redeployed, not from the portal.
     authentication_backend:
@@ -196,6 +203,10 @@ spec:
               value: /secrets/smtp-password
             - name: AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
               value: /secrets/oidc-hmac-secret
+            - name: AUTHELIA_DUO_API_INTEGRATION_KEY_FILE
+              value: /secrets/duo-integration-key
+            - name: AUTHELIA_DUO_API_SECRET_KEY_FILE
+              value: /secrets/duo-secret-key
             # Expands the {{ secret ... }} references in configuration.yml.
             - name: X_AUTHELIA_CONFIG_FILTERS
               value: template
@@ -209,6 +220,11 @@ spec:
                 secretKeyRef:
                   name: authelia-secrets
                   key: smtp-username
+            - name: AUTHELIA_DUO_API_HOSTNAME
+              valueFrom:
+                secretKeyRef:
+                  name: authelia-secrets
+                  key: duo-hostname
           volumeMounts:
             - name: config
               mountPath: /config

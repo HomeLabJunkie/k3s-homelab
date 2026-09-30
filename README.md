@@ -401,7 +401,7 @@ Longhorn, Prometheus, Grafana, Portainer and Trilium. Their routes use the
 shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
 from other namespaces), which asks Authelia about each request. Anyone not
 logged in is redirected to the portal; access needs a password and a second
-factor (TOTP app or security key), and only the `admins` group is allowed. Any
+factor (Duo Push, TOTP app or security key), and only the `admins` group is allowed. Any
 other hostname sent through the middleware is denied. Portainer and Trilium
 keep their own logins behind Authelia; Grafana signs in through Authelia too.
 
@@ -412,6 +412,12 @@ keep their own logins behind Authelia; Grafana signs in through Authelia too.
 - **Second factor:** on first login, register a TOTP app or security key.
   Authelia confirms by emailing a one-time code to `ADMIN_EMAIL`, using the
   same SMTP account as Alertmanager.
+- **Duo Push:** Authelia uses a Duo Auth API application (`DUO_API_HOSTNAME`,
+  `DUO_INTEGRATION_KEY`, `DUO_SECRET_KEY` in `.secrets.enc`, the same one
+  deployrr's Authelia uses). Duo sends the push to the Duo user whose username
+  matches `ADMIN_UI_USERNAME`; that user must already have a device enrolled in
+  Duo (self-enrollment is off). Pick "Push Notification" on the portal's
+  second-factor page; Authelia remembers it as the preferred method.
 - **Storage:** registered devices live in SQLite on the 1Gi `authelia-data`
   Longhorn PVC, encrypted with `AUTHELIA_STORAGE_ENCRYPTION_KEY`. A restored
   PVC is only readable with that same key. Sessions are in memory, so an
@@ -1073,6 +1079,8 @@ Expected sensitive values include:
 - `AUTHELIA_OIDC_HMAC_SECRET` and `GRAFANA_OIDC_CLIENT_SECRET`
   (`openssl rand -hex 32`), and `AUTHELIA_OIDC_JWKS_KEY_B64`, Authelia's OIDC
   signing key (`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | base64 -w0`)
+- `DUO_API_HOSTNAME`, `DUO_INTEGRATION_KEY`, `DUO_SECRET_KEY`: Duo Auth API
+  application details for Authelia's Duo Push
 - Values are read with bash `source`: single-quote any value containing shell
   characters such as `&`, `;`, `|`, `$`, spaces or `#` after a space
 - `WEBSITE_DEPLOY_KEY_B64`: the jeffriffle.com repo's read-only deploy key

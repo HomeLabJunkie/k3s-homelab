@@ -389,6 +389,9 @@ for var in \
   AUTHELIA_OIDC_HMAC_SECRET \
   AUTHELIA_OIDC_JWKS_KEY_B64 \
   GRAFANA_OIDC_CLIENT_SECRET \
+  DUO_API_HOSTNAME \
+  DUO_INTEGRATION_KEY \
+  DUO_SECRET_KEY \
   WEBSITE_DEPLOY_KEY_B64 \
   CLOUDFLARE_ANALYTICS_TOKEN
 do
@@ -813,6 +816,9 @@ kubectl create secret generic authelia-secrets \
   --from-file=oidc-hmac-secret=<(printf '%s' "$AUTHELIA_OIDC_HMAC_SECRET") \
   --from-file=oidc-jwks-key.pem=<(printf '%s' "$AUTHELIA_OIDC_JWKS_KEY_B64" | base64 -d) \
   --from-file=oidc-grafana-client-secret=<(printf '%s' "$AUTHELIA_GRAFANA_CLIENT_DIGEST") \
+  --from-file=duo-hostname=<(printf '%s' "$DUO_API_HOSTNAME") \
+  --from-file=duo-integration-key=<(printf '%s' "$DUO_INTEGRATION_KEY") \
+  --from-file=duo-secret-key=<(printf '%s' "$DUO_SECRET_KEY") \
   --dry-run=client -o yaml | kubectl apply -f -
 unset AUTHELIA_ADMIN_SALT AUTHELIA_ADMIN_HASH AUTHELIA_USERS_DATABASE \
   AUTHELIA_SMTP_PORT AUTHELIA_SMTP_SCHEME AUTHELIA_GRAFANA_CLIENT_DIGEST
