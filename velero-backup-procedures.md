@@ -54,7 +54,7 @@ that remains an explicit manifest step.
 
 ## Schedule and retention
 
-`protected-apps-daily` runs daily at 01:17 `America/Chicago`, protects the
+`protected-apps-daily` runs daily at 01:47 `America/Chicago`, protects the
 namespaces represented
 in `recovery/apps.conf`, moves CSI snapshot data to Garage, and retains each
 backup for 7 days. Data-mover concurrency is one per node to limit storage and
@@ -63,8 +63,17 @@ network pressure. Temporary full-copy snapshot volumes use the dedicated
 their normal replica count. The first seed backup can take substantially longer
 than later Kopia backups.
 
-The existing Longhorn jobs remain unchanged:
+Each temporary volume must finish copying before its upload starts. Node agents
+wait up to 90 minutes for that (`--data-mover-prepare-timeout` in
+`velero-values.yaml`; Velero's default of 30 minutes was too short for Loki's
+50Gi volume). A DataUpload that still times out fails with `timeout on
+preparing data upload` and leaves the backup `PartiallyFailed`.
 
+The existing Longhorn jobs remain unchanged (Longhorn cron times are UTC):
+
+- `snapshot-6hour` at `17 */6 * * *`, which is 01:17 Chicago time during
+  daylight saving time; the Velero schedule stays off minute 17 so the two do
+  not snapshot the same volumes at once
 - `backup-nightly` at `37 2 * * *`, retaining 14 backups on the CIFS target
 - `system-backup-nightly` at `20 4 * * *`, retaining 7 backups
 

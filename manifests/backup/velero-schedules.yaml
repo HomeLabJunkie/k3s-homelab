@@ -4,7 +4,10 @@ metadata:
   name: protected-apps-daily
   namespace: velero
 spec:
-  schedule: "CRON_TZ=America/Chicago 17 1 * * *"
+  # Off minute 17: Longhorn's snapshot-6hour job (UTC) snapshots the same
+  # volumes at 01:17 Chicago daylight time, and the overlap stalled Loki's
+  # snapshot clone.
+  schedule: "CRON_TZ=America/Chicago 47 1 * * *"
   skipImmediately: true
   template:
     includedNamespaces:
