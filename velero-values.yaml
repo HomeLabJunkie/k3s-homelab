@@ -58,6 +58,9 @@ nodeAgent:
       memory: 256Mi
   extraArgs:
     - --node-agent-configmap=velero-velero-node-agent-config
+    # Longhorn fully copies each snapshot into a temporary volume before the
+    # upload starts; Loki's 50Gi volume has needed more than the 30m default.
+    - --data-mover-prepare-timeout=90m
 
 configMaps:
   velero-node-agent-config:
