@@ -415,6 +415,10 @@ logged in is redirected to the portal; access needs a password and a second
 factor (Duo Push, TOTP app or security key), and only the `admins` group is allowed. Any
 other hostname sent through the middleware is denied. Portainer and Trilium
 keep their own logins behind Authelia; Grafana signs in through Authelia too.
+The middleware accepts at most 64 KiB (`maxResponseBodySize: 65536`) from
+Authelia per check; its answers are about 100 bytes plus the redirect URL.
+Without a limit Traefik logs a `maxResponseBodySize is not configured` warning
+for every protected route at startup.
 
 - **Users:** one admin, `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` from
   `.secrets.enc`. `deploy.sh` writes an argon2id-hashed users file into the
