@@ -331,6 +331,14 @@ http_health_check() {
   fi
 }
 
+# An app's route is a Kubernetes Ingress or a Traefik IngressRoute of the same
+# name (apps behind the Authelia middleware use an IngressRoute).
+get_app_route() {
+  local ns="$1" name="$2"
+  kubectl -n "$ns" get ingress "$name" 2>/dev/null \
+    || kubectl -n "$ns" get ingressroutes.traefik.io "$name"
+}
+
 health_check_app() {
   local app="$1"
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; return 1; }
@@ -356,7 +364,7 @@ health_check_app() {
   [[ -z "$service" ]] || verify_service_endpoints "$ns" "$service"
 
   if [[ -n "$ingress" ]]; then
-    kubectl -n "$ns" get ingress "$ingress" >/dev/null
+    get_app_route "$ns" "$ingress" >/dev/null
   fi
 
   http_health_check "$app" "$ns" || {
@@ -837,7 +845,7 @@ EOF
   kubectl -n "$ns" get deployment "$workload"
   kubectl -n "$ns" get pvc "$pvc" "$restore_vol" -o wide
   verify_service_endpoints "$ns" "$service" || true
-  if [[ -n "$ingress" ]]; then kubectl -n "$ns" get ingress "$ingress" || true; fi
+  if [[ -n "$ingress" ]]; then get_app_route "$ns" "$ingress" || true; fi
 
   echo
   echo "Rollback state: $state_dir"

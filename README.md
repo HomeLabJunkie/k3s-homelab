@@ -392,6 +392,17 @@ ingress hostname returned the same response before and after, with Rancher's
 validation.
 See the [upstream chart release](https://github.com/traefik/traefik-helm-chart/releases/tag/v41.6.1).
 
+Routes that use a Traefik middleware are `IngressRoute` objects, not Kubernetes
+`Ingress` objects: Longhorn, Grafana, Prometheus, Portainer, Trilium, the
+`www` redirect and the Traefik dashboard. Traefik reads Ingresses and its own
+CRDs through two separate providers. At startup the Ingress routes used to load
+a moment before the middlewares, and each one logged
+`middleware "...@kubernetescrd" does not exist` (harmless, since the pod was not
+Ready yet). IngressRoutes and Middlewares load together, so the errors are
+gone. Routes without a middleware (Authelia, Rancher, Vaultwarden, the website)
+are still Ingresses. `deploy.sh` removes the replaced Ingress after applying
+each IngressRoute.
+
 ### cert-manager
 
 cert-manager issues and renews certificates using the configured Let's Encrypt `ClusterIssuer`.
@@ -449,9 +460,11 @@ for every protected route at startup.
   login is the break-glass way in: `/login?disableAutoLogin=true` with
   `GRAFANA_ADMIN_PASSWORD`. Signing out of Grafana also signs out of Authelia.
 - **Protecting another app:** add its hostname to `access_control` in
-  `templates/generated/authelia.yaml.template` and the annotation
-  `traefik.ingress.kubernetes.io/router.middlewares: traefik-admin-ui-auth@kubernetescrd`
-  to its ingress. Clients that call an app's API directly cannot follow the
+  `templates/generated/authelia.yaml.template` and route it with an
+  `IngressRoute` that lists the `admin-ui-auth` middleware (namespace
+  `traefik`), as in `templates/generated/portainer-ingress.yaml.template`. Do
+  not use an `Ingress` with the `router.middlewares` annotation: it works, but
+  logs a missing-middleware error each time Traefik starts. Clients that call an app's API directly cannot follow the
   login redirect: keep Vaultwarden out of Authelia.
 - **Trilium sync and ETAPI:** the desktop app's sync and ETAPI clients cannot
   follow a login redirect either, so Authelia bypasses just the paths they use
@@ -633,8 +646,8 @@ the configuration without sending mail. An optional `config/email.env` can
 override the shared account.
 
 The Prometheus UI is at `prometheus.${BASE_DOMAIN}`, defined with Grafana's
-ingress in `monitoring-ingress.yaml`. Prometheus has no login of its own, so the
-ingress uses the same `admin-ui-auth` Authelia middleware as the Traefik
+IngressRoute in `monitoring-ingress.yaml`. Prometheus has no login of its own, so the
+route uses the same `admin-ui-auth` Authelia middleware as the Traefik
 dashboard and Longhorn (see [Authelia](#authelia)). The Cloudflare
 tunnel's hostnames are managed in the Zero Trust dashboard, so a new hostname
 also needs a public hostname entry there pointing at
