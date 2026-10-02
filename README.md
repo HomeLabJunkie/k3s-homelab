@@ -381,6 +381,17 @@ Both replicas rolled out cleanly and the ingress hosts still responded. The
 remaining startup warnings are the deliberate `allowCrossNamespace` setting and
 the encoded-characters default.
 
+On 2026-10-01, the Helm chart was upgraded from `41.6.0` to `41.6.1`
+(release revision 25), retaining Traefik `v3.7.13` and the existing release
+values. `deploy.sh` defaults to the same chart version. The chart change only
+adds Traefik Hub v3.21.0 support: with this repository's values the rendered
+manifests differ only in the `helm.sh/chart` label, and the CRDs are unchanged.
+Both replicas rolled out cleanly, all six nodes remained Ready, and every
+ingress hostname returned the same response before and after, with Rancher's
+`/ping` returning `pong` through the ingress service with HTTPS certificate
+validation.
+See the [upstream chart release](https://github.com/traefik/traefik-helm-chart/releases/tag/v41.6.1).
+
 ### cert-manager
 
 cert-manager issues and renews certificates using the configured Let's Encrypt `ClusterIssuer`.
