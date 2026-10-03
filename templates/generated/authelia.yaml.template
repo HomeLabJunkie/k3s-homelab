@@ -342,6 +342,9 @@ spec:
   forwardAuth:
     address: http://authelia.authelia.svc.cluster.local/api/authz/forward-auth
     trustForwardHeader: true
+    # Authelia's answers are about 100 bytes plus the redirect URL. Without a
+    # limit Traefik buffers a response of any size and warns at startup.
+    maxResponseBodySize: 65536
     authResponseHeaders:
       - Remote-User
       - Remote-Groups
