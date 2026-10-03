@@ -153,7 +153,7 @@ COUNT=0
 TOTAL_BYTES=0
 MISSING=0
 
-while IFS=$'\t' read -r NS PVC PV PVC_SIZE; do
+while IFS=$'\t' read -r NS PVC PV _; do
     [[ -z "$PV" || "$PV" == "null" ]] && continue
 
     DRIVER="$(

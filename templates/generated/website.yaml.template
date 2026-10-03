@@ -175,31 +175,25 @@ spec:
     replacement: https://${1}
     permanent: true
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+# An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
+# together, so the route never starts up before its middleware exists.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
 metadata:
   name: website-www
   namespace: website
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: website-redirect-www@kubernetescrd
 spec:
-  ingressClassName: traefik
-  rules:
-  - host: www.${BASE_DOMAIN}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: jeffriffle
-            port:
-              number: 80
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`www.${BASE_DOMAIN}`)
+      kind: Rule
+      middlewares:
+        - name: redirect-www
+      services:
+        - name: jeffriffle
+          port: 80
   tls:
-  - hosts:
-    - www.${BASE_DOMAIN}
     secretName: tls-website
 ---
 apiVersion: cert-manager.io/v1

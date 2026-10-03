@@ -174,7 +174,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Cluster | K3s (Kubernetes) | v1.36.4 |
 | Network | Cilium (+ Hubble) | 1.20.1 |
 | Service addresses | MetalLB | Layer 2 mode |
-| Web front door | Traefik | chart 41.6.0 |
+| Web front door | Traefik | chart 41.6.1 |
 | Certificates | cert-manager | v1.21.1 |
 | Outside access | Cloudflare Tunnel (cloudflared) | 2 copies |
 | Storage | Longhorn | 1.12.1 |

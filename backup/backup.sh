@@ -189,6 +189,8 @@ kubectl get storageclass -o yaml >"$STAGE_DEST/cluster-state/storageclasses.yaml
 kubectl get pv -o yaml >"$STAGE_DEST/cluster-state/persistentvolumes.yaml"
 kubectl get pvc -A -o yaml >"$STAGE_DEST/cluster-state/persistentvolumeclaims.yaml"
 kubectl get ingress -A -o yaml >"$STAGE_DEST/cluster-state/ingresses.yaml"
+kubectl get ingressroutes.traefik.io -A -o yaml >"$STAGE_DEST/cluster-state/ingressroutes.yaml"
+kubectl get middlewares.traefik.io -A -o yaml >"$STAGE_DEST/cluster-state/middlewares.yaml"
 kubectl get pvc -A \
     -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,VOLUME:.spec.volumeName,SC:.spec.storageClassName,STATUS:.status.phase' \
     >"$STAGE_DEST/cluster-state/pvc-volume-map.txt"
@@ -202,8 +204,12 @@ kubectl -n longhorn-system get systembackups.longhorn.io -o yaml \
 helm list -A -o yaml >"$STAGE_DEST/cluster-state/helm-releases.yaml"
 
 echo "==> Requesting K3s etcd snapshot..."
+# The remote commands below embed STAMP and SNAPSHOT on purpose; SNAPSHOT is
+# checked against a strict pattern before use.
+# shellcheck disable=SC2029
 ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
     "sudo -n k3s etcd-snapshot save --name manual-${STAMP}"
+# shellcheck disable=SC2029
 SNAPSHOT="$(
     ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
         "sudo -n find /var/lib/rancher/k3s/server/db/snapshots -maxdepth 1 -type f -name 'manual-${STAMP}*' -printf '%f\\n'" |
@@ -212,6 +218,7 @@ SNAPSHOT="$(
 [[ "$SNAPSHOT" =~ ^manual-${STAMP}[-A-Za-z0-9._]*$ ]] ||
     fail "etcd snapshot was not found or had an unexpected name"
 echo "    snapshot: $SNAPSHOT"
+# shellcheck disable=SC2029
 ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
     "sudo -n cat '/var/lib/rancher/k3s/server/db/snapshots/${SNAPSHOT}'" \
     >"$STAGE_DEST/etcd/$SNAPSHOT"
@@ -241,6 +248,7 @@ EOF
 echo "==> Creating and verifying checksums..."
 (
     cd "$STAGE_DEST"
+    # shellcheck disable=SC2094 # find skips SHA256SUMS itself
     find . -type f ! -name SHA256SUMS -exec sha256sum {} \; >SHA256SUMS
     tar -tzf repo/k3s-repository.tar.gz >/dev/null
     sha256sum -c SHA256SUMS >/dev/null
@@ -282,6 +290,7 @@ BACKUP_COMPLETE=1
 prune_cluster_bundles
 
 echo "==> Removing copied on-demand etcd snapshot from control node..."
+# shellcheck disable=SC2029
 if ! ssh "${STORAGE_SSH_OPTIONS[@]}" "$CONTROL_IP" \
     "sudo -n k3s etcd-snapshot delete '${SNAPSHOT}'" >/dev/null 2>&1; then
     echo "WARNING: unable to delete control-node snapshot ${SNAPSHOT}."

@@ -98,7 +98,7 @@ if [[ -f "$ROOT_DIR/.secrets.enc" ]]; then
   source <(printf '%s\n' "$decrypted_secrets")
   unset decrypted_secrets
 elif [[ -f "$ROOT_DIR/.secrets" ]]; then
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1090,SC1091
   source "$ROOT_DIR/.secrets"
 else
   echo "ERROR: no secrets file found" >&2

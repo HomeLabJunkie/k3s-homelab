@@ -12,6 +12,7 @@ fi
 
 # Export cluster configuration for Ansible lookup('env', ...) expressions.
 set -a
+# shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
 
@@ -19,7 +20,7 @@ KUBECONFIG_SOURCE="${KUBECONFIG_SOURCE:-$K3S_DIR/kubeconfig}"
 KUBECONFIG_TARGET="${KUBECONFIG_TARGET:-$HOME/.kube/config}"
 
 CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.21.1}"
-TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.6.0}"
+TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.6.1}"
 RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.15.1}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 
@@ -177,12 +178,20 @@ ensure_namespace() {
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 }
 
+# Routes that use a Traefik middleware are IngressRoutes of the same name. Remove
+# the Ingress they replaced once the IngressRoute is applied, so the hostname
+# is never left without a route.
+remove_replaced_ingress() {
+  local ns="$1" name="$2"
+  kubectl -n "$ns" delete ingress "$name" --ignore-not-found
+}
+
 apply_manifest() {
   local file="$1"
-  local output ns attempt
+  local output ns
   require_file "$file"
 
-  for attempt in {1..10}; do
+  for _ in {1..10}; do
     if output="$(kubectl apply -f "$file" 2>&1)"; then
       printf '%s\n' "$output"
       return 0
@@ -356,9 +365,11 @@ if [[ -f "$K3S_DIR/.secrets.enc" ]]; then
     echo "ERROR: sops could not decrypt $K3S_DIR/.secrets.enc"
     exit 1
   }
+  # shellcheck disable=SC1090
   source <(printf '%s\n' "$decrypted_secrets")
   unset decrypted_secrets
 elif [[ -f "$K3S_DIR/.secrets" ]]; then
+  # shellcheck disable=SC1090,SC1091
   source "$K3S_DIR/.secrets"
 else
   echo "ERROR: neither $K3S_DIR/.secrets.enc nor $K3S_DIR/.secrets exists"
@@ -389,6 +400,9 @@ for var in \
   AUTHELIA_OIDC_HMAC_SECRET \
   AUTHELIA_OIDC_JWKS_KEY_B64 \
   GRAFANA_OIDC_CLIENT_SECRET \
+  DUO_API_HOSTNAME \
+  DUO_INTEGRATION_KEY \
+  DUO_SECRET_KEY \
   WEBSITE_DEPLOY_KEY_B64 \
   CLOUDFLARE_ANALYTICS_TOKEN
 do
@@ -710,6 +724,7 @@ wait_longhorn_backup_target_available default "CIFS"
 
 echo "==> Deploying Longhorn HTTPS ingress..."
 apply_manifest "$LONGHORN_INGRESS_MANIFEST"
+remove_replaced_ingress longhorn-system longhorn-frontend
 kubectl -n longhorn-system wait --for=condition=Ready certificate/tls-longhorn-ingress --timeout=300s
 
 echo "==> Verifying all Longhorn nodes have the dedicated storage disk..."
@@ -764,6 +779,7 @@ AUTHELIA_ADMIN_HASH="$(
   printf '%s' "$ADMIN_UI_PASSWORD" |
     argon2 "$AUTHELIA_ADMIN_SALT" -id -t 3 -k 65536 -p 4 -l 32 -e
 )"
+# shellcheck disable=SC2016 # literal hash prefix
 [[ "$AUTHELIA_ADMIN_HASH" == '$argon2id$'* ]] || {
   echo "ERROR: could not hash ADMIN_UI_PASSWORD with argon2."
   exit 1
@@ -789,6 +805,7 @@ AUTHELIA_GRAFANA_CLIENT_DIGEST="$(
       openssl dgst -sha256 -hmac "$AUTHELIA_SESSION_SECRET" -r | cut -c1-32)" \
       -id -t 3 -k 65536 -p 4 -l 32 -e
 )"
+# shellcheck disable=SC2016 # literal hash prefix
 [[ "$AUTHELIA_GRAFANA_CLIENT_DIGEST" == '$argon2id$'* ]] || {
   echo "ERROR: could not hash GRAFANA_OIDC_CLIENT_SECRET with argon2."
   exit 1
@@ -813,6 +830,9 @@ kubectl create secret generic authelia-secrets \
   --from-file=oidc-hmac-secret=<(printf '%s' "$AUTHELIA_OIDC_HMAC_SECRET") \
   --from-file=oidc-jwks-key.pem=<(printf '%s' "$AUTHELIA_OIDC_JWKS_KEY_B64" | base64 -d) \
   --from-file=oidc-grafana-client-secret=<(printf '%s' "$AUTHELIA_GRAFANA_CLIENT_DIGEST") \
+  --from-file=duo-hostname=<(printf '%s' "$DUO_API_HOSTNAME") \
+  --from-file=duo-integration-key=<(printf '%s' "$DUO_INTEGRATION_KEY") \
+  --from-file=duo-secret-key=<(printf '%s' "$DUO_SECRET_KEY") \
   --dry-run=client -o yaml | kubectl apply -f -
 unset AUTHELIA_ADMIN_SALT AUTHELIA_ADMIN_HASH AUTHELIA_USERS_DATABASE \
   AUTHELIA_SMTP_PORT AUTHELIA_SMTP_SCHEME AUTHELIA_GRAFANA_CLIENT_DIGEST
@@ -925,6 +945,8 @@ echo "==> Applying Longhorn monitoring, dashboards, alerts, and Grafana HTTPS...
 apply_manifest "$MONITORING_LONGHORN"
 apply_manifest "$MONITORING_DASHBOARDS"
 apply_manifest "$MONITORING_INGRESS"
+remove_replaced_ingress monitoring grafana
+remove_replaced_ingress monitoring prometheus
 
 echo "==> Waiting for Grafana TLS certificate..."
 kubectl -n monitoring wait \
@@ -1018,6 +1040,7 @@ apply_manifest "$MONITORING_DASHBOARDS_V2"
 
 # The website dashboard fills in only the account ID; Grafana's own $variables stay as-is.
 echo "==> Applying jeffriffle.com website dashboard..."
+# shellcheck disable=SC2016 # envsubst takes the variable name literally
 kubectl create configmap grafana-jeffriffle-website \
   --namespace monitoring \
   --from-file=jeffriffle-website.json=<(envsubst '${CLOUDFLARE_ACCOUNT_ID}' < "$WEBSITE_DASHBOARD") \
@@ -1052,6 +1075,7 @@ helm upgrade --install portainer portainer/portainer \
 
 echo "==> Applying Portainer HTTPS ingress..."
 apply_manifest "$PORTAINER_INGRESS"
+remove_replaced_ingress portainer portainer
 
 echo "==> Waiting for Portainer TLS certificate..."
 kubectl -n portainer wait \
@@ -1286,6 +1310,7 @@ PF_PID=""
 
 echo "==> Deploying Trilium with Longhorn storage..."
 apply_manifest "$TRILIUM_MANIFEST"
+remove_replaced_ingress trilium trilium
 
 echo "==> Waiting for Trilium Longhorn PVC to bind..."
 for i in {1..60}; do
@@ -1339,6 +1364,7 @@ VAULTWARDEN_ADMIN_TOKEN_HASH="$(
   printf '%s' "$VAULTWARDEN_ADMIN_TOKEN" |
     argon2 "$(openssl rand -base64 32)" -id -t 3 -k 65540 -p 4 -e
 )"
+# shellcheck disable=SC2016 # literal hash prefix
 [[ "$VAULTWARDEN_ADMIN_TOKEN_HASH" == '$argon2id$'* ]] || {
   echo "ERROR: could not hash VAULTWARDEN_ADMIN_TOKEN with argon2."
   exit 1
@@ -1487,6 +1513,7 @@ apply_manifest "$WEBSITE_NGINX"
 
 echo "==> Deploying application ingress and certificates..."
 apply_manifest "$K3S_DIR/website.yaml"
+remove_replaced_ingress website website-www
 if [[ "$website_nginx_changed" == true ]]; then
   echo "==> jeffriffle.com nginx config changed; restarting the site..."
   kubectl -n website rollout restart deployment/jeffriffle
@@ -1529,28 +1556,28 @@ kubectl -n vaultwarden get certificate tls-vaultwarden-ingress
 
 echo
 echo "===== TRILIUM ====="
-kubectl -n trilium get pods,svc,pvc,ingress
+kubectl -n trilium get pods,svc,pvc,ingressroute
 kubectl -n trilium get certificate tls-trilium-ingress
 
 echo
 echo "===== LONGHORN ====="
 kubectl -n longhorn-system get pods
 kubectl -n longhorn-system get nodes.longhorn.io
-kubectl -n longhorn-system get ingress
+kubectl -n longhorn-system get ingressroute
 kubectl -n longhorn-system get certificate tls-longhorn-ingress
 kubectl get storageclass longhorn
 echo
 echo "===== MONITORING ====="
 kubectl -n monitoring get pods
 kubectl -n monitoring get pvc -o wide
-kubectl -n monitoring get ingress
+kubectl -n monitoring get ingressroute
 kubectl -n monitoring get certificate tls-grafana-ingress
 kubectl -n monitoring get servicemonitor longhorn-prometheus-servicemonitor
 kubectl -n monitoring get prometheusrule homelab-baseline-alerts
 
 echo
 echo "===== PORTAINER ====="
-kubectl -n portainer get pods,svc,pvc,ingress
+kubectl -n portainer get pods,svc,pvc,ingressroute
 kubectl -n portainer get certificate tls-portainer-ingress
 
 echo

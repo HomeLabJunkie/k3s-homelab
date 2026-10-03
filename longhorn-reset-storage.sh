@@ -24,6 +24,7 @@ printf '  - %s\n' "${hosts[@]}"
 echo
 read -r -p 'Type RESET-LONGHORN to continue: ' answer
 [[ "$answer" == "RESET-LONGHORN" ]] || { echo "Cancelled."; exit 1; }
+# shellcheck disable=SC2016 # the script expands on each node, not here
 ansible all -i "$INVENTORY" -b -m shell -a '
 set -Eeuo pipefail
 storage_src="$(findmnt -n -o SOURCE /var/lib/storage)"

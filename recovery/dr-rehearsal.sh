@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Stages use `cmd && RESULT[x]="PASS" || fail_stage ...`; the assignment cannot fail.
+# shellcheck disable=SC2015
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

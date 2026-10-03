@@ -28,10 +28,11 @@ EOF
 chmod +x "$TEST_ROOT/kubectl"
 
 completed="$(date -u -Iseconds)"
-export BACKUPS_JSON="$(jq -cn --arg completed "$completed" '{items:[
+BACKUPS_JSON="$(jq -cn --arg completed "$completed" '{items:[
   {metadata:{name:"newer-offsite"},spec:{storageLocation:"offsite"},status:{phase:"Completed",completionTimestamp:$completed}},
   {metadata:{name:"garage-current"},spec:{storageLocation:"garage"},status:{phase:"Completed",completionTimestamp:$completed}}
 ]}')"
+export BACKUPS_JSON
 
 output="$(PATH="$TEST_ROOT:$PATH" "$ROOT_DIR/backup/verify-velero.sh")"
 grep -q '^==> Latest Velero backup: garage-current$' <<<"$output"

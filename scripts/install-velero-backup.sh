@@ -19,11 +19,13 @@ done
 }
 
 set -a
+# shellcheck disable=SC1090
 source "${ENV_FILE:-$ROOT/config/cluster.env}"
 decrypted_secrets="$(sops --decrypt "$SECRETS_FILE")" || {
   echo "ERROR: sops could not decrypt $SECRETS_FILE" >&2
   exit 1
 }
+# shellcheck disable=SC1090
 source <(printf '%s\n' "$decrypted_secrets")
 unset decrypted_secrets
 set +a

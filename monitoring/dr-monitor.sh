@@ -105,7 +105,7 @@ done < <(kubectl -n longhorn-system get volumes.longhorn.io -o name 2>/dev/null 
 
 if [[ -f "$APPS_FILE" ]]; then
   bjson="$(kubectl -n longhorn-system get backupvolumes.longhorn.io -o json 2>/dev/null || echo '{"items":[]}')"
-  while IFS='|' read -r app ns pvc kind workload service ingress; do
+  while IFS='|' read -r app ns pvc _; do
     [[ -z "$app" || "$app" == \#* ]] && continue
     vol="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)"
     [[ -n "$vol" ]] || { crit "$app PVC $ns/$pvc is missing or unbound"; continue; }

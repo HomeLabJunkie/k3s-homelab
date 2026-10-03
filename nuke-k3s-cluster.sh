@@ -119,6 +119,7 @@ EOSH
 run_on_node() {
   local node="$1"
   # run the cleanup
+  # shellcheck disable=SC2029 # WIPE_DECISION is passed to the remote script
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${node}" "bash -s -- ${WIPE_DECISION}" <<< "$REMOTE_SCRIPT" 2>&1 \
     | sed "s/^/[$node] /"
   local rc=${PIPESTATUS[0]}
