@@ -6,8 +6,9 @@ image:
 
 initContainers:
   - name: velero-plugin-for-aws
-    # v1.14.2 corrupts metadata on non-AWS S3 backends via SDK checksum
-    # framing (velero-io/velero#9951). Keep v1.14.1 until v1.14.3 is stable.
+    # Never v1.14.2: it corrupts metadata on non-AWS S3 backends via SDK
+    # checksum framing (velero-io/velero#9951). v1.14.3 and later are fine; run
+    # scripts/test-velero-backup.sh after every plugin change.
     image: docker.io/velero/velero-plugin-for-aws:v1.14.4
     imagePullPolicy: IfNotPresent
     volumeMounts:
@@ -59,7 +60,8 @@ nodeAgent:
   extraArgs:
     - --node-agent-configmap=velero-velero-node-agent-config
     # Longhorn fully copies each snapshot into a temporary volume before the
-    # upload starts; Loki's 50Gi volume has needed more than the 30m default.
+    # upload starts. Headroom over the 30m default; it does not fix Loki's
+    # intermittent clone failures (see velero-backup-procedures.md).
     - --data-mover-prepare-timeout=90m
 
 configMaps:
