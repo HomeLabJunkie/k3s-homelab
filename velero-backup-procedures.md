@@ -11,18 +11,19 @@ its NFSv3 export.
 | Component | Version |
 | --- | --- |
 | CSI snapshot controller and CRDs | v8.6.0 |
-| Velero | v1.18.2 |
+| Velero | v1.18.4 |
 | Velero Helm chart | 12.1.0 |
-| Velero AWS object-store plugin | v1.14.1 |
+| Velero AWS object-store plugin | v1.14.4 |
 
 The snapshot controller version matches the `csi-snapshotter` sidecar shipped
 by Longhorn 1.12.1.
 
-The AWS plugin remains pinned to v1.14.1 because v1.14.2 corrupts metadata on
-non-AWS S3 backends by adding unsupported checksum framing. The Garage location
-also explicitly disables optional checksum calculation. Upgrade only after a
-stable plugin release containing the fix for `velero-io/velero#9951` passes the
-disposable restore test.
+Never run AWS plugin v1.14.2: it corrupts metadata on non-AWS S3 backends by
+adding unsupported checksum framing (`velero-io/velero#9951`). v1.14.3 and later
+carry the fix, and the Garage location also explicitly disables optional
+checksum calculation. `velero-values.yaml` holds the versions actually deployed;
+Dependabot bumps them, so after merging a Velero or plugin bump, run the
+installer and then the disposable restore test below before relying on it.
 
 ## Storage and credentials
 
@@ -65,9 +66,16 @@ than later Kopia backups.
 
 Each temporary volume must finish copying before its upload starts. Node agents
 wait up to 90 minutes for that (`--data-mover-prepare-timeout` in
-`velero-values.yaml`; Velero's default of 30 minutes was too short for Loki's
-50Gi volume). A DataUpload that still times out fails with `timeout on
+`velero-values.yaml`). A DataUpload that still times out fails with `timeout on
 preparing data upload` and leaves the backup `PartiallyFailed`.
+
+Known issue: Loki's 50Gi volume (`logging/storage-loki-0`) intermittently fails
+this way (Sep 28, Oct 1 and Oct 3 2026). The copy normally takes 4-8 minutes, so
+the timeout is not the cause: on Oct 3 the Longhorn clone failed with
+`connection reset by peer` 46 seconds in, Longhorn detached the temporary
+volume, and the clone never completed. Moving the schedule off minute 17 and
+raising the timeout did not prevent it. The cause is not yet known; a manual
+re-run has succeeded each time.
 
 The existing Longhorn jobs remain unchanged (Longhorn cron times are UTC):
 
