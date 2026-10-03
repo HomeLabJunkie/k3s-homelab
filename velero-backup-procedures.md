@@ -57,7 +57,8 @@ that remains an explicit manifest step.
 
 `protected-apps-daily` runs daily at 01:47 `America/Chicago`, protects the
 namespaces represented
-in `recovery/apps.conf`, moves CSI snapshot data to Garage, and retains each
+in `recovery/apps.conf` except `logging` (see the known issue below), moves CSI
+snapshot data to Garage, and retains each
 backup for 7 days. Data-mover concurrency is one per node to limit storage and
 network pressure. Temporary full-copy snapshot volumes use the dedicated
 `longhorn-velero-temp` storage class with one replica; production volumes keep
@@ -69,13 +70,19 @@ wait up to 90 minutes for that (`--data-mover-prepare-timeout` in
 `velero-values.yaml`). A DataUpload that still times out fails with `timeout on
 preparing data upload` and leaves the backup `PartiallyFailed`.
 
-Known issue: Loki's 50Gi volume (`logging/storage-loki-0`) intermittently fails
+Known issue: Loki's 50Gi volume (`logging/storage-loki-0`) intermittently failed
 this way (Sep 28, Oct 1 and Oct 3 2026). The copy normally takes 4-8 minutes, so
 the timeout is not the cause: on Oct 3 the Longhorn clone failed with
 `connection reset by peer` 46 seconds in, Longhorn detached the temporary
 volume, and the clone never completed. Moving the schedule off minute 17 and
-raising the timeout did not prevent it. The cause is not yet known; a manual
-re-run has succeeded each time.
+raising the timeout did not prevent it, and the cause is not yet known.
+
+Until it is, the `logging` namespace is not in the Velero schedule, so one bad
+clone no longer marks every nightly backup `PartiallyFailed`. Loki's volume is
+still backed up by Longhorn's `backup-nightly` job to the CIFS target, and Loki,
+its gateway, the canary and Alloy are redeployed from this repository. Add
+`logging` back to `manifests/backup/velero-schedules.yaml` once the clone
+failures are understood.
 
 The existing Longhorn jobs remain unchanged (Longhorn cron times are UTC):
 
