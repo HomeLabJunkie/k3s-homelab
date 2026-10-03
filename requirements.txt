@@ -140,11 +140,11 @@ six==1.17.0
     #   python-dateutil
 subprocess-tee==0.4.2
     # via ansible-compat
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   kubernetes
     #   requests
-virtualenv==21.2.0
+virtualenv==21.7.13
     # via pre-commit
 wcmatch==10.1
     # via molecule
