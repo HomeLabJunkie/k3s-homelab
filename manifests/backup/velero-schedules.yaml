@@ -15,7 +15,9 @@ spec:
       - authelia
       - portainer
       - monitoring
-      - logging
+      # logging (Loki) is left out: its Longhorn snapshot clone intermittently
+      # fails and left the whole backup PartiallyFailed. Longhorn's
+      # backup-nightly still covers the Loki volume.
     snapshotMoveData: true
     storageLocation: garage
     ttl: 168h

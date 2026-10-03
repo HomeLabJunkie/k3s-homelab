@@ -303,7 +303,7 @@ The repository contains user-systemd units with this intended order:
 
 | Time | Unit | Action |
 | --- | --- | --- |
-| 01:17 America/Chicago | Velero `protected-apps-daily` | Move application snapshots to Garage |
+| 01:47 America/Chicago | Velero `protected-apps-daily` | Move application snapshots to Garage |
 | 02:37 | Longhorn `backup-nightly` | Back up application volumes |
 | 04:20 | Longhorn `system-backup-nightly` | Create Longhorn system backup |
 | 04:30 plus random delay | `k3s-dr-backup.timer` | Create cluster recovery bundle |
