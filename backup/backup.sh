@@ -189,6 +189,8 @@ kubectl get storageclass -o yaml >"$STAGE_DEST/cluster-state/storageclasses.yaml
 kubectl get pv -o yaml >"$STAGE_DEST/cluster-state/persistentvolumes.yaml"
 kubectl get pvc -A -o yaml >"$STAGE_DEST/cluster-state/persistentvolumeclaims.yaml"
 kubectl get ingress -A -o yaml >"$STAGE_DEST/cluster-state/ingresses.yaml"
+kubectl get ingressroutes.traefik.io -A -o yaml >"$STAGE_DEST/cluster-state/ingressroutes.yaml"
+kubectl get middlewares.traefik.io -A -o yaml >"$STAGE_DEST/cluster-state/middlewares.yaml"
 kubectl get pvc -A \
     -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,VOLUME:.spec.volumeName,SC:.spec.storageClassName,STATUS:.status.phase' \
     >"$STAGE_DEST/cluster-state/pvc-volume-map.txt"

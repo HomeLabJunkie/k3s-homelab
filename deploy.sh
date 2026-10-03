@@ -20,7 +20,7 @@ KUBECONFIG_SOURCE="${KUBECONFIG_SOURCE:-$K3S_DIR/kubeconfig}"
 KUBECONFIG_TARGET="${KUBECONFIG_TARGET:-$HOME/.kube/config}"
 
 CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.21.1}"
-TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.6.0}"
+TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.6.1}"
 RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.15.1}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 
@@ -176,6 +176,14 @@ ensure_namespace() {
   local ns="$1"
   [[ -n "$ns" ]] || return 0
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+}
+
+# Routes that use a Traefik middleware are IngressRoutes of the same name. Remove
+# the Ingress they replaced once the IngressRoute is applied, so the hostname
+# is never left without a route.
+remove_replaced_ingress() {
+  local ns="$1" name="$2"
+  kubectl -n "$ns" delete ingress "$name" --ignore-not-found
 }
 
 apply_manifest() {
@@ -716,6 +724,7 @@ wait_longhorn_backup_target_available default "CIFS"
 
 echo "==> Deploying Longhorn HTTPS ingress..."
 apply_manifest "$LONGHORN_INGRESS_MANIFEST"
+remove_replaced_ingress longhorn-system longhorn-frontend
 kubectl -n longhorn-system wait --for=condition=Ready certificate/tls-longhorn-ingress --timeout=300s
 
 echo "==> Verifying all Longhorn nodes have the dedicated storage disk..."
@@ -936,6 +945,8 @@ echo "==> Applying Longhorn monitoring, dashboards, alerts, and Grafana HTTPS...
 apply_manifest "$MONITORING_LONGHORN"
 apply_manifest "$MONITORING_DASHBOARDS"
 apply_manifest "$MONITORING_INGRESS"
+remove_replaced_ingress monitoring grafana
+remove_replaced_ingress monitoring prometheus
 
 echo "==> Waiting for Grafana TLS certificate..."
 kubectl -n monitoring wait \
@@ -1064,6 +1075,7 @@ helm upgrade --install portainer portainer/portainer \
 
 echo "==> Applying Portainer HTTPS ingress..."
 apply_manifest "$PORTAINER_INGRESS"
+remove_replaced_ingress portainer portainer
 
 echo "==> Waiting for Portainer TLS certificate..."
 kubectl -n portainer wait \
@@ -1298,6 +1310,7 @@ PF_PID=""
 
 echo "==> Deploying Trilium with Longhorn storage..."
 apply_manifest "$TRILIUM_MANIFEST"
+remove_replaced_ingress trilium trilium
 
 echo "==> Waiting for Trilium Longhorn PVC to bind..."
 for i in {1..60}; do
@@ -1500,6 +1513,7 @@ apply_manifest "$WEBSITE_NGINX"
 
 echo "==> Deploying application ingress and certificates..."
 apply_manifest "$K3S_DIR/website.yaml"
+remove_replaced_ingress website website-www
 if [[ "$website_nginx_changed" == true ]]; then
   echo "==> jeffriffle.com nginx config changed; restarting the site..."
   kubectl -n website rollout restart deployment/jeffriffle
@@ -1542,28 +1556,28 @@ kubectl -n vaultwarden get certificate tls-vaultwarden-ingress
 
 echo
 echo "===== TRILIUM ====="
-kubectl -n trilium get pods,svc,pvc,ingress
+kubectl -n trilium get pods,svc,pvc,ingressroute
 kubectl -n trilium get certificate tls-trilium-ingress
 
 echo
 echo "===== LONGHORN ====="
 kubectl -n longhorn-system get pods
 kubectl -n longhorn-system get nodes.longhorn.io
-kubectl -n longhorn-system get ingress
+kubectl -n longhorn-system get ingressroute
 kubectl -n longhorn-system get certificate tls-longhorn-ingress
 kubectl get storageclass longhorn
 echo
 echo "===== MONITORING ====="
 kubectl -n monitoring get pods
 kubectl -n monitoring get pvc -o wide
-kubectl -n monitoring get ingress
+kubectl -n monitoring get ingressroute
 kubectl -n monitoring get certificate tls-grafana-ingress
 kubectl -n monitoring get servicemonitor longhorn-prometheus-servicemonitor
 kubectl -n monitoring get prometheusrule homelab-baseline-alerts
 
 echo
 echo "===== PORTAINER ====="
-kubectl -n portainer get pods,svc,pvc,ingress
+kubectl -n portainer get pods,svc,pvc,ingressroute
 kubectl -n portainer get certificate tls-portainer-ingress
 
 echo
