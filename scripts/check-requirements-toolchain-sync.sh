@@ -66,7 +66,7 @@ fi
 if (( status != 0 )); then
   echo "" >&2
   echo "Update config/toolchain.env to match requirements.in (or vice versa)." >&2
-  echo "Remember to refresh the 'Automation toolchain guard' section of README.md too." >&2
+  echo "Remember to refresh the 'Automation toolchain guard' section of docs/deployment.md too." >&2
   exit 1
 fi
 
