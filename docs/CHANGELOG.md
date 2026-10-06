@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-06: fb-search process reaping and cached dependencies
+
+On 2026-10-06, the fb-search pod was given `shareProcessNamespace: true`, so
+the pause container is PID 1 and reaps the Chromium processes each search
+orphans. The previous pod had built up 57 defunct `chrome-headless` processes
+in six days; the new pod showed none after three browser runs. The same day,
+the dependency-caching change merged on 2026-09-23 was applied for the first
+time: packages now install, hash-verified, into the `fb-search-deps` Longhorn
+volume and are reused on restart. `apps/fb-search` is not part of `deploy.sh`
+and reaches the cluster only through `kubectl apply -k apps/fb-search`.
+
 ## 2026-10-01: Traefik chart 41.6.1
 
 On 2026-10-01, the Helm chart was upgraded from `41.6.0` to `41.6.1`
