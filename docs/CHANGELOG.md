@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: cloudflared 2026.10.0
+
+On 2026-10-07, the image was upgraded from `cloudflare/cloudflared:2026.9.1`
+to `2026.10.0`, skipping 2026.9.2 and 2026.9.3. The releases in between harden
+Quick Tunnel authentication, which this tunnel does not use, cap response
+sizes and update dependencies. 2026.10.0 normalizes request paths when access
+rules are used, retries DNS resolution and cancels QUIC reads when request
+bodies close. Only the image tag changed in the rendered manifest. Both
+replicas rolled out one at a time and each registered four `http2`
+connections, all six nodes remained Ready, and seven public hostnames returned
+the same status codes before and after. See the upstream
+[release notes](https://github.com/cloudflare/cloudflared/blob/2026.10.0/RELEASE_NOTES).
+
 ## 2026-10-06: fb-search process reaping and cached dependencies
 
 On 2026-10-06, the fb-search pod was given `shareProcessNamespace: true`, so
