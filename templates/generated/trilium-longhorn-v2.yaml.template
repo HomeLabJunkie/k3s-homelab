@@ -36,7 +36,7 @@ spec:
       enableServiceLinks: false
       containers:
         - name: trilium
-          image: triliumnext/trilium:v0.104.1
+          image: triliumnext/trilium:v0.106.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
