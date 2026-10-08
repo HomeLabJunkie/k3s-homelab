@@ -6,6 +6,29 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-08: K3s v1.36.5
+
+On 2026-10-08, all six nodes were upgraded from `v1.36.4+k3s1` to
+`v1.36.5+k3s1`, after a fresh cluster recovery bundle (`backup/backup.sh`,
+`RESULT: BACKUP PASSED`) and check-mode dry runs on one control-plane node and
+one worker. The release updates Kubernetes to v1.36.5, fixes restore from
+compressed etcd snapshots and bumps gRPC for CVE-2026-84445. Its warning about
+the bundled Traefik chart does not apply, because K3s runs here with
+`--disable traefik`.
+
+The nodes were rolled one at a time with `maintain-node.sh --apply --yes`,
+control plane first (`k3s-node-0` to `k3s-node-2`), then the workers. On every
+node the API, node, Cilium and kube-vip checks passed, but the Longhorn check
+failed and the script left the node cordoned: it checks volume robustness
+while the node is still cordoned, when Longhorn has stopped that node's
+replicas. Each node was then uncordoned by hand and the next one started only
+after all nine volumes were healthy again, which took between three and
+sixteen minutes per node. Afterwards all six nodes were Ready on v1.36.5 with
+none cordoned, etcd and `/readyz` reported ok, Cilium showed 6/6 nodes
+reachable, all ten certificates were Ready, and seven public hostnames
+returned the same status codes as before. See the upstream
+[release notes](https://github.com/k3s-io/k3s/releases/tag/v1.36.5%2Bk3s1).
+
 ## 2026-10-08: Alloy chart 1.13.0
 
 On 2026-10-08, the Alloy Helm chart was upgraded from `1.11.1` to `1.13.0`
