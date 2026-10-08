@@ -6,6 +6,21 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-08: Traefik rejects encoded null characters
+
+On 2026-10-08, the `web` and `websecure` entrypoints were set to reject
+request paths containing an encoded null character (`%00`), through two
+`allowEncodedNullCharacter=false` flags in `additionalArguments` (release
+revision 27, chart and image unchanged). Traefik allows all seven encoded
+characters by default and logs a startup warning when no entrypoint denies
+any of them; an encoded null has no legitimate use in a path, so denying it
+removes the warning without affecting the applications behind the proxy. The
+other six, including encoded slashes and percents, are still allowed. Both
+replicas rolled out cleanly. Afterwards Grafana returned its usual `302`
+through the ingress address and a path containing `%00` returned `400`. The
+only startup warning left is the cross-namespace notice, which is expected:
+five IngressRoutes share the `traefik/admin-ui-auth` middleware.
+
 ## 2026-10-08: Traefik chart 41.7.0
 
 On 2026-10-08, the Helm chart was upgraded from `41.6.1` to `41.7.0` (release
