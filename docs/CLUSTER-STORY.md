@@ -175,7 +175,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Network | Cilium (+ Hubble) | 1.20.1 |
 | Service addresses | MetalLB | Layer 2 mode |
 | Web front door | Traefik | chart 41.6.1 |
-| Certificates | cert-manager | v1.21.1 |
+| Certificates | cert-manager | v1.21.2 |
 | Outside access | Cloudflare Tunnel (cloudflared) | 2 copies |
 | Storage | Longhorn | 1.12.1 |
 | Management | Rancher / Portainer | 2.15.1 / chart 245.0.0 |
