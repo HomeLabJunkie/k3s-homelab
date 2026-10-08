@@ -6,6 +6,22 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: Cilium 1.20.2
+
+On 2026-10-07, Cilium was upgraded from `1.20.1` to `1.20.2` (Helm release
+revision 13) with its existing values; `cilium_tag` in the Ansible group
+variables now matches. 1.20.2 is a bug-fix release, including fixes for two
+agent crashes and for dropped traffic and connection handling in the BPF load
+balancer. With this cluster's values the rendered chart differs only in image
+tags: the agent, operator and Hubble Relay moved to `v1.20.2`, Envoy to
+`v1.37.6` and Hubble UI to `v0.13.6`. The agents rolled two nodes at a time
+with no container restarts anywhere in the cluster. Afterwards every agent
+reported `OK` with 6/6 nodes reachable, all six nodes stayed Ready, a
+cross-node service call and outbound HTTPS from a pod succeeded, and seven
+public hostnames returned the same status codes before and after. See the
+upstream
+[release notes](https://github.com/cilium/cilium/releases/tag/v1.20.2).
+
 ## 2026-10-07: Rancher 2.15.2 and Loki chart 18.14.0
 
 On 2026-10-07, Rancher was upgraded from `2.15.1` to `2.15.2` (release
