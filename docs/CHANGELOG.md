@@ -6,6 +6,70 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-08: kube-vip v1.2.4
+
+On 2026-10-08, kube-vip was upgraded from `v1.0.4` to `v1.2.4`;
+`kube_vip_tag_version` in the Ansible group variables now matches. The
+releases in between are mostly BGP, egress and service-mode work; for this
+cluster's ARP control-plane mode they bring leader-election and ARP fixes. The
+required RBAC is unchanged. The DaemonSet was switched to `OnDelete` for the
+roll so the pods could be replaced one at a time: the two standbys first, each
+checked for a clean start, then the leader. The strategy was restored to
+`RollingUpdate` afterwards.
+
+Three failovers were measured by probing `/readyz` on the API address about
+twice a second. From a wired laptop and from a worker node, each failover cost
+one to three failed probes. From a laptop on Wi-Fi, a failover that moved the
+address to a different node left the API unreachable for three to seven
+minutes, because that laptop kept using the previous node's MAC address. Only
+clients outside the cluster are affected: the nodes reach the API through
+their local load balancer, and ingress traffic uses the MetalLB address.
+Whether v1.0.4 behaved the same from Wi-Fi was not measured. Afterwards all
+three pods were ready with no errors logged, the API and etcd reported ok, and
+the three kube-vip scrape targets were up.
+
+## 2026-10-08: MetalLB v0.16.1
+
+On 2026-10-08, MetalLB was upgraded from `v0.15.3` to `v0.16.1` by applying
+the upstream `metallb-native.yaml`; `metal_lb_controller_tag_version` and
+`metal_lb_speaker_tag_version` in the Ansible group variables now match. Only
+three CRDs, the controller, the speakers and one RoleBinding changed. The
+Traefik service kept `192.168.0.200`, announced from the same node, and 204
+probes of that address at half-second intervals during the roll all succeeded.
+
+Since 0.16, MetalLB serves metrics over HTTPS on port `metricshttps` (9120)
+and checks the scraper's token with the Kubernetes API, so the old plain-HTTP
+monitor stopped working. `monitoring-scrape-targets.yaml` now grants the
+controller and speakers the token and access review permissions that check
+needs, and the `metallb` PodMonitor moved from `metallb-system` to the
+`monitoring` namespace so it can present Prometheus's own token. `deploy.sh`
+deletes the old monitor. All seven MetalLB targets were up again afterwards.
+See the upstream
+[release notes](https://metallb.io/release-notes/#version-0-16-1).
+
+## 2026-10-08: kube-prometheus-stack chart 92.2.0
+
+On 2026-10-08, the Helm chart was upgraded from `87.21.0` to `92.2.0` (release
+revision 20) with its existing values, after a monitoring-only Velero backup
+(`monitoring-pre-kps-92-2-0`) and after applying the chart's ten Prometheus
+Operator CRDs (`v0.94.1`) server-side. `deploy.sh` defaults to the same chart
+version. The upgrade moves Prometheus Operator from `v0.92.1` to `v0.94.1`,
+Prometheus from `3.13.1` to `3.15.0`, Alertmanager from `0.33.1` to `0.34.1`
+and Grafana from `13.1.1` to `13.2.3`. Grafana now runs from its distroless
+image with a read-only root filesystem, and the control-plane monitors
+authenticate with a token Secret the chart creates; neither needed a values
+change here.
+
+The first attempt (revision 19) failed: the new Grafana pod was scheduled on a
+different node and could not attach the ReadWriteOnce data volume while the
+old pod still held it. `monitoring-values.yaml` now sets Grafana's
+`deploymentStrategy` to `Recreate`, which let the rollout finish. The old
+Grafana pod kept serving for the ten minutes the new one was stuck, and
+`KubernetesDeploymentUnavailable` fired and cleared. Afterwards all 81 scrape targets across 26 pools were up,
+the 35 rule groups loaded, only `Watchdog` was firing, 24-hour-old data was
+still queryable, and Grafana's sign-in redirected to Authelia. See the chart's
+[upgrade guide](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/UPGRADE.md).
+
 ## 2026-10-08: maintain-node.sh waits for Longhorn after the uncordon
 
 On 2026-10-08, `maintain-node.sh` was changed so that a node which passes its

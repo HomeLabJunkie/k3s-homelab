@@ -52,7 +52,7 @@ VAULTWARDEN_MANIFEST="${VAULTWARDEN_MANIFEST:-$K3S_DIR/vaultwarden-longhorn-v2.y
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
 AUTHELIA_MANIFEST="${AUTHELIA_MANIFEST:-$K3S_DIR/authelia.yaml}"
 AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
-KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-87.21.0}"
+KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-92.2.0}"
 MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
 MONITORING_INGRESS="${MONITORING_INGRESS:-$K3S_DIR/monitoring-ingress.yaml}"
 MONITORING_LONGHORN="${MONITORING_LONGHORN:-$K3S_DIR/monitoring-longhorn-v2.yaml}"
@@ -1174,6 +1174,8 @@ kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
 # namespace exists.
 echo "==> Applying Prometheus scrape targets..."
 apply_manifest "$MONITORING_SCRAPE_TARGETS"
+# The MetalLB monitor moved to the monitoring namespace with MetalLB 0.16.
+kubectl -n metallb-system delete podmonitor metallb --ignore-not-found
 
 echo "==> Configuring Rancher admin credentials..."
 kubectl port-forward -n cattle-system svc/rancher 8443:443 >/dev/null 2>&1 &

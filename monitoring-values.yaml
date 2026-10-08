@@ -46,6 +46,10 @@ grafana:
       role_attribute_path: contains(groups[*], 'admins') && 'GrafanaAdmin' || ''
       role_attribute_strict: true
       allow_assign_grafana_admin: true
+  # The data volume is ReadWriteOnce, so a rolling update deadlocks when the
+  # new pod lands on another node: stop the old pod before starting the new one.
+  deploymentStrategy:
+    type: Recreate
   persistence:
     enabled: true
     type: pvc
