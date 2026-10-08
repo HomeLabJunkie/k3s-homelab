@@ -6,6 +6,20 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-08: maintain-node.sh waits for Longhorn after the uncordon
+
+On 2026-10-08, `maintain-node.sh` was changed so that a node which passes its
+own checks (API, node Ready, Cilium, kube-vip) is uncordoned first, and the
+Longhorn check then waits up to 30 minutes for that node's replicas to
+rebuild. Before, Longhorn was judged while the node was still cordoned, when
+its replicas are stopped, so every node in the K3s v1.36.5 roll reported FAIL
+and was left cordoned. A node that fails its own checks still stays cordoned.
+If Longhorn does not recover in time the run still fails and stops, with the
+node left in service so the rebuild can continue. The wait is set by
+`POST_MAINTENANCE_LONGHORN_ATTEMPTS` and
+`POST_MAINTENANCE_LONGHORN_INTERVAL_SECONDS`. The change is covered by the
+mock tests and a check-mode run; it has not yet been used on a live roll.
+
 ## 2026-10-08: K3s v1.36.5
 
 On 2026-10-08, all six nodes were upgraded from `v1.36.4+k3s1` to
