@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: cert-manager v1.21.2
+
+On 2026-10-07, the Helm chart was upgraded from `v1.21.1` to `v1.21.2`
+(release revision 20) with the same `crds.enabled=true` setting. `deploy.sh`
+defaults to the same chart version. v1.21.2 is a bug-fix release that upstream
+advises all users to take: it fixes controller and webhook panics and ACME
+renewal bugs, and stops ACME and Vault issuers copying untrusted HTTP response
+bodies into status conditions and Events. The controller, webhook and
+cainjector rolled out cleanly, all ten certificates and the `letsencrypt-prod`
+ClusterIssuer stayed Ready, and a server-side dry run of a new Certificate
+passed the admission webhook. See the upstream
+[release notes](https://github.com/cert-manager/cert-manager/releases/tag/v1.21.2).
+
 ## 2026-10-07: Vaultwarden 1.37.4
 
 On 2026-10-07, the image was upgraded from `vaultwarden/server:1.37.3` to
