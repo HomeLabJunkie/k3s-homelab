@@ -39,21 +39,66 @@ spec:
       interval: 30s
       honorLabels: true
 ---
-# Controller and speakers.
+# MetalLB controller and speakers. Since 0.16 they serve metrics over HTTPS on
+# metricshttps (9120) with a self-signed certificate, and check the scraper's
+# token against the Kubernetes API. That check needs the two review
+# permissions below, which the upstream manifest does not grant.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metallb-metrics-auth
+rules:
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-metrics-auth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metallb-metrics-auth
+subjects:
+  - kind: ServiceAccount
+    name: controller
+    namespace: metallb-system
+  - kind: ServiceAccount
+    name: speaker
+    namespace: metallb-system
+---
+# Lives in the monitoring namespace, not metallb-system, because a monitor can
+# only reference a Secret in its own namespace: this one presents Prometheus's
+# own service account token, which the chart keeps in that Secret.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: metallb
-  namespace: metallb-system
+  namespace: monitoring
   labels:
     release: monitoring
 spec:
+  namespaceSelector:
+    matchNames:
+      - metallb-system
   selector:
     matchLabels:
       app: metallb
   podMetricsEndpoints:
-    - port: monitoring
+    - port: metricshttps
       interval: 30s
+      scheme: https
+      tlsConfig:
+        insecureSkipVerify: true
+      authorization:
+        type: Bearer
+        credentials:
+          name: monitoring-kube-prometheus-prometheus-token
+          key: token
 ---
 # The Cilium agent does not serve metrics (no prometheus-serve-addr in
 # cilium-config); the operator and Envoy proxies do.
