@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SNAPSHOTTER_VERSION="${SNAPSHOTTER_VERSION:-v8.6.0}"
-VELERO_CHART_VERSION="${VELERO_CHART_VERSION:-12.1.0}"
+VELERO_CHART_VERSION="${VELERO_CHART_VERSION:-12.2.0}"
 SECRETS_FILE="${SECRETS_FILE:-$ROOT/.secrets.enc}"
 
 for command in helm kubectl sops base64; do
