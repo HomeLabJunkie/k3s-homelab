@@ -6,6 +6,20 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: Portainer chart 245.1.0 and Velero chart 12.2.0
+
+On 2026-10-07, the Portainer Helm chart was upgraded from `245.0.0` to
+`245.1.0` (release revision 16) and the Velero Helm chart from `12.1.0` to
+`12.2.0` (release revision 12), each with its existing values. `deploy.sh` and
+`scripts/install-velero-backup.sh` default to the same chart versions. Both
+are chart-only changes: `portainer-values.yaml` already pinned
+`portainer-ce:2.45.1-alpine` and `velero-values.yaml` already pinned
+`velero:v1.18.4`, so the rendered manifests differ only in chart labels, the
+Velero CRDs are unchanged, and no pod restarted. Portainer answered through
+its ingress as before. Velero's `garage` storage location stayed Available,
+all six node agents stayed ready, the daily schedule stayed enabled, and a
+test backup (`velero-post-chart-12-2-0`) completed.
+
 ## 2026-10-07: cert-manager v1.21.2
 
 On 2026-10-07, the Helm chart was upgraded from `v1.21.1` to `v1.21.2`

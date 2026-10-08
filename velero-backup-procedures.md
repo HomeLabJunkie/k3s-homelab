@@ -12,7 +12,7 @@ its NFSv3 export.
 | --- | --- |
 | CSI snapshot controller and CRDs | v8.6.0 |
 | Velero | v1.18.4 |
-| Velero Helm chart | 12.1.0 |
+| Velero Helm chart | 12.2.0 |
 | Velero AWS object-store plugin | v1.14.4 |
 
 The snapshot controller version matches the `csi-snapshotter` sidecar shipped
