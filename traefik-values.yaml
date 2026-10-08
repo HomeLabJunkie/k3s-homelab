@@ -66,3 +66,7 @@ additionalArguments:
   # Set legacy naming explicitly to silence the startup warning (the chart omits
   # the flag when false). true would rename routers/services: breaking.
   - "--providers.kubernetescrd.safeNaming=false"
+  # Reject %00 in request paths (no legitimate use). Denying any encoded
+  # character on an entrypoint also silences the startup warning.
+  - "--entryPoints.web.http.encodedCharacters.allowEncodedNullCharacter=false"
+  - "--entryPoints.websecure.http.encodedCharacters.allowEncodedNullCharacter=false"
