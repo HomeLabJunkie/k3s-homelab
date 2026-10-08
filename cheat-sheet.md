@@ -186,8 +186,11 @@ node and cluster before moving to the next target.
 
 Before changing a node, the wrapper verifies fresh cluster and Velero backups,
 cordons the node, and drains evictable workloads while honoring disruption
-budgets. The node is uncordoned only after post-maintenance validation passes;
-failures leave the rolling run stopped and attempt to restore schedulability.
+budgets. After reconciliation it checks the API, the node, Cilium and kube-vip
+while the node is still cordoned, uncordons a node that passes, and then waits
+up to 30 minutes for Longhorn to rebuild that node's replicas. Longhorn stops a
+cordoned node's replicas, so its volumes can only become healthy again once the
+node is back in service.
 
 ### 5. Confirm the final result
 
@@ -209,8 +212,15 @@ Each applied node must pass:
 ### Failure and rollback handling
 
 If drain, Ansible reconciliation, or post-maintenance validation fails, the
-rolling run stops before touching another node. The wrapper attempts to
-uncordon the failed node, but confirm with:
+rolling run stops before touching another node. What happens to the node
+depends on where it failed:
+
+- A failed drain changed nothing, so the node is uncordoned.
+- A node that fails its own checks after reconciliation stays cordoned.
+- A node that passes its own checks is uncordoned; if Longhorn then does not
+  recover in time, the node stays in service so its replicas can keep rebuilding.
+
+Confirm with:
 
 ```bash
 kubectl get nodes

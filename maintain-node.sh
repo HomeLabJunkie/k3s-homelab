@@ -11,6 +11,10 @@ ASSUME_YES=false
 TARGET=""
 POST_MAINTENANCE_VALIDATION_ATTEMPTS="${POST_MAINTENANCE_VALIDATION_ATTEMPTS:-60}"
 POST_MAINTENANCE_VALIDATION_INTERVAL_SECONDS="${POST_MAINTENANCE_VALIDATION_INTERVAL_SECONDS:-2}"
+# Longhorn rebuilds a returning node's replicas one after another, so recovery
+# is allowed far longer than the node checks (30 minutes by default).
+POST_MAINTENANCE_LONGHORN_ATTEMPTS="${POST_MAINTENANCE_LONGHORN_ATTEMPTS:-360}"
+POST_MAINTENANCE_LONGHORN_INTERVAL_SECONDS="${POST_MAINTENANCE_LONGHORN_INTERVAL_SECONDS:-5}"
 
 fail() {
   echo
@@ -44,8 +48,9 @@ Behavior:
   - defaults to check-only and makes no node changes
   - live execution requires --apply
   - --apply requires confirmation unless --yes is also supplied
-  - validates API, target Node Ready, Cilium, kube-vip (control-plane),
-    and Longhorn volumes after live execution
+  - validates API, target Node Ready, Cilium and kube-vip (control-plane)
+    after live execution, uncordons the node, then waits for Longhorn
+    volumes to become healthy again
   - prints a PASS/FAIL summary and exits nonzero if validation fails
 
 Safety:
@@ -285,7 +290,7 @@ restore_schedulability() {
 
 # Only return the node to service automatically if nothing on it changed (e.g.
 # the drain failed). Once reconciliation has started, a node that did not pass
-# validation stays cordoned so workloads are not scheduled onto it.
+# its own checks stays cordoned so workloads are not scheduled onto it.
 on_exit_schedulability() {
   [[ "$NODE_CORDONED" == true ]] || return 0
   if [[ "$NODE_CHANGED" == true ]]; then
@@ -328,6 +333,7 @@ node_ok=false
 cilium_ok=false
 vip_ok=false
 longhorn_ok=false
+longhorn_checked=false
 
 api_detail="Kubernetes API /readyz did not return ok"
 node_detail="target node $target_name is not Ready"
@@ -405,34 +411,8 @@ for (( attempt = 1; attempt <= POST_MAINTENANCE_VALIDATION_ATTEMPTS; attempt++ )
     vip_detail="could not read kube-vip pod status on $target_name"
   fi
 
-  if longhorn_volumes="$(
-    kubectl -n longhorn-system get volumes.longhorn.io \
-      --no-headers \
-      -o custom-columns='STATE:.status.state,ROBUSTNESS:.status.robustness,NAME:.metadata.name' \
-      2>/dev/null
-  )"; then
-    # Detached volumes (scaled-down workloads, DR restore tests) report
-    # robustness "unknown"; only attached volumes can prove replica health.
-    bad_longhorn="$(awk '!(($1=="attached" && $2=="healthy") || ($1=="detached" && $2!="faulted")) {print}' <<<"$longhorn_volumes")"
-    if [[ -z "$bad_longhorn" ]]; then
-      longhorn_ok=true
-      if [[ -n "$longhorn_volumes" ]]; then
-        longhorn_detail="all attached Longhorn volumes are healthy; none faulted"
-      else
-        longhorn_detail="no Longhorn volumes found; nothing to validate"
-      fi
-    else
-      longhorn_ok=false
-      longhorn_detail="unhealthy, faulted, or transitioning Longhorn volume(s): ${bad_longhorn//$'\n'/; }"
-    fi
-  else
-    longhorn_ok=false
-    longhorn_detail="could not read Longhorn volume status"
-  fi
-
   if [[ "$api_ok" == true && "$node_ok" == true && \
-        "$cilium_ok" == true && "$vip_ok" == true && \
-        "$longhorn_ok" == true ]]; then
+        "$cilium_ok" == true && "$vip_ok" == true ]]; then
     break
   fi
 
@@ -440,6 +420,49 @@ for (( attempt = 1; attempt <= POST_MAINTENANCE_VALIDATION_ATTEMPTS; attempt++ )
     sleep "$POST_MAINTENANCE_VALIDATION_INTERVAL_SECONDS"
   fi
 done
+
+# Longhorn stops a cordoned node's replicas, so volumes with a replica on the
+# target stay degraded until it is schedulable again. Return a node that passed
+# its own checks to service first, then wait for the replicas to rebuild.
+if [[ "$api_ok" == true && "$node_ok" == true && \
+      "$cilium_ok" == true && "$vip_ok" == true ]]; then
+  restore_schedulability
+  longhorn_checked=true
+  echo "==> Waiting for Longhorn volumes to become healthy..."
+
+  for (( attempt = 1; attempt <= POST_MAINTENANCE_LONGHORN_ATTEMPTS; attempt++ )); do
+    if longhorn_volumes="$(
+      kubectl -n longhorn-system get volumes.longhorn.io \
+        --no-headers \
+        -o custom-columns='STATE:.status.state,ROBUSTNESS:.status.robustness,NAME:.metadata.name' \
+        2>/dev/null
+    )"; then
+      # Detached volumes (scaled-down workloads, DR restore tests) report
+      # robustness "unknown"; only attached volumes can prove replica health.
+      bad_longhorn="$(awk '!(($1=="attached" && $2=="healthy") || ($1=="detached" && $2!="faulted")) {print}' <<<"$longhorn_volumes")"
+      if [[ -z "$bad_longhorn" ]]; then
+        longhorn_ok=true
+        if [[ -n "$longhorn_volumes" ]]; then
+          longhorn_detail="all attached Longhorn volumes are healthy; none faulted"
+        else
+          longhorn_detail="no Longhorn volumes found; nothing to validate"
+        fi
+      else
+        longhorn_ok=false
+        longhorn_detail="unhealthy, faulted, or transitioning Longhorn volume(s): ${bad_longhorn//$'\n'/; }"
+      fi
+    else
+      longhorn_ok=false
+      longhorn_detail="could not read Longhorn volume status"
+    fi
+
+    [[ "$longhorn_ok" == true ]] && break
+
+    if (( attempt < POST_MAINTENANCE_LONGHORN_ATTEMPTS )); then
+      sleep "$POST_MAINTENANCE_LONGHORN_INTERVAL_SECONDS"
+    fi
+  done
+fi
 
 echo
 echo "============================================================"
@@ -480,7 +503,9 @@ else
   echo "SKIP: kube-vip - $vip_detail"
 fi
 
-if [[ "$longhorn_ok" == true ]]; then
+if [[ "$longhorn_checked" != true ]]; then
+  echo "SKIP: Longhorn volumes - not checked because $target_name failed its own checks and stays cordoned"
+elif [[ "$longhorn_ok" == true ]]; then
   echo "PASS: Longhorn volumes - $longhorn_detail"
 else
   echo "FAIL: Longhorn volumes - $longhorn_detail"
@@ -490,13 +515,16 @@ fi
 if [[ "$validation_failed" == true ]]; then
   echo
   echo "POST-MAINTENANCE VALIDATION: FAIL"
+  if [[ "$longhorn_checked" == true ]]; then
+    echo >&2
+    echo "WARNING: $target_name is back in service so its replicas can rebuild, but Longhorn is not healthy." >&2
+    echo "         Do not maintain another node until every attached volume is healthy." >&2
+  fi
   exit 1
 fi
 
 echo
 echo "POST-MAINTENANCE VALIDATION: PASS"
-
-restore_schedulability
 
 echo
 echo "===== QUICK REPOSITORY DOCTOR ====="

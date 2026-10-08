@@ -138,7 +138,12 @@ if [[ "$args" == *" name=kube-vip-ds "* ]]; then
 fi
 
 if [[ "$args" == *" volumes.longhorn.io "* ]]; then
+  # Longhorn stops a cordoned node's replicas: degraded until the uncordon.
+  cordoned=true
+  [[ "$(tail -n 1 "$MOCK_STATE_DIR/schedulability" 2>/dev/null)" == "uncordon" ]] && cordoned=false
   if [[ "$live" == true && "$scenario" == "longhorn" ]]; then
+    echo 'attached degraded pvc-mock'
+  elif [[ "$live" == true && "$scenario" == "longhorn-recovers" && "$cordoned" == true ]]; then
     echo 'attached degraded pvc-mock'
   else
     echo 'attached healthy pvc-mock'
@@ -190,6 +195,8 @@ run_case() {
     MOCK_NODE_TYPE="$node_type" \
     POST_MAINTENANCE_VALIDATION_ATTEMPTS=1 \
     POST_MAINTENANCE_VALIDATION_INTERVAL_SECONDS=0 \
+    POST_MAINTENANCE_LONGHORN_ATTEMPTS=1 \
+    POST_MAINTENANCE_LONGHORN_INTERVAL_SECONDS=0 \
     "$REPO_ROOT/maintain-node.sh" "$TARGET" --apply --yes \
       >"$output_file" 2>&1
   rc=$?
@@ -215,12 +222,18 @@ run_case api-failure api worker 1 'FAIL: API /readyz' no
 run_case node-failure node worker 1 'FAIL: Target node' no
 run_case cilium-failure cilium worker 1 'FAIL: Cilium' no
 run_case kube-vip-failure kube-vip control-plane 1 'FAIL: kube-vip' no
-run_case longhorn-failure longhorn worker 1 'FAIL: Longhorn volumes' no
+# Longhorn is judged only after the node is back in service, so a node that
+# passed its own checks is uncordoned even when the volumes then fail.
+run_case longhorn-failure longhorn worker 1 'FAIL: Longhorn volumes' yes
 run_case longhorn-detached-ok longhorn-detached worker 0 'POST-MAINTENANCE VALIDATION: PASS' yes
-run_case longhorn-faulted longhorn-faulted worker 1 'FAIL: Longhorn volumes' no
-run_case longhorn-attaching longhorn-attaching worker 1 'FAIL: Longhorn volumes' no
-# A failed validation leaves the changed node cordoned, with instructions.
+run_case longhorn-faulted longhorn-faulted worker 1 'FAIL: Longhorn volumes' yes
+run_case longhorn-attaching longhorn-attaching worker 1 'FAIL: Longhorn volumes' yes
+run_case longhorn-failure-message longhorn worker 1 'Do not maintain another node' yes
+# Volumes that are degraded only while the node is cordoned recover after the uncordon.
+run_case longhorn-recovers-after-uncordon longhorn-recovers worker 0 'PASS: Longhorn volumes' yes
+# A node that fails its own checks stays cordoned and Longhorn is not judged.
 run_case left-cordoned-message node worker 1 'LEFT CORDONED' no
+run_case left-cordoned-skips-longhorn node worker 1 'SKIP: Longhorn volumes' no
 # A failed drain changed nothing on the node, so it goes straight back into service.
 run_case drain-failure drain-failure worker 1 'cannot evict pod' yes
 
