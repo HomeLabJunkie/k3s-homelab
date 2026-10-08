@@ -6,6 +6,30 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: Trilium v0.106.0
+
+On 2026-10-07, the image was upgraded from `triliumnext/trilium:v0.104.1` to
+`v0.106.0`, skipping v0.105.0, after a Trilium-only Velero backup
+(`trilium-pre-0-106-0`). Only the image tag changed in the rendered manifest.
+On first start Trilium wrote its own `backup-before-migration.db`, migrated
+the database from version 239 to 240, and passed its consistency checks with
+no errors logged; `/api/health-check` returned `ok` from inside the pod and
+the ingress redirected to login as before.
+
+The two releases change some behaviour:
+
+- General HTML in text notes is no longer preserved by default (re-enable
+  under Options → Text notes → Preserve unsupported HTML tags), and `<div>`s
+  in text notes are unwrapped.
+- `#label=value` searches now match the full value only.
+- MCP access now requires authentication.
+- `cheerio` is no longer built in for scripts.
+
+See the upstream
+[v0.105.0](https://github.com/TriliumNext/Trilium/releases/tag/v0.105.0) and
+[v0.106.0](https://github.com/TriliumNext/Trilium/releases/tag/v0.106.0)
+release notes.
+
 ## 2026-10-07: Cilium 1.20.2
 
 On 2026-10-07, Cilium was upgraded from `1.20.1` to `1.20.2` (Helm release
