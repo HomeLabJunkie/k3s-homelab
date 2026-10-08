@@ -6,6 +6,26 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: Rancher 2.15.2 and Loki chart 18.14.0
+
+On 2026-10-07, Rancher was upgraded from `2.15.1` to `2.15.2` (release
+revision 15) with its existing Helm values, after an on-demand etcd snapshot
+(`pre-rancher-2-15-2`). 2.15.2 is a patch release with security fixes: logout
+now revokes the server-side session token, unauthenticated users can no longer
+modify public UI settings, and three Fleet issues are closed. Both replicas
+rolled out on `v2.15.2`, `/ping` returned `pong`, the `local` cluster stayed
+Ready, and Rancher then upgraded its own Fleet (`0.16.2`), webhook (`0.11.3`)
+and Turtles (`0.27.2`) charts. See the upstream
+[release notes](https://github.com/rancher/rancher/releases/tag/v2.15.2).
+
+The same day, the Loki Helm chart was upgraded from `18.9.0` to `18.14.0`
+(release revision 14) with the existing `loki-values.yaml`, moving Loki and
+its canary from `3.7.6` to `3.7.8` and the gateway's access-log exporter from
+`0.4.11` to `0.4.21`. Loki restarted once on its existing volume and reported
+ready, new log lines arrived from 35 streams within two minutes, and logs from
+1, 6, 24 and 72 hours earlier were still queryable. `deploy.sh` defaults to
+both new chart versions.
+
 ## 2026-10-07: Portainer chart 245.1.0 and Velero chart 12.2.0
 
 On 2026-10-07, the Portainer Helm chart was upgraded from `245.0.0` to
