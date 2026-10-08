@@ -6,6 +6,22 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-08: Traefik chart 41.7.0
+
+On 2026-10-08, the Helm chart was upgraded from `41.6.1` to `41.7.0` (release
+revision 26), moving Traefik from `v3.7.13` to `v3.7.14` with the existing
+release values. `deploy.sh` defaults to the same chart version. v3.7.14 fixes
+eight security advisories. Its migration notes cover the Ingress-NGINX and
+Gateway API providers and OTLP histograms, none of which are enabled here.
+With this repository's values the rendered manifests differ only in the image
+tag and the `helm.sh/chart` label, and the CRDs are unchanged. Both replicas
+rolled out one at a time with no errors or warnings logged, and 97 paired
+probes of the site, on the LAN address and through Cloudflare, all succeeded
+during the roll. Every ingress hostname returned the same response before and
+after, and Rancher's `/ping` returned `pong` through the ingress service.
+See the upstream
+[release notes](https://github.com/traefik/traefik/releases/tag/v3.7.14).
+
 ## 2026-10-08: kube-vip v1.2.4
 
 On 2026-10-08, kube-vip was upgraded from `v1.0.4` to `v1.2.4`;
