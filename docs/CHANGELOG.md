@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-07: Vaultwarden 1.37.4
+
+On 2026-10-07, the image was upgraded from `vaultwarden/server:1.37.3` to
+`1.37.4`, after a Vaultwarden-only Velero backup (`vaultwarden-pre-1-37-4`).
+1.37.4 is a security release fixing seven advisories, the most severe being
+revoked organization members keeping access (High, 8.1) and a two-factor
+authentication flaw (Medium, 6.8). Its upgrade notes do not apply here:
+`IP_HEADER` and Duo are not configured, and the database is SQLite. Only the
+image tag changed in the rendered manifest. The pod started cleanly with no
+errors or warnings logged, and `/alive` returned 200 before and after. See the
+upstream
+[release notes](https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.4).
+
 ## 2026-10-07: cloudflared 2026.10.0
 
 On 2026-10-07, the image was upgraded from `cloudflare/cloudflared:2026.9.1`
