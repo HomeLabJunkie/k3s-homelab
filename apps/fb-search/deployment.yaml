@@ -16,6 +16,9 @@ spec:
       labels:
         app: fb-search
     spec:
+      # Each search leaves orphaned Chromium processes behind. With a shared PID
+      # namespace the pause container is PID 1 and reaps them; uvicorn does not.
+      shareProcessNamespace: true
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
