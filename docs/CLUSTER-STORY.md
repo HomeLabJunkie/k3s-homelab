@@ -180,7 +180,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Storage | Longhorn | 1.12.1 |
 | Management | Rancher / Portainer | 2.15.2 / chart 245.1.0 |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 87.21.0 |
-| Logging | Loki + Alloy | chart 18.14.0 / 1.11.1 |
+| Logging | Loki + Alloy | chart 18.14.0 / 1.13.0 |
 | Second backup | Velero → Garage | chart 12.2.0 |
 
 ---

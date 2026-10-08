@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-08: Alloy chart 1.13.0
+
+On 2026-10-08, the Alloy Helm chart was upgraded from `1.11.1` to `1.13.0`
+(release revision 15) with the existing `alloy-values.yaml`, moving Alloy from
+`v1.18.1` to `v1.20.0` and its config reloader from `v0.91.0` to `v0.94.0`.
+`deploy.sh` defaults to the same chart version. The breaking changes in Alloy
+1.19 and 1.20 concern `prometheus.write.queue` and `otelcol.*` components,
+none of which this configuration uses. The new pod reported ready and log
+lines kept arriving in Loki. For its first two minutes Alloy re-sent older
+pod log lines, which Loki rejected as `entry too far behind`; no errors were
+logged after that.
+
 ## 2026-10-07: Trilium v0.106.0
 
 On 2026-10-07, the image was upgraded from `triliumnext/trilium:v0.104.1` to
