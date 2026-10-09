@@ -6,6 +6,26 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-09: Credential handling, backup permissions and bootstrap hardened
+
+On 2026-10-09, three findings from a repository security audit were fixed.
+`deploy.sh` now passes the Rancher bootstrap password to Helm with
+`--set-file` instead of on the command line, and the `k3s_server` role has
+`k3s-init` read the cluster token from a root-only file
+(`k3s_server_init_token_file`) that is removed when bootstrap finishes, so
+neither credential appears in a process list. `backup.sh` stages under
+`umask 077` and strips group and other access from the published bundle,
+failing the backup if any entry is still open; before, the etcd snapshot,
+which holds every Kubernetes Secret, was published world-readable. Bundles
+already on the NAS keep their old permissions, and the snapshot is still
+stored unencrypted. Finally, a fresh multi-server bootstrap could not
+complete: the servers play runs one host at a time, but each server waited
+for every control-plane node to join. Each server now waits only for itself,
+and a separate play in `site.yml` verifies full membership afterwards.
+Redeploys of an existing cluster were never affected. The backup change is
+covered by a new test and the playbooks pass a syntax check; none of the
+three has yet been used on a live bootstrap, Rancher install or backup run.
+
 ## 2026-10-08: Traefik rejects encoded null characters
 
 On 2026-10-08, the `web` and `websecure` entrypoints were set to reject
