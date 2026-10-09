@@ -6,6 +6,23 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-09: etcd snapshot restore tested with encrypted Secrets
+
+On 2026-10-09, the etcd snapshot from cluster bundle `20261009-132622`, the
+first taken after secrets encryption was enabled, was restored into a
+throwaway K3s `v1.36.5+k3s1` server in a Docker container on the operator
+laptop. The container ran on an internal network with no route to the LAN and
+with the agent disabled, so no workloads started. The snapshot's checksum
+matched the bundle's `SHA256SUMS`, the `--cluster-reset` restore succeeded and
+the restored API became ready with all 34 namespaces. All 180 Secrets were
+readable; 179 matched production by hash and the other had since been
+replaced in production. The restored etcd database still held its Secrets as
+AES-CBC records. The restore refused to run without the cluster token, and
+again with a wrong one, and the `K3S_TOKEN` in `.secrets.enc` matched the
+live cluster's token. The test covers the control plane and Secrets only: no
+workloads were started. Every test artifact was removed afterwards. The steps
+are in [Backup and disaster recovery](backup-and-dr.md).
+
 ## 2026-10-09: K3s secrets encryption at rest
 
 On 2026-10-09, secrets encryption was enabled on the running cluster, so
@@ -24,8 +41,8 @@ were left unhealthy. Cluster bundles were taken before (`20261009-124046`)
 and after (`20261009-132622`); the first is the last one whose snapshot holds
 Secrets unencrypted. Restoring a snapshot now needs the cluster's
 `K3S_TOKEN`, as described in
-[Backup and disaster recovery](backup-and-dr.md). A snapshot restore has not
-been rehearsed since.
+[Backup and disaster recovery](backup-and-dr.md). A snapshot restore was
+tested later the same day; see the entry above.
 
 ## 2026-10-09: Portainer removed
 

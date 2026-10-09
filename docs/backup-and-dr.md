@@ -90,7 +90,55 @@ What this means for recovery:
   the [K3s documentation](https://docs.k3s.io/cli/secrets-encrypt); a wrong
   rotation procedure can corrupt the cluster.
 
-An etcd snapshot restore has not been rehearsed since encryption was enabled.
+#### Testing an etcd snapshot restore
+
+`recovery/dr-rehearsal.sh` restores Longhorn volumes; it does not restore the
+etcd snapshot. That is tested separately, in a container that cannot reach
+the LAN and runs no workloads, so kube-vip, MetalLB and cloudflared never
+start against the real addresses or tunnel. Tested on 2026-10-09 against the
+first snapshot taken after encryption was enabled: all 180 Secrets were
+readable, and 179 matched production by hash (the other had since been
+replaced in production).
+
+With the snapshot copied out of a bundle to `$W/snapshot` and an env file
+`$W/env` (mode 0600) holding `K3S_TOKEN=<the cluster token>`:
+
+```bash
+IMG=rancher/k3s:v1.36.5-k3s1   # match the cluster's K3s version
+ARGS="--disable-agent --secrets-encryption --flannel-backend=none \
+  --disable-network-policy --disable servicelb --disable traefik"
+
+docker network create --internal etcd-restore-test
+docker volume create etcd-restore-data
+GW="$(docker network inspect etcd-restore-test -f '{{(index .IPAM.Config 0).Gateway}}')"
+
+# K3s needs a default route to start; on an internal network it leads nowhere.
+docker run --rm --privileged --network etcd-restore-test \
+  --tmpfs /run --tmpfs /var/run --env-file "$W/env" \
+  -v "$W":/restore:ro -v etcd-restore-data:/var/lib/rancher/k3s \
+  --entrypoint sh "$IMG" -c "ip route add default via $GW && exec k3s server \
+    --cluster-reset --cluster-reset-restore-path=/restore/snapshot $ARGS"
+
+docker run -d --name etcd-restore --privileged --network etcd-restore-test \
+  --tmpfs /run --tmpfs /var/run --env-file "$W/env" \
+  -v etcd-restore-data:/var/lib/rancher/k3s \
+  --entrypoint sh "$IMG" -c "ip route add default via $GW && exec k3s server $ARGS"
+
+docker exec etcd-restore kubectl get --raw=/readyz
+docker exec etcd-restore kubectl get secrets -A
+```
+
+Afterwards remove the container, volume, network and the files in `$W`.
+
+- Without a token the restore stops with `please pass --token to complete the
+  restoration`; with the wrong one it stops with `bootstrap data already found
+  and encrypted with different token`.
+- `k3s secrets-encrypt status` fails in this test cluster because it has no
+  node of its own. Readable Secrets are the evidence.
+- The test covers the control plane and Secrets only. No workloads start, so
+  it says nothing about applications running on the restored state.
+- A real recovery uses the same `--cluster-reset` and
+  `--cluster-reset-restore-path` flags on a server, with the same token.
 
 ### 2. Longhorn Application Backups
 
