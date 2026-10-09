@@ -6,6 +6,27 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-09: K3s secrets encryption at rest
+
+On 2026-10-09, secrets encryption was enabled on the running cluster, so
+Secrets are now stored encrypted in etcd and in etcd snapshots (K3s's default
+AES-CBC provider). `--secrets-encryption` was added to `extra_server_args`,
+and the documented K3s procedure for an existing HA cluster was followed:
+`k3s secrets-encrypt enable` on `k3s-node-0`, each of the three servers
+reconciled in turn with `maintain-node.sh --apply`, `rotate-keys` on
+`k3s-node-0`, which re-encrypted all 180 Secrets, then a second restart of
+each server. All three report `Encryption Status: Enabled` with matching
+hashes. As a check, a throwaway Secret and ConfigMap were created and an etcd
+snapshot taken: the Secret's value did not appear in the snapshot and the
+ConfigMap's did. Every `maintain-node.sh` run passed its post-maintenance
+validation, Longhorn volumes returned to healthy between servers, and no pods
+were left unhealthy. Cluster bundles were taken before (`20261009-124046`)
+and after (`20261009-132622`); the first is the last one whose snapshot holds
+Secrets unencrypted. Restoring a snapshot now needs the cluster's
+`K3S_TOKEN`, as described in
+[Backup and disaster recovery](backup-and-dr.md). A snapshot restore has not
+been rehearsed since.
+
 ## 2026-10-09: Portainer removed
 
 On 2026-10-09, Portainer was removed; Rancher is the only management UI. The
