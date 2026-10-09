@@ -6,6 +6,24 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-09: Manifest validation against the cluster's CRDs
+
+On 2026-10-09, `scripts/validate-manifests.sh` was added. It runs
+`kubeconform` in strict mode over every Kubernetes manifest in the
+repository, including the rendered ones that Git ignores, and is read-only.
+A first run against the public CRD schema catalog had reported
+`task: system-backup` on a Longhorn RecurringJob as invalid although the
+installed Longhorn accepts it, so the script validates against schemas
+exported from the cluster's own CRDs and against its Kubernetes version
+instead. The exported schemas are closed, so a misspelt field in a custom
+resource is rejected. Schemas are cached under
+`~/.cache/k3s-homelab/manifest-schemas` and reused with `--offline`. On both
+laptops all 118 resources in 34 files validated against Kubernetes 1.36.5 and
+227 exported CRD schemas. The run on the T480 also turned up a stale,
+gitignored `apps/longhorn/longhorn-ingress.yaml` from September that nothing
+used; it was deleted. The check needs `kubeconform` on the laptop and is not
+part of CI or `repo-doctor.sh`.
+
 ## 2026-10-09: Credential handling, backup permissions and bootstrap hardened
 
 On 2026-10-09, three findings from a repository security audit were fixed.
