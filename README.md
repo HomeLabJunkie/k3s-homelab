@@ -64,7 +64,7 @@ has a read-only check to run first.
 
 | I want to... | Run | Changes the cluster? |
 | --- | --- | --- |
-| Check overall health | `./repo-doctor.sh` (`--quick` skips preflight and DR) | No |
+| Check overall health | `./repo-doctor.sh` (`--quick` skips preflight, manifests and DR) | No |
 | Check a deployment would be safe | `./deploy.sh --preflight-only` | No |
 | Validate manifests before applying | `./scripts/validate-manifests.sh` | No |
 | Deploy or converge the cluster | `./deploy.sh` | Yes |

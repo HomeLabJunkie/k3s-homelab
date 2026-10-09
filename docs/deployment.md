@@ -289,10 +289,12 @@ It checks:
 - `./deploy.sh --preflight-only`
 - Kubernetes API and node readiness
 - Cilium, kube-vip, and Longhorn volume health
+- every Kubernetes manifest, through `scripts/validate-manifests.sh`
 - basic local secret/tracked-file hygiene
 - the complete `./dr-status.sh` disaster-recovery readiness dashboard
 
-For a faster local/cluster check that skips deployment preflight and DR:
+For a faster local/cluster check that skips deployment preflight, manifest
+validation and DR:
 
 ```bash
 ./repo-doctor.sh --quick
@@ -340,6 +342,8 @@ CRD schemas to `~/.cache/k3s-homelab/manifest-schemas`; `--offline` reuses
 them without contacting the cluster. Helm values files and unrendered
 templates are not manifests and are skipped. It needs `kubeconform` on the
 laptop and is not part of CI, which has no cluster to read the CRDs from.
+`repo-doctor.sh` runs it as part of the full check and skips it under
+`--quick`, `--no-manifests`, or when `kubeconform` is not installed.
 
 ### Operator workstation readiness
 
