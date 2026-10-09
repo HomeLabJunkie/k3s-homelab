@@ -38,6 +38,7 @@
 │   ├── ensure-ansible-collections.sh
 │   ├── render-config.sh / prepare-env.sh / run-deploy.sh
 │   ├── scan-secrets.sh                     # CI secret/config scan
+│   ├── validate-manifests.sh               # kubeconform against the cluster's CRDs
 │   └── install-velero-backup.sh
 ├── apps/                           # longhorn/ trilium/ (Helm values / manifests)
 ├── templates/                      # envsubst sources rendered to rendered/
