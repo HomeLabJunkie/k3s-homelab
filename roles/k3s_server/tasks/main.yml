@@ -91,6 +91,28 @@
   tags: kubevip
   when: kube_vip_lb_ip_range is defined
 
+- name: Stage the cluster token for the transient k3s-init service
+  when:
+    - not k3s_existing_etcd_member.stat.exists
+    - groups[group_name_master | default('master')] | length > 1
+  block:
+    - name: Ensure the K3s configuration directory exists
+      ansible.builtin.file:
+        path: "{{ k3s_server_init_token_file | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Write the cluster token for k3s-init
+      ansible.builtin.copy:
+        content: "{{ k3s_token | trim }}"
+        dest: "{{ k3s_server_init_token_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
 - name: Init cluster inside the transient k3s-init service
   ansible.builtin.command:
     cmd: systemd-run -p RestartSec=2 -p Restart=on-failure --unit=k3s-init k3s server {{ server_init_args }}
@@ -102,11 +124,13 @@
     - not ansible_check_mode
     - not k3s_existing_etcd_member.stat.exists
   block:
-    - name: Verify that all nodes actually joined (check k3s-init.service if this fails)
+    # The servers play runs one host at a time, so the remaining servers have
+    # not started yet. Full membership is verified by site.yml afterwards.
+    - name: Verify that this server actually joined (check k3s-init.service if this fails)
       ansible.builtin.command:
         cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} get nodes -l 'node-role.kubernetes.io/control-plane=true' -o=jsonpath='{.items[*].metadata.name}'" # yamllint disable-line rule:line-length
       register: nodes
-      until: nodes.rc == 0 and (nodes.stdout.split() | length) == (groups[group_name_master | default('master')] | length) # yamllint disable-line rule:line-length
+      until: nodes.rc == 0 and (ansible_facts.hostname | lower) in nodes.stdout.split()
       retries: "{{ retry_count | default(20) }}"
       delay: 10
       changed_when: false
@@ -122,6 +146,10 @@
         name: k3s-init
         state: stopped
       failed_when: false
+    - name: Remove the cluster token staged for k3s-init
+      ansible.builtin.file:
+        path: "{{ k3s_server_init_token_file }}"
+        state: absent
 
 - name: Copy K3s service file
   register: k3s_service

@@ -1151,7 +1151,7 @@ helm upgrade --install rancher rancher-stable/rancher \
   --set ingress.tls.source=secret \
   --set ingress.ingressClassName=traefik \
   --set replicas=2 \
-  --set-string bootstrapPassword="$RANCHER_BOOTSTRAP_PASSWORD" \
+  --set-file bootstrapPassword=<(printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD") \
   --wait \
   --timeout=600s
 

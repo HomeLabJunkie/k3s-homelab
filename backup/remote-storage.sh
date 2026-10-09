@@ -113,6 +113,26 @@ mv -Tf -- "$temporary_link" "$link_path"
 REMOTE
 }
 
+# Bundles hold an etcd snapshot, which contains every Kubernetes Secret. Strip
+# group and other access, then refuse to continue if any entry is still open.
+storage_restrict_bundle() {
+    local bundle="$1"
+    storage_root_script "$bundle" <<'REMOTE'
+set -Eeuo pipefail
+bundle="$1"
+[[ -d "$bundle" && ! -L "$bundle" ]] || {
+    echo "ERROR: backup bundle is not a directory: ${bundle}" >&2
+    exit 1
+}
+chmod -R go-rwx -- "$bundle"
+exposed="$(find "$bundle" -perm /077 -print -quit)"
+[[ -z "$exposed" ]] || {
+    echo "ERROR: backup bundle entry is still group- or world-accessible: ${exposed}" >&2
+    exit 1
+}
+REMOTE
+}
+
 storage_mount() {
     local state
     state="$(
