@@ -58,6 +58,40 @@ The cluster bundle contains:
 
 Bundles are stored on the configured NFS cluster-backup export and a `latest` symlink identifies the newest recovery bundle.
 
+Bundles are published readable only by their owner on the NAS, because the
+etcd snapshot holds every Kubernetes Secret.
+
+#### Secrets encryption at rest
+
+The servers run with `--secrets-encryption` (set in `extra_server_args` in
+`inventory/k3s-ansible/group_vars/all.yml`), so Secrets are stored encrypted
+in etcd with K3s's default AES-CBC provider, and they are encrypted inside
+every etcd snapshot too. ConfigMaps and other resources are not encrypted.
+
+```bash
+ssh <control-plane-node> sudo k3s secrets-encrypt status
+```
+
+should report `Encryption Status: Enabled` and `All hashes match` on each
+server.
+
+What this means for recovery:
+
+- The encryption key lives on each server in
+  `/var/lib/rancher/k3s/server/cred/encryption-config.json`. K3s also keeps it
+  in the cluster's bootstrap data inside etcd, protected by the cluster token.
+- Restoring an etcd snapshot onto new servers therefore needs the same
+  `K3S_TOKEN` the cluster was built with. It is kept in `.secrets.enc`, which
+  every bundle carries. Without that token the Secrets in a snapshot cannot
+  be read.
+- Snapshots taken before 2026-10-09 still hold Secrets unencrypted.
+- To rotate the key, run `sudo k3s secrets-encrypt rotate-keys` on one server,
+  wait for `reencrypt_finished`, then restart K3s on each server in turn. See
+  the [K3s documentation](https://docs.k3s.io/cli/secrets-encrypt); a wrong
+  rotation procedure can corrupt the cluster.
+
+An etcd snapshot restore has not been rehearsed since encryption was enabled.
+
 ### 2. Longhorn Application Backups
 
 Application data is backed up through Longhorn to the configured SMB/CIFS backup target. Cluster recovery bundles use the same NAS through its NFSv3 export.
