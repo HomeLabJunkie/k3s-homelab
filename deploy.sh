@@ -58,10 +58,6 @@ MONITORING_INGRESS="${MONITORING_INGRESS:-$K3S_DIR/monitoring-ingress.yaml}"
 MONITORING_LONGHORN="${MONITORING_LONGHORN:-$K3S_DIR/monitoring-longhorn-v2.yaml}"
 MONITORING_DASHBOARDS="${MONITORING_DASHBOARDS:-$K3S_DIR/monitoring-dashboards.yaml}"
 GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.${HOSTNAME_DOMAIN}}"
-PORTAINER_CHART_VERSION="${PORTAINER_CHART_VERSION:-245.1.0}"
-PORTAINER_VALUES="${PORTAINER_VALUES:-$K3S_DIR/portainer-values.yaml}"
-PORTAINER_INGRESS="${PORTAINER_INGRESS:-$K3S_DIR/portainer-ingress.yaml}"
-PORTAINER_HOSTNAME="${PORTAINER_HOSTNAME:-portainer.${HOSTNAME_DOMAIN}}"
 LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-18.14.0}"
 ALLOY_CHART_VERSION="${ALLOY_CHART_VERSION:-1.13.0}"
 LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
@@ -75,7 +71,7 @@ LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}
 
 # Refuse to push a placeholder hostname into the cluster.
 for hostname_var in RANCHER_HOSTNAME LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
-  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME PORTAINER_HOSTNAME AUTHELIA_HOSTNAME; do
+  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME AUTHELIA_HOSTNAME; do
   if [[ "${!hostname_var}" == *.invalid ]]; then
     echo "ERROR: $hostname_var is the placeholder ${!hostname_var}."
     echo "Set BASE_DOMAIN (or $hostname_var) in $ENV_FILE."
@@ -344,8 +340,6 @@ for file in \
   "$MONITORING_INGRESS" \
   "$MONITORING_LONGHORN" \
   "$MONITORING_DASHBOARDS" \
-  "$PORTAINER_VALUES" \
-  "$PORTAINER_INGRESS" \
   "$LOKI_VALUES" \
   "$ALLOY_VALUES" \
   "$LOKI_DATASOURCE" \
@@ -568,7 +562,6 @@ helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo add rancher-stable https://releases.rancher.com/server-charts/stable --force-update
 helm repo add longhorn https://charts.longhorn.io --force-update
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
-helm repo add portainer https://portainer.github.io/k8s/ --force-update
 helm repo add grafana-community https://grafana-community.github.io/helm-charts --force-update
 helm repo add grafana https://grafana.github.io/helm-charts --force-update
 helm repo update >/dev/null
@@ -1061,65 +1054,6 @@ kubectl -n logging rollout status deployment/alloy --timeout=600s
 
 echo "==> Logging stack is ready."
 
-echo "==> Preparing Portainer namespace..."
-ensure_namespace portainer
-
-echo "==> Installing Portainer CE chart ${PORTAINER_CHART_VERSION}..."
-helm upgrade --install portainer portainer/portainer \
-  --version "$PORTAINER_CHART_VERSION" \
-  --namespace portainer \
-  --create-namespace \
-  --values "$PORTAINER_VALUES" \
-  --wait \
-  --timeout=600s
-
-echo "==> Applying Portainer HTTPS ingress..."
-apply_manifest "$PORTAINER_INGRESS"
-remove_replaced_ingress portainer portainer
-
-echo "==> Waiting for Portainer TLS certificate..."
-kubectl -n portainer wait \
-  --for=condition=Ready \
-  certificate/tls-portainer-ingress \
-  --timeout=300s
-
-echo "==> Waiting for Portainer deployment..."
-kubectl -n portainer rollout status deployment/portainer --timeout=600s
-
-echo "==> Verifying Portainer PVC is Bound and Longhorn-backed..."
-PORTAINER_PVC="$(
-  kubectl -n portainer get pvc \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"="}{.status.phase}{"="}{.spec.storageClassName}{"\n"}{end}'
-)"
-printf '%s\n' "$PORTAINER_PVC"
-
-if ! printf '%s\n' "$PORTAINER_PVC" | grep -q '=Bound=longhorn$'; then
-  echo "ERROR: Portainer PVC is not Bound on Longhorn."
-  kubectl -n portainer get pvc -o wide || true
-  exit 1
-fi
-
-echo "==> Verifying Portainer service endpoints..."
-for i in {1..60}; do
-  endpoints="$(
-    kubectl -n portainer get endpointslice \
-      -l kubernetes.io/service-name=portainer \
-      -o go-template='{{range .items}}{{range .endpoints}}{{range .addresses}}{{.}}{{"\n"}}{{end}}{{end}}{{end}}' \
-      2>/dev/null || true
-  )"
-  if [[ -n "$endpoints" ]]; then
-    break
-  fi
-  if [[ "$i" -eq 60 ]]; then
-    echo "ERROR: Portainer service has no ready endpoints."
-    kubectl -n portainer get pods,svc,endpointslice -o wide || true
-    exit 1
-  fi
-  sleep 5
-done
-
-echo "==> Portainer is ready."
-
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system
 
@@ -1578,11 +1512,6 @@ kubectl -n monitoring get servicemonitor longhorn-prometheus-servicemonitor
 kubectl -n monitoring get prometheusrule homelab-baseline-alerts
 
 echo
-echo "===== PORTAINER ====="
-kubectl -n portainer get pods,svc,pvc,ingressroute
-kubectl -n portainer get certificate tls-portainer-ingress
-
-echo
 echo "===== LOGGING ====="
 kubectl -n logging get pods,svc,pvc
 helm -n logging list
@@ -1613,7 +1542,6 @@ echo " Trilium:        https://${TRILIUM_HOSTNAME}"
 echo " Vaultwarden:    https://${VAULTWARDEN_HOSTNAME}"
 echo " Grafana:        https://${GRAFANA_HOSTNAME}"
 echo " Grafana user:   admin"
-echo " Portainer:      https://${PORTAINER_HOSTNAME}"
 echo " Loki:           internal only; use Grafana Explore and dashboards"
 echo " EndpointSlice:  app health checks + Longhorn ServiceMonitor use EndpointSlice"
 echo " Vaultwarden invite: ${VAULTWARDEN_INITIAL_EMAIL}"
@@ -1655,21 +1583,6 @@ echo " Change the password in .secrets.enc (ADMIN_UI_PASSWORD) and redeploy."
 echo "============================================================================"
 
 echo
-echo "============================================================================"
-echo " Portainer first-time setup"
-echo "============================================================================"
-echo " Portainer URL:"
-echo " https://${PORTAINER_HOSTNAME}"
-echo
-echo " Portainer 2.45.0 protects new installations with a one-time setup token."
-echo " Retrieve the current setup token from the Portainer pod logs:"
-echo "   kubectl -n portainer logs deployment/portainer | grep 'setup_token='"
-echo
-echo " Open the Portainer URL, enter that setup token when prompted, then create"
-echo " the first administrator account. The administrator password must be at"
-echo " least 12 characters."
-echo
-echo " Portainer data is stored on a 20Gi Longhorn PVC."
 echo "============================================================================"
 echo " Rancher user:   ${RANCHER_ADMIN_USER}"
 echo "============================================================================"

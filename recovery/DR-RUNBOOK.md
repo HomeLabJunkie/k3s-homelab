@@ -61,7 +61,6 @@ Examples:
 
 - Trilium: notes visible in UI
 - Vaultwarden: application starts and database is readable
-- Portainer: authentication and UI work
 - Grafana: database health is OK
 - Prometheus: TSDB loads and historical data can be queried
 - Alertmanager: restored state loads and readiness succeeds
@@ -491,34 +490,6 @@ Successful DR test:
     PASS
 
 
-## Portainer
-
-Persistent data contains:
-
-    portainer.db
-    portainer.key
-    portainer.pub
-
-Validate:
-
-- restored database exists
-- Portainer starts
-- /api/status responds
-- authentication succeeds
-- UI loads
-
-Some Kubernetes objects shown by Portainer are live cluster resources and
-are not necessarily stored inside portainer.db.
-
-Therefore, absence of original production namespaces/applications on an
-isolated DR cluster does not by itself mean the Portainer database restore
-failed.
-
-Successful DR test:
-
-    PASS
-
-
 # 10. Observability Recovery
 
 The observability stack consists of:
@@ -715,15 +686,10 @@ Result:
 |--------------|-----------------|-------------------|----------------------|--------|
 | Trilium      | PASS            | PASS              | PASS                 | PASS   |
 | Vaultwarden  | PASS            | PASS              | PASS                 | PASS   |
-| Portainer    | PASS            | PASS              | PASS*                | PASS   |
 | Grafana      | PASS            | PASS              | PASS                 | PASS   |
 | Prometheus   | PASS            | PASS              | PASS                 | PASS   |
 | Alertmanager | PASS            | PASS              | PASS                 | PASS   |
 | Loki         | PASS            | PASS              | PASS                 | PASS   |
-
-*Portainer's live Kubernetes inventory depends on the cluster Portainer is
-connected to and is not expected to reproduce the original production
-cluster inventory on an isolated DR test cluster.
 
 
 # 12. DR Cleanup
@@ -804,7 +770,6 @@ For applications such as:
 
 - Trilium
 - Vaultwarden
-- Portainer
 - Grafana
 
 stopping or quiescing the writer before a deliberate backup gives the
@@ -822,6 +787,10 @@ The validated DR test proved recovery of:
 
 
 # 14. DR Test Record
+
+Portainer was removed from the cluster on 2026-10-09. The records below are
+kept as written, so they still list it among the seven workloads restored at
+the time; a rehearsal now restores six.
 
 Validated:
 
@@ -1331,7 +1300,6 @@ Validated mappings include:
     dr-restore-monitoring-alertmanager  -> monitoring/alertmanager-dr
     dr-restore-monitoring-grafana       -> monitoring/grafana-dr
     dr-restore-monitoring-prometheus    -> monitoring/prometheus-dr
-    dr-restore-portainer                -> portainer/portainer-dr
     dr-restore-trilium                  -> trilium/trilium-dr
     dr-restore-vaultwarden              -> vaultwarden/vaultwarden-dr
 
@@ -1448,7 +1416,6 @@ Expected validation targets:
 
     trilium/trilium-dr-validation
     vaultwarden/vaultwarden-dr-validation
-    portainer/portainer-dr-validation
     monitoring/grafana-dr-validation
     monitoring/prometheus-dr-validation
     monitoring/alertmanager-dr-validation
@@ -1463,10 +1430,6 @@ Application-level checks include:
     Vaultwarden
       /alive
       restored db.sqlite3
-
-    Portainer
-      /api/status
-      restored portainer.db
 
     Grafana
       /api/health

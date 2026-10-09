@@ -23,8 +23,8 @@ Components include:
 metrics without creating their own monitor: Traefik, cert-manager, MetalLB, the
 Cilium operator and Envoy proxies, kube-vip, Loki, loki-canary, Alloy and
 cloudflared. These feed the Traefik (per-app requests, 5xx rate, p95 latency)
-and Certificates (days until expiry) dashboards. Vaultwarden, Trilium and
-Portainer have no metrics endpoint of their own, so Traefik's per-service
+and Certificates (days until expiry) dashboards. Vaultwarden and Trilium
+have no metrics endpoint of their own, so Traefik's per-service
 metrics are their traffic view. The Cilium agent does not serve metrics because
 `prometheus-serve-addr` is unset in `cilium-config`.
 

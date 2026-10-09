@@ -53,7 +53,6 @@ mapping() {
         dr-restore-monitoring-alertmanager) printf '%s\t%s\n' monitoring alertmanager-dr ;;
         dr-restore-monitoring-grafana)      printf '%s\t%s\n' monitoring grafana-dr ;;
         dr-restore-monitoring-prometheus)   printf '%s\t%s\n' monitoring prometheus-dr ;;
-        dr-restore-portainer)               printf '%s\t%s\n' portainer portainer-dr ;;
         dr-restore-trilium)                 printf '%s\t%s\n' trilium trilium-dr ;;
         dr-restore-vaultwarden)             printf '%s\t%s\n' vaultwarden vaultwarden-dr ;;
         *) return 1 ;;

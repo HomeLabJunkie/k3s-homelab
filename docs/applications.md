@@ -14,12 +14,6 @@ The deployment includes:
 - bootstrap/admin credential configuration
 - server URL configuration
 
-## Portainer
-
-Portainer CE provides a second management interface.
-
-Its data is stored on a Longhorn PVC and is included in the protected DR application set.
-
 ## Trilium
 
 Trilium is deployed with persistent Longhorn storage.

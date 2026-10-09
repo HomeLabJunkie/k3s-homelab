@@ -62,14 +62,13 @@ get_image() {
 
 TRILIUM_IMAGE="$(get_image trilium deployment trilium trilium)"
 VAULTWARDEN_IMAGE="$(get_image vaultwarden deployment vaultwarden vaultwarden)"
-PORTAINER_IMAGE="$(get_image portainer deployment portainer portainer)"
 GRAFANA_IMAGE="$(get_image monitoring deployment monitoring-grafana grafana)"
 PROM_IMAGE="$(get_image monitoring statefulset prometheus-monitoring-kube-prometheus-prometheus prometheus)"
 ALERT_IMAGE="$(get_image monitoring statefulset alertmanager-monitoring-kube-prometheus-alertmanager alertmanager)"
 LOKI_IMAGE="$(get_image logging statefulset loki loki)"
 
 for VAR in \
-    TRILIUM_IMAGE VAULTWARDEN_IMAGE PORTAINER_IMAGE GRAFANA_IMAGE \
+    TRILIUM_IMAGE VAULTWARDEN_IMAGE GRAFANA_IMAGE \
     PROM_IMAGE ALERT_IMAGE LOKI_IMAGE
 do
     if [[ -z "${!VAR}" || "${!VAR}" == "null" ]]; then
@@ -104,7 +103,6 @@ cat > "$OUTPUT" <<EOF
 # Production images captured at generation time:
 # Trilium:      $TRILIUM_IMAGE
 # Vaultwarden:  $VAULTWARDEN_IMAGE
-# Portainer:    $PORTAINER_IMAGE
 # Grafana:      $GRAFANA_IMAGE
 # Prometheus:   $PROM_IMAGE
 # Alertmanager: $ALERT_IMAGE
@@ -231,41 +229,6 @@ spec:
     - name: data
       persistentVolumeClaim:
         claimName: vaultwarden-dr
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: portainer-dr-validation
-  namespace: portainer
-spec:
-  selector:
-    app: portainer-dr-validation
-  ports:
-    - port: 9000
-      targetPort: 9000
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: portainer-dr-validation
-  namespace: portainer
-  labels:
-    app: portainer-dr-validation
-spec:
-  restartPolicy: Never
-  enableServiceLinks: false
-  containers:
-    - name: portainer
-      image: $PORTAINER_IMAGE
-      ports:
-        - containerPort: 9000
-      volumeMounts:
-        - name: data
-          mountPath: /data
-  volumes:
-    - name: data
-      persistentVolumeClaim:
-        claimName: portainer-dr
 ---
 apiVersion: v1
 kind: Service
@@ -505,7 +468,6 @@ echo
 echo "Captured images:"
 printf '  %-14s %s\n' "Trilium" "$TRILIUM_IMAGE"
 printf '  %-14s %s\n' "Vaultwarden" "$VAULTWARDEN_IMAGE"
-printf '  %-14s %s\n' "Portainer" "$PORTAINER_IMAGE"
 printf '  %-14s %s\n' "Grafana" "$GRAFANA_IMAGE"
 printf '  %-14s %s\n' "Prometheus" "$PROM_IMAGE"
 printf '  %-14s %s\n' "Alertmanager" "$ALERT_IMAGE"

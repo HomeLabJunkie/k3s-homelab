@@ -32,7 +32,6 @@ Core platform:
 | External access | Cloudflare Tunnel |
 | Persistent storage | Longhorn |
 | Cluster management | Rancher |
-| Secondary management | Portainer |
 | Metrics | kube-prometheus-stack |
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
@@ -94,7 +93,7 @@ established cluster.
 | Step-by-step maintenance and OS updates | [Maintenance cheat sheet](cheat-sheet.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
-| Rancher, Portainer, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
+| Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
 | Prometheus, Grafana, alerts, Loki | [Monitoring and logging](docs/observability.md) |
 | What is protected, backup layers, DR rehearsal | [Backup and disaster recovery](docs/backup-and-dr.md) |
 | Backup commands, schedules, troubleshooting | [Backup procedures](backup-procedures.md) |

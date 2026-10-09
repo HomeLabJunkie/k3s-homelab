@@ -37,7 +37,7 @@ Each computer has 8 processor cores, between 14 and 30 GB of memory, and about 2
 | **3** | The network | Lets apps and computers talk to each other | Cilium, Hubble, MetalLB |
 | **4** | Secure access from outside | One safe front door with HTTPS | Traefik, cert-manager, Cloudflare Tunnel |
 | **5** | Storage | Data survives a failed computer | Longhorn |
-| **6** | Management tools | See and control everything from a web page | Rancher, Portainer |
+| **6** | Management tools | See and control everything from a web page | Rancher |
 | **7** | The applications | The reason the cluster exists | Vaultwarden, Trilium, a website, fb-search |
 | **8** | Monitoring and alerts | Notice problems early, and keep history | Prometheus, Grafana, Alertmanager, Loki |
 | **9** | Backups and disaster recovery | Recover from the worst case | Longhorn backups, Velero, Garage, a spare computer |
@@ -98,7 +98,6 @@ By default, an app's data lives on whichever computer it happens to run on, whic
 Two web-based control panels make the cluster easy to see and manage:
 
 - **Rancher** is the main dashboard: all six computers, everything running on them, and their health in one place. Two copies run for redundancy.
-- **Portainer** is a second, simpler dashboard, kept as an alternative view.
 - **Longhorn** also has its own dashboard for the storage system.
 
 ## Step 7 — The applications
@@ -133,7 +132,7 @@ Replication (Step 5) protects against a failed computer. Backups protect against
 
 **Three layers of protection:**
 
-1. **Longhorn nightly backups** to a separate storage box (a NAS) on the home network. This covers the 7 apps whose data matters: Vaultwarden, Trilium, Portainer, Grafana, Loki, Prometheus and Alertmanager, about **175 GiB** in total.
+1. **Longhorn nightly backups** to a separate storage box (a NAS) on the home network. This covers the 7 apps whose data matters: Vaultwarden, Trilium, Authelia, Grafana, Loki, Prometheus and Alertmanager, about **156 GiB** in total.
 2. **A cluster recovery bundle:** a copy of the cluster's records (an etcd snapshot), its settings, and the project's Git repository. Created with `./backup/backup.sh`.
 3. **Velero to Garage:** a second, independent backup that runs nightly and is stored in a different place (an S3-style storage service called Garage on a separate machine). Two different tools in two different locations mean a single mistake can't remove both.
 
@@ -178,7 +177,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Certificates | cert-manager | v1.21.2 |
 | Outside access | Cloudflare Tunnel (cloudflared) | 2 copies |
 | Storage | Longhorn | 1.12.1 |
-| Management | Rancher / Portainer | 2.15.2 / chart 245.1.0 |
+| Management | Rancher | 2.15.2 |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 92.2.0 |
 | Logging | Loki + Alloy | chart 18.14.0 / 1.13.0 |
 | Second backup | Velero → Garage | chart 12.2.0 |

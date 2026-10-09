@@ -52,8 +52,6 @@ VALIDATION_RESOURCES=(
   "trilium service trilium-dr-validation"
   "vaultwarden pod vaultwarden-dr-validation"
   "vaultwarden service vaultwarden-dr-validation"
-  "portainer pod portainer-dr-validation"
-  "portainer service portainer-dr-validation"
   "monitoring pod grafana-dr-validation"
   "monitoring service grafana-dr-validation"
   "monitoring pod prometheus-dr-validation"
@@ -74,7 +72,6 @@ PVC_RESOURCES=(
   "monitoring alertmanager-dr"
   "monitoring grafana-dr"
   "monitoring prometheus-dr"
-  "portainer portainer-dr"
   "trilium trilium-dr"
   "vaultwarden vaultwarden-dr"
 )
@@ -84,7 +81,6 @@ PV_RESOURCES=(
   "alertmanager-dr-pv"
   "grafana-dr-pv"
   "prometheus-dr-pv"
-  "portainer-dr-pv"
   "trilium-dr-pv"
   "vaultwarden-dr-pv"
 )
@@ -94,7 +90,6 @@ LH_VOLUMES=(
   "dr-restore-monitoring-alertmanager"
   "dr-restore-monitoring-grafana"
   "dr-restore-monitoring-prometheus"
-  "dr-restore-portainer"
   "dr-restore-trilium"
   "dr-restore-vaultwarden"
 )
