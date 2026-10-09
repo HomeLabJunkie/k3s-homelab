@@ -122,8 +122,12 @@ argument_specs:
             description: Addresses that will not use the proxies
             required: true
 
+      k3s_server_init_token_file:
+        description: Root-only file the transient k3s-init service reads the cluster token from
+        default: /etc/rancher/k3s/server-init-token
+
       retry_count:
-        description: Amount of retries when verifying that nodes joined
+        description: Amount of retries when verifying that this server joined
         type: int
         default: 20
 

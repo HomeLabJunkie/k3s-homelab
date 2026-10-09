@@ -45,6 +45,23 @@
     - role: k3s_server
       become: true
 
+- name: Verify k3s control plane membership
+  hosts: master
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  tasks:
+    - name: Verify that all servers actually joined
+      ansible.builtin.command:
+        cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} get nodes -l 'node-role.kubernetes.io/control-plane=true' -o=jsonpath='{.items[*].metadata.name}'" # yamllint disable-line rule:line-length
+      register: control_plane_nodes
+      until: control_plane_nodes.rc == 0 and (control_plane_nodes.stdout.split() | length) == (groups[group_name_master | default('master')] | length) # yamllint disable-line rule:line-length
+      retries: "{{ retry_count | default(20) }}"
+      delay: 10
+      changed_when: false
+      become: true
+      run_once: true
+      when: not ansible_check_mode
+
 - name: Setup k3s agents
   hosts: node
   gather_facts: true
