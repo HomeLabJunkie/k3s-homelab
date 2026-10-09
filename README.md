@@ -66,6 +66,7 @@ has a read-only check to run first.
 | --- | --- | --- |
 | Check overall health | `./repo-doctor.sh` (`--quick` skips preflight and DR) | No |
 | Check a deployment would be safe | `./deploy.sh --preflight-only` | No |
+| Validate manifests before applying | `./scripts/validate-manifests.sh` | No |
 | Deploy or converge the cluster | `./deploy.sh` | Yes |
 | Check one node | `./maintain-node.sh <NODE_IP>` | No |
 | Reconcile one node | `./maintain-node.sh <NODE_IP> --apply` | Yes |

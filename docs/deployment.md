@@ -322,6 +322,25 @@ cluster changes. Individual modes are also available:
 ./workflow-check.sh dr
 ```
 
+### Manifest validation
+
+`scripts/validate-manifests.sh` checks every Kubernetes manifest in the
+repository with `kubeconform`, including the rendered ones that Git ignores:
+
+```bash
+./scripts/validate-manifests.sh
+./scripts/validate-manifests.sh --offline website.yaml
+```
+
+It validates in strict mode against the cluster's own Kubernetes version and
+the CRDs installed in it, so a misspelt field or a value the installed
+Longhorn, Traefik, cert-manager, Velero or Prometheus version does not accept
+is reported before anything is applied. Each online run exports the cluster's
+CRD schemas to `~/.cache/k3s-homelab/manifest-schemas`; `--offline` reuses
+them without contacting the cluster. Helm values files and unrendered
+templates are not manifests and are skipped. It needs `kubeconform` on the
+laptop and is not part of CI, which has no cluster to read the CRDs from.
+
 ### Operator workstation readiness
 
 For a new Omarchy laptop, follow [Operator laptop setup](../operator-laptop-setup.md)
