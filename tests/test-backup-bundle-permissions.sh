@@ -52,6 +52,7 @@ fi
 # backup.sh must stage privately and restrict the bundle before it is verified
 # and published as latest.
 grep -qx 'umask 077' "$ROOT_DIR/backup/backup.sh"
+# shellcheck disable=SC2016 # literal $DEST as written in backup.sh
 restrict_line="$(grep -n '^storage_restrict_bundle "\$DEST"$' "$ROOT_DIR/backup/backup.sh" | cut -d: -f1)"
 latest_line="$(grep -n '^storage_replace_symlink ' "$ROOT_DIR/backup/backup.sh" | cut -d: -f1)"
 [[ -n "$restrict_line" && -n "$latest_line" ]]
