@@ -6,6 +6,24 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-09: Portainer removed
+
+On 2026-10-09, Portainer was removed; Rancher is the only management UI. The
+Helm release (chart `245.1.0`), its IngressRoute and certificate, and the
+`portainer` namespace were deleted, which also deleted the 20 GiB Longhorn
+volume. Its data was not kept: the Longhorn backup volume and its 42 backups
+were deleted from the NAS as well. `deploy.sh` no longer installs it, and it
+was taken out of `recovery/apps.conf`, the DR rehearsal scripts, the Velero
+`protected-apps-daily` schedule (applied the same day) and the documentation.
+Afterwards `dr-status.sh` reported 7 protected workloads with 7 fresh
+backups, and a DR rehearsal now restores six volumes instead of seven. Two
+things clear on their own: the Authelia access rule for the Portainer
+hostname goes with the next `deploy.sh` run, and the Velero backups that
+still contain the namespace expire by 2026-10-16.
+
+`repo-doctor.sh` also gained a manifest-validation section the same day; it
+is skipped under `--quick`.
+
 ## 2026-10-09: Manifest validation against the cluster's CRDs
 
 On 2026-10-09, `scripts/validate-manifests.sh` was added. It runs

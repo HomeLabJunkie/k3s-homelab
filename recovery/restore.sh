@@ -298,7 +298,6 @@ http_health_check() {
   case "$app" in
     trilium)      url="http://trilium:8080/" ;;
     vaultwarden)  url="http://vaultwarden/alive" ;;
-    portainer)    url="http://portainer:9000/api/status" ;;
     grafana)      url="http://monitoring-grafana/api/health" ;;
     loki)         url="http://loki-gateway/loki/api/v1/status/buildinfo" ;;
     prometheus)   url="http://monitoring-kube-prometheus-prometheus:9090/-/ready" ;;

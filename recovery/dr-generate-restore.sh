@@ -111,9 +111,6 @@ restore_basename() {
         monitoring/prometheus-monitoring-kube-prometheus-prometheus-db-prometheus-monitoring-kube-prometheus-prometheus-0)
             printf '%s\n' "monitoring-prometheus"
             ;;
-        portainer/portainer)
-            printf '%s\n' "portainer"
-            ;;
         trilium/trilium-data)
             printf '%s\n' "trilium"
             ;;

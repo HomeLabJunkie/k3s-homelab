@@ -41,8 +41,6 @@ exclude_paths:
   - monitoring-loki-datasource.yaml
   - monitoring-longhorn-v2.yaml
   - monitoring-values.yaml
-  - portainer-ingress.yaml
-  - portainer-values.yaml
   - traefik-dashboard-cert.yaml
   - website-nginx.yaml
   - traefik-dashboard.yaml

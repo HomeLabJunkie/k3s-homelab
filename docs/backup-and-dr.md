@@ -9,14 +9,13 @@ day-to-day commands and verification criteria are in
 
 ## Protected persistent workloads
 
-The DR configuration in `recovery/apps.conf` currently protects eight persistent workloads:
+The DR configuration in `recovery/apps.conf` currently protects seven persistent workloads:
 
 | Application | Namespace | Persistent data |
 | --- | --- | --- |
 | Trilium | `trilium` | `trilium-data` |
 | Vaultwarden | `vaultwarden` | `vaultwarden-data` |
 | Authelia | `authelia` | `authelia-data` |
-| Portainer | `portainer` | `portainer` |
 | Grafana | `monitoring` | `monitoring-grafana` |
 | Loki | `logging` | `storage-loki-0` |
 | Prometheus | `monitoring` | Prometheus StatefulSet PVC |

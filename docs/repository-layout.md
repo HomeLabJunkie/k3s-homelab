@@ -68,8 +68,8 @@
 
 Additional manifests and Helm values at the repository root (`traefik-*.yaml`,
 `longhorn-*.yaml`, `monitoring-*.yaml`, `loki-values.yaml`, `alloy-values.yaml`,
-`portainer-*.yaml`, `trilium-*.yaml`, `vaultwarden-*.yaml`, `cloudflared*.yaml`,
+`trilium-*.yaml`, `vaultwarden-*.yaml`, `cloudflared*.yaml`,
 `clusterissuer-letsencrypt.yaml`, `website.yaml`, dashboards, and ingress files)
-define Traefik, Longhorn, monitoring, logging, Portainer, Trilium, Vaultwarden,
+define Traefik, Longhorn, monitoring, logging, Trilium, Vaultwarden,
 Cloudflare, certificates, and ingress behavior used by `deploy.sh`. Many are
 environment-specific and generated from `templates/`, so they are git-ignored.

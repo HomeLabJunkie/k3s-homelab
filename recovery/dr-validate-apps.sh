@@ -59,7 +59,6 @@ pass "Kubernetes API reachable"
 declare -a APPS=(
     "trilium:trilium-dr-validation"
     "vaultwarden:vaultwarden-dr-validation"
-    "portainer:portainer-dr-validation"
     "monitoring:grafana-dr-validation"
     "monitoring:prometheus-dr-validation"
     "monitoring:alertmanager-dr-validation"
@@ -177,10 +176,6 @@ run_http_contains vaultwarden \
     "Vaultwarden /alive reachable" \
     "http://vaultwarden-dr-validation/alive" ""
 
-run_http_contains portainer \
-    "Portainer /api/status reachable" \
-    "http://portainer-dr-validation:9000/api/status" ""
-
 GRAFANA_JSON="$(run_http_raw monitoring \
     "http://grafana-dr-validation:3000/api/health" \
     "$HTTP_RETRIES" "$HTTP_RETRY_DELAY" || true)"
@@ -226,13 +221,6 @@ if $KUBECTL -n vaultwarden exec vaultwarden-dr-validation -- \
     pass "Vaultwarden restored db.sqlite3 is present and non-empty"
 else
     fail "Vaultwarden restored db.sqlite3 is missing or empty"
-fi
-
-if $KUBECTL -n portainer exec portainer-dr-validation -- \
-    sh -c 'test -s /data/portainer.db' >/dev/null 2>&1; then
-    pass "Portainer restored portainer.db is present and non-empty"
-else
-    warn "Portainer portainer.db could not be verified from inside the container"
 fi
 
 # An instant query at "now" is not a valid DR historical-data test because
