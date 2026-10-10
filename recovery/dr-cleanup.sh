@@ -65,6 +65,8 @@ VALIDATION_RESOURCES=(
   "logging service loki-dr-validation-memberlist"
   "logging configmap loki-dr-validation-config"
   "logging configmap loki-dr-validation-runtime"
+  "authelia pod authelia-dr-validation"
+  "website pod fb-search-deps-dr-validation"
 )
 
 PVC_RESOURCES=(

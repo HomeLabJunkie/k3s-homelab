@@ -6,6 +6,59 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-10: Full rebuild with deploy.sh tested on an isolated cluster
+
+On 2026-10-10, `./deploy.sh --bootstrap` built the whole stack from empty VMs
+on the isolated test cluster, in one pass of 25 minutes with no errors and no
+intervention: six nodes Ready, 117 pods running, nine Let's Encrypt
+certificates issued, seven Longhorn volumes healthy with the backup target
+available, and Rancher answering from the internet through a Cloudflare
+tunnel. It used a separate domain, tunnel and API token, and ran from a
+separate clone of the repository; `docs/backup-and-dr.md` describes the
+setup. The domain's DNS zone was compared with a backup afterwards and was
+unchanged. This also proved the Rancher `--set-file` password change from
+2026-10-09, which had not run live.
+
+Getting there took twelve partial runs. Most stops were gaps in the test
+environment, now fixed in `recovery/dr-test-cluster.sh`: each node gets a
+200 GB dedicated Longhorn disk and 4 vCPUs, a seventh VM stands in for the
+backup NAS, and disk syncs on the test dataset are relaxed so etcd keeps up.
+
+The runs also found faults in `deploy.sh`, fixed here and proven with four
+further runs:
+
+- Vaultwarden was not restarted when its secrets changed, so a new mail
+  password or admin token had no effect until something else restarted it.
+  Its deployment is now stamped with a hash of those values, as Authelia's
+  already was.
+- The website was only waited on when its nginx config had just changed, so
+  a run could report success with the site's pods failing. `deploy.sh` now
+  always waits for the site and its certificate, and restarts it when the
+  nginx config or the deploy key changes.
+- After a deployment had been stuck, the next run could fail once at the
+  same step on the stale status. The waits for Authelia, Vaultwarden and
+  the website now ride that out.
+
+Two prerequisites of a real rebuild are now documented: every node needs its
+storage disk mounted at `/var/lib/storage` beforehand, and the mail login
+must work, because Authelia will not start and the Vaultwarden invitation
+fails without it.
+
+## 2026-10-10: Rehearsal checks for Authelia and fb-search; iLO login in secrets
+
+DR rehearsals now validate all eight restored volumes. Authelia is not
+started, since it needs its production configuration; a small pod mounts
+each of the two remaining volumes read-only and the rehearsal checks that
+Authelia's `db.sqlite3` is a SQLite database and that the `fb-search`
+dependencies and install marker are present. A full rehearsal on 2026-10-10
+passed in 39 minutes with 21 checks and 0 failures, up from 17.
+
+`recovery/dr-host-power.sh` still reads the iLO login from
+`~/.config/ilo-ubuntu-hp`, and now falls back to `DR_ILO_USERNAME` and
+`DR_ILO_PASSWORD` in `.secrets.enc` when that file does not exist, so a
+replacement laptop can power the DR server on. The old DR VM on Unraid,
+kept as a fallback since the move to `ubuntu-hp`, was deleted.
+
 ## 2026-10-10: Fresh bootstrap tested on an isolated cluster
 
 On 2026-10-10, `site.yml` was run from scratch against six new VMs on

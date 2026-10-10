@@ -2,9 +2,14 @@
 set -Eeuo pipefail
 
 # A throwaway six-node cluster on the DR hypervisor, for testing a fresh
-# bootstrap with site.yml without touching production. The VMs sit on their
-# own NAT network: they can reach the internet to download K3s and images,
-# and are firewalled off from every private network, including the LAN.
+# bootstrap with site.yml, or a full deploy.sh run, without touching
+# production. The VMs sit on their own NAT network: they can reach the
+# internet to download K3s and images, and are firewalled off from every
+# private network, including the LAN.
+#
+# Each node has the dedicated Longhorn disk that longhorn-host-prep.yml
+# requires. A seventh VM stands in for the backup NAS, serving the same share
+# and export paths over SMB and NFS, so deploy.sh finds a backup target.
 #
 # The cluster gets its own random token and its own addresses. Nothing from
 # production is copied into it.
@@ -28,12 +33,19 @@ SUBNET=10.90.0
 SERVERS=(11 12 13)
 WORKERS=(21 22 23)
 TEST_VIP="$SUBNET.50"
-TEST_LB_RANGE="$SUBNET.60-$SUBNET.80"
+TEST_LB_RANGE="$SUBNET.100-$SUBNET.120"
+# Stand-in for the backup NAS. Its SMB login is a fixed dummy: the network is
+# sealed, and nothing of value is stored there.
+NAS=8
+NAS_EXPORT=/mnt/HD/HD_a2/K3S-Backup
+NAS_SHARE=K3S-Backup
+NAS_LOGIN=dummy
 
 usage() {
   cat <<'EOF'
 Usage:
-  recovery/dr-test-cluster.sh create      Create the network and six VMs
+  recovery/dr-test-cluster.sh create      Create the network, six nodes and a
+                                          stand-in NAS
   recovery/dr-test-cluster.sh bootstrap   Run site.yml against them
   recovery/dr-test-cluster.sh status      Show VMs and, if built, the nodes
   recovery/dr-test-cluster.sh destroy     Delete the VMs, disks and network
@@ -74,11 +86,12 @@ cmd_create() {
   mkdir -p "$STATE_DIR"
   rm -f "$STATE_DIR/known_hosts"
 
-  "${HYPERVISOR[@]}" "sudo -n bash -s -- $(printf '%q ' "$SUBNET" "$public_key" "${SERVERS[*]}" "${WORKERS[*]}")" <<'REMOTE'
+  "${HYPERVISOR[@]}" "sudo -n bash -s -- $(printf '%q ' "$SUBNET" "$public_key" "${SERVERS[*]}" "${WORKERS[*]}" "$NAS" "$NAS_EXPORT" "$NAS_SHARE" "$NAS_LOGIN")" <<'REMOTE'
 set -Eeuo pipefail
 subnet="$1" public_key="$2"
 read -r -a servers <<<"$3"
 read -r -a workers <<<"$4"
+nas="$5" nas_export="$6" nas_share="$7" nas_login="$8"
 image=/tank/vm/images/ubuntu-26.04-server-cloudimg-amd64.img
 [[ -s "$image" ]] || { echo "ERROR: base image is missing: $image" >&2; exit 1; }
 
@@ -134,16 +147,65 @@ systemctl daemon-reload
 systemctl enable -q k3s-test-isolation.service
 
 zfs list tank/vm/k3s-test >/dev/null 2>&1 || zfs create tank/vm/k3s-test
+# etcd waits on every disk sync, which is too slow on this pool with seven
+# VMs. These VMs are disposable, so let the host acknowledge syncs early.
+zfs set sync=disabled tank/vm/k3s-test
 
+# role "node" adds the dedicated Longhorn disk, as /dev/sda1 on
+# /var/lib/storage; role "nas" serves the backup share and export instead.
 create_vm() {
-  local name="$1" address="$2" memory="$3"
+  local name="$1" address="$2" memory="$3" role="$4"
   if virsh dominfo "$name" >/dev/null 2>&1; then
     echo "  $name already exists"
     return 0
   fi
-  local dir=/tank/vm/k3s-test seed
+  local dir=/tank/vm/k3s-test seed packages role_config
+  local -a storage_disk=()
   seed="$(mktemp -d)"
-  qemu-img create -q -f qcow2 -F qcow2 -b "$image" "$dir/$name.qcow2" 40G
+  qemu-img create -q -f qcow2 -F qcow2 -b "$image" "$dir/$name.qcow2" 60G
+  if [[ "$role" == node ]]; then
+    # Larger than Longhorn's 50 GiB reserve, with room for every volume.
+    qemu-img create -q -f qcow2 "$dir/$name-storage.qcow2" 200G
+    storage_disk=(--disk "path=$dir/$name-storage.qcow2,bus=sata,cache=none,discard=unmap")
+    packages="open-iscsi, nfs-common, cifs-utils, curl, python3"
+    role_config="$(cat <<'EOF'
+runcmd:
+  - parted -s /dev/sda mklabel gpt mkpart storage ext4 1MiB 100%
+  - udevadm settle
+  - mkfs.ext4 -q -L longhorn /dev/sda1
+  - mkdir -p /var/lib/storage
+  - echo "LABEL=longhorn /var/lib/storage ext4 defaults,nofail 0 2" >>/etc/fstab
+  - systemctl daemon-reload
+  - mount /var/lib/storage
+EOF
+)"
+  else
+    packages="samba, nfs-kernel-server"
+    role_config="$(cat <<EOF
+write_files:
+  - path: /etc/samba/smb.conf
+    content: |
+      [global]
+      server role = standalone server
+      map to guest = never
+      [${nas_share}]
+      path = ${nas_export}
+      read only = no
+      valid users = ${nas_login}
+      force user = ${nas_login}
+  - path: /etc/exports
+    content: |
+      ${nas_export} ${subnet}.0/24(rw,sync,no_subtree_check,no_root_squash)
+runcmd:
+  - useradd -M -s /usr/sbin/nologin ${nas_login}
+  - mkdir -p ${nas_export}/longhorn
+  - chown -R ${nas_login}:${nas_login} ${nas_export}
+  - (echo ${nas_login}; echo ${nas_login}) | smbpasswd -s -a ${nas_login}
+  - systemctl restart smbd nfs-kernel-server
+  - exportfs -ra
+EOF
+)"
+  fi
   printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$name" "$(date +%s)" "$name" >"$seed/meta-data"
   cat >"$seed/network-config" <<EOF
 version: 2
@@ -174,14 +236,16 @@ users:
     sudo: "ALL=(ALL) NOPASSWD:ALL"
 ssh_pwauth: false
 package_update: true
-packages: [open-iscsi, nfs-common, curl, python3]
+packages: [${packages}]
+${role_config}
 EOF
   cloud-localds -N "$seed/network-config" "$dir/$name-seed.iso" "$seed/user-data" "$seed/meta-data"
   rm -rf "$seed"
-  virt-install --name "$name" --memory "$memory" --vcpus 2 --cpu host-passthrough \
+  virt-install --name "$name" --memory "$memory" --vcpus 4 --cpu host-passthrough \
     --os-variant ubuntu24.04 --import --boot uefi \
     --disk "path=$dir/$name.qcow2,bus=virtio,cache=none,discard=unmap" \
     --disk "path=$dir/$name-seed.iso,device=cdrom" \
+    "${storage_disk[@]}" \
     --network network=k3s-test,model=virtio \
     --graphics none --console pty,target_type=serial --noautoconsole >/dev/null
   echo "  $name created at $address"
@@ -189,19 +253,20 @@ EOF
 
 index=0
 for host in "${servers[@]}"; do
-  create_vm "k3s-test-server-$index" "$subnet.$host" 6144
+  create_vm "k3s-test-server-$index" "$subnet.$host" 12288 node
   index=$((index + 1))
 done
 index=0
 for host in "${workers[@]}"; do
-  create_vm "k3s-test-worker-$index" "$subnet.$host" 4096
+  create_vm "k3s-test-worker-$index" "$subnet.$host" 8192 node
   index=$((index + 1))
 done
+create_vm k3s-test-nas "$subnet.$nas" 3072 nas
 REMOTE
 
   echo "==> Waiting for the VMs to finish first boot..."
   local host address waited
-  for host in "${SERVERS[@]}" "${WORKERS[@]}"; do
+  for host in "${SERVERS[@]}" "${WORKERS[@]}" "$NAS"; do
     address="$SUBNET.$host"
     waited=0
     until vm_ssh "$address" 'cloud-init status --wait >/dev/null 2>&1; true' 2>/dev/null; do
@@ -211,6 +276,23 @@ REMOTE
     done
     echo "  $address ready"
   done
+
+  echo "==> Checking the Longhorn disk on every node..."
+  for host in "${SERVERS[@]}" "${WORKERS[@]}"; do
+    vm_ssh "$SUBNET.$host" 'findmnt -n -o SOURCE,FSTYPE /var/lib/storage | grep -q "^/dev/sda1 ext4$"' ||
+      fail "$SUBNET.$host has no /dev/sda1 ext4 filesystem on /var/lib/storage"
+  done
+  echo "  /var/lib/storage: mounted on all nodes"
+
+  echo "==> Checking the stand-in NAS from the first worker..."
+  vm_ssh "$SUBNET.${WORKERS[0]}" "
+    set -e
+    sudo mkdir -p /mnt/nas-check
+    sudo mount -t cifs -o vers=3.0,username=$NAS_LOGIN,password=$NAS_LOGIN //$SUBNET.$NAS/$NAS_SHARE/longhorn /mnt/nas-check
+    sudo touch /mnt/nas-check/.probe && sudo rm /mnt/nas-check/.probe
+    sudo umount /mnt/nas-check && sudo rmdir /mnt/nas-check" ||
+    fail "the stand-in NAS share is not usable"
+  echo "  //$SUBNET.$NAS/$NAS_SHARE: writable"
 
   echo "==> Checking isolation from the first VM..."
   # shellcheck disable=SC2016 # expanded on the VM

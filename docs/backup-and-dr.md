@@ -220,7 +220,9 @@ rehearsals.
 
 The script reads `DR_HYPERVISOR_HOST` and `DR_ILO_HOST` from
 `config/cluster.env`, and the iLO login from `~/.config/ilo-ubuntu-hp` (mode
-0600, username on line 1, password on line 2). The VM starts automatically
+0600, username on line 1, password on line 2). When that file does not
+exist, for example on a replacement laptop, it reads `DR_ILO_USERNAME` and
+`DR_ILO_PASSWORD` from `.secrets.enc` instead. The VM starts automatically
 when the server boots.
 
 `recovery/dr-host-build.sh` builds the DR host on a fresh Ubuntu machine, or
@@ -253,7 +255,7 @@ host itself, which is only checked when it is on.
 against it, with the production `group_vars`:
 
 ```bash
-./recovery/dr-test-cluster.sh create      # network and six VMs, about 3 minutes
+./recovery/dr-test-cluster.sh create      # network and seven VMs, about 3 minutes
 ./recovery/dr-test-cluster.sh bootstrap   # site.yml, about 8 minutes
 ./recovery/dr-test-cluster.sh status
 ./recovery/dr-test-cluster.sh destroy
@@ -266,10 +268,77 @@ inside a VM. The cluster has its own random token and addresses; nothing
 from production is copied into it. It is reachable only through the server,
 which has `kubectl` and `k9s` for looking at it.
 
-This tests the cluster layer that `site.yml` builds: K3s, kube-vip, Cilium
-and MetalLB. It does not run `deploy.sh`, so no applications. Running
-`deploy.sh` there as it stands would connect `cloudflared` to the real
-tunnel and request real certificates.
+Each node has 4 vCPUs (12 GB for servers, 8 GB for workers) and a 200 GB
+second disk mounted as `/dev/sda1` on `/var/lib/storage`, which
+`longhorn-host-prep.yml` requires. A seventh VM, `k3s-test-nas` at
+`10.90.0.8`, stands in for the backup NAS with the same SMB share and NFS
+export paths. `create` checks the storage mount on every node and writes to
+the share before it finishes.
+
+`bootstrap` tests the cluster layer that `site.yml` builds: K3s, kube-vip,
+Cilium and MetalLB. It does not run `deploy.sh`, so no applications.
+
+### Testing a full rebuild
+
+A full `deploy.sh --bootstrap` can be run against the same VMs, which proves
+a rebuild from nothing: the cluster, cert-manager, Traefik, Longhorn,
+Authelia, monitoring, logging, Rancher, the Cloudflare tunnel, Trilium,
+Vaultwarden and the website. It takes about 25 minutes after `create`.
+
+Never run it from the normal checkout. `deploy.sh` renders the inventory and
+the manifests into the repository, so a test run there would overwrite
+production's rendered files and point Ansible at the wrong nodes. Use a
+separate clone with its own settings and secrets:
+
+1. Clone the repository somewhere private, for example
+   `~/.local/state/k3s-homelab/deploy-test/repo`, and copy `.ansible/` into
+   it from the normal checkout.
+2. Write its `config/cluster.env` from production's, replacing every
+   address: `KUBE_VIP=10.90.0.50`, `K3S_NODE_0` to `K3S_NODE_5` as
+   `10.90.0.11` to `.13` and `.21` to `.23`,
+   `METALLB_IP_RANGE=10.90.0.100-10.90.0.120`,
+   `CLOUDFLARE_ORIGIN_IP=10.90.0.100`, `BACKUP_NAS_IP=10.90.0.8`, and an
+   `UNRAID_IP` that nothing answers on. Set `BASE_DOMAIN` to a separate test
+   domain and `CLOUDFLARE_TUNNEL_ID` to a separate test tunnel.
+3. Give it its own `.secrets.enc` with a new `K3S_TOKEN`, the test tunnel's
+   token, a Cloudflare API token scoped to the test zone only, and
+   `LONGHORN_CIFS_USERNAME` and `LONGHORN_CIFS_PASSWORD` both set to
+   `dummy`, the stand-in NAS login. The mail login and the website deploy
+   key must be real: Authelia will not start, and the Vaultwarden invitation
+   fails, when the mail server rejects the login.
+4. In the clone only, set `flannel_iface` and `cilium_iface` to `enp1s0` in
+   `inventory/k3s-ansible/group_vars/all.yml`. The VMs' network interface
+   has that name where the real nodes have `eno1`.
+5. Reach the sealed network through the server. Open a SOCKS proxy with
+   `ssh -f -N -D 127.0.0.1:1080 ubuntu-hp`, then export
+   `HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` as
+   `socks5://127.0.0.1:1080` (not `socks5h`, which breaks the checks that
+   address the load balancer directly) and `NO_PROXY=localhost,127.0.0.1`.
+   Set `ANSIBLE_SSH_COMMON_ARGS` to the same `ProxyJump` options
+   `dr-test-cluster.sh` uses, `KUBECONFIG_TARGET` and `KUBECONFIG` to a file
+   outside `~/.kube`, and `SKIP_SYNC_CHECK=true`.
+6. Run `./deploy.sh --preflight-only --bootstrap`, then
+   `./deploy.sh --bootstrap`, from the clone.
+
+To browse the result, start a browser through the same proxy:
+
+```bash
+chromium --user-data-dir=/tmp/k3s-test-browser \
+  --proxy-server="socks5://127.0.0.1:1080" \
+  --host-resolver-rules="MAP example.test 10.90.0.100, MAP *.example.test 10.90.0.100"
+```
+
+Only the Rancher hostname goes through the Cloudflare tunnel; every other
+name exists only on the test load balancer. Afterwards run
+`dr-test-cluster.sh destroy` and delete the clone, which holds real secrets.
+
+Two things a rebuild of the real cluster needs that `deploy.sh` does not do:
+
+- **A storage disk on every node.** `longhorn-host-prep.yml` stops unless
+  `/var/lib/storage` is an ext4 filesystem on `/dev/sda1`, separate from the
+  root disk. On a reinstalled node, partition the second disk, create the
+  filesystem, add it to `/etc/fstab` and mount it first.
+- **A working mail login.** See step 3.
 
 ### DR Readiness Gate
 
