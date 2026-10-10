@@ -4,7 +4,7 @@ set -o pipefail
 
 KUBECTL="${KUBECTL:-kubectl}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
-DR_NODE="${DR_NODE:-k3s-dr-test}"
+DR_NODE="${DR_NODE:-$(hostname -s)}"
 
 PASS=0
 WARN=0
@@ -23,7 +23,7 @@ Usage:
 Environment overrides:
   KUBECTL      Kubernetes CLI command. Default: kubectl
   LONGHORN_NS  Longhorn namespace. Default: longhorn-system
-  DR_NODE      DR Longhorn node. Default: k3s-dr-test
+  DR_NODE      DR Longhorn node. Default: this host's short hostname
 
 Resume-aware collision behavior:
   - Existing matching completed restore volume: PASS / SKIP-COMPLETE

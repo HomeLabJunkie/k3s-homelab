@@ -204,6 +204,48 @@ recovery/DR-RUNBOOK.md
 
 The DR process has been validated end-to-end against a dedicated K3s DR host.
 
+### The DR host
+
+Rehearsals restore into `k3s-dr`, a single-node K3s cluster with Cilium and
+Longhorn that points at the production Longhorn backup target. It is a VM
+(8 vCPUs, 32 GB, 500 GB disk) on the `ubuntu-hp` server, under KVM/libvirt,
+with its disk on the `tank` ZFS pool. `ubuntu-hp` is powered on only for
+rehearsals.
+
+```bash
+./recovery/dr-host-power.sh status   # server power state, DR host reachability
+./recovery/dr-host-power.sh on       # power on through the iLO, wait for SSH
+./recovery/dr-host-power.sh off      # shut down the VMs and the server
+```
+
+The script reads `DR_HYPERVISOR_HOST` and `DR_ILO_HOST` from
+`config/cluster.env`, and the iLO login from `~/.config/ilo-ubuntu-hp` (mode
+0600, username on line 1, password on line 2). The VM starts automatically
+when the server boots.
+
+`recovery/dr-host-build.sh` builds the DR host on a fresh Ubuntu machine, or
+converges an existing one. It reads the K3s, Cilium and Longhorn versions and
+the Longhorn backup target from production, so the DR host matches the
+cluster it has to recover, and installs the DR helpers under
+`/usr/local/libexec/k3s-dr/`. It needs passwordless sudo on the host;
+`--lock-sudo` then restricts passwordless sudo to the helpers. To regain
+general sudo afterwards, set a password from the server with
+`virsh set-user-password k3s-dr jeff <password>`.
+
+`ubuntu-hp` also holds a copy of the NAS backup share in `tank/backup/k3s`,
+refreshed by `/usr/local/sbin/k3s-backup-replicate` each time the server
+boots and snapshotted after each run. It is only as fresh as the last time
+the server was on. The script is `recovery/k3s-backup-replicate.sh`, installed
+by hand on the server with its settings in `/etc/k3s-backup-replicate.env` and
+run by the `k3s-backup-replicate.service` unit. It mounts the NAS read-only,
+and refuses to run against an empty share so a failed mount cannot empty the
+copy.
+
+With `DR_HOST_ON_DEMAND=true`, `dr-status.sh` treats an unreachable DR host
+as powered off: it prints a note, skips the DR preflight and capacity checks,
+and can still report `DR READY`. That result then says nothing about the DR
+host itself, which is only checked when it is on.
+
 ### DR Readiness Gate
 
 Before planning or executing a rehearsal, run the read-only readiness dashboard:
@@ -223,7 +265,8 @@ actions. It checks:
 - fresh backup coverage for all protected workloads
 - total protected restore capacity
 - an additional configurable restore-capacity headroom requirement
-- passwordless SSH connectivity to the DR host
+- passwordless SSH connectivity to the DR host (skipped with a note when
+  `DR_HOST_ON_DEMAND=true` and the host is powered off)
 - the protected DR preflight helper
 - DR Longhorn capacity against the current restore requirement
 
@@ -303,13 +346,7 @@ DR preflight
 Generate + validate current restore plan
         |
         v
-RESTORE confirmation
-        |
-        v
 Sequential / resumable Longhorn restore
-        |
-        v
-BIND confirmation
         |
         v
 Static DR PV/PVC bindings
@@ -324,24 +361,16 @@ Isolated validation workloads
 Application + historical-data validation
         |
         v
-CLEANUP confirmation
-        |
-        v
 Guarded cleanup
         |
         v
 Final clean-state preflight
 ```
 
-The individual destructive safety confirmations are intentionally retained:
-
-```text
-RESTORE
-BIND
-CLEANUP
-```
-
-The orchestrator never auto-types these confirmations.
+`--execute` runs unattended. The restore, bind and cleanup helpers each ask
+for a typed confirmation (`RESTORE`, `BIND`, `CLEANUP`) when run by hand, but
+the orchestrator passes `--yes` to all three, so one command runs the whole
+rehearsal, including the cleanup. Everything it changes is on the DR host.
 
 If application validation fails, DR state is preserved for troubleshooting and cleanup does not run automatically.
 

@@ -68,30 +68,36 @@ VALIDATION_RESOURCES=(
 )
 
 PVC_RESOURCES=(
+  "authelia authelia-dr"
   "logging loki-dr"
   "monitoring alertmanager-dr"
   "monitoring grafana-dr"
   "monitoring prometheus-dr"
   "trilium trilium-dr"
   "vaultwarden vaultwarden-dr"
+  "website fb-search-deps-dr"
 )
 
 PV_RESOURCES=(
+  "authelia-dr-pv"
   "loki-dr-pv"
   "alertmanager-dr-pv"
   "grafana-dr-pv"
   "prometheus-dr-pv"
   "trilium-dr-pv"
   "vaultwarden-dr-pv"
+  "fb-search-deps-dr-pv"
 )
 
 LH_VOLUMES=(
+  "dr-restore-authelia-authelia-data"
   "dr-restore-logging-loki"
   "dr-restore-monitoring-alertmanager"
   "dr-restore-monitoring-grafana"
   "dr-restore-monitoring-prometheus"
   "dr-restore-trilium"
   "dr-restore-vaultwarden"
+  "dr-restore-website-fb-search-deps"
 )
 
 echo "============================================================"
