@@ -2,9 +2,9 @@
 #
 # The admin-ui-auth Middleware at the bottom replaces the old shared basic auth:
 # Traefik asks Authelia about every request to the admin UIs (Traefik dashboard,
-# Longhorn, Prometheus, Grafana, Portainer, Trilium). Authelia lets a logged-in
+# Longhorn, Prometheus, Grafana, Trilium). Authelia lets a logged-in
 # member of the admins group through and sends everyone else to the portal.
-# Grafana, Portainer and Trilium keep their own logins behind it.
+# Grafana and Trilium keep their own logins behind it.
 #
 # deploy.sh creates the authelia-secrets Secret from .secrets.enc: session,
 # storage and JWT secrets, the SMTP login (shared with Alertmanager), the Duo
@@ -82,7 +82,6 @@ data:
             - longhorn.${BASE_DOMAIN}
             - prometheus.${BASE_DOMAIN}
             - grafana.${BASE_DOMAIN}
-            - portainer.${BASE_DOMAIN}
             - trilium.${BASE_DOMAIN}
           subject: group:admins
           policy: two_factor

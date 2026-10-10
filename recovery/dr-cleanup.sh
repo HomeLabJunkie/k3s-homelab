@@ -52,8 +52,6 @@ VALIDATION_RESOURCES=(
   "trilium service trilium-dr-validation"
   "vaultwarden pod vaultwarden-dr-validation"
   "vaultwarden service vaultwarden-dr-validation"
-  "portainer pod portainer-dr-validation"
-  "portainer service portainer-dr-validation"
   "monitoring pod grafana-dr-validation"
   "monitoring service grafana-dr-validation"
   "monitoring pod prometheus-dr-validation"
@@ -67,36 +65,41 @@ VALIDATION_RESOURCES=(
   "logging service loki-dr-validation-memberlist"
   "logging configmap loki-dr-validation-config"
   "logging configmap loki-dr-validation-runtime"
+  "authelia pod authelia-dr-validation"
+  "website pod fb-search-deps-dr-validation"
 )
 
 PVC_RESOURCES=(
+  "authelia authelia-dr"
   "logging loki-dr"
   "monitoring alertmanager-dr"
   "monitoring grafana-dr"
   "monitoring prometheus-dr"
-  "portainer portainer-dr"
   "trilium trilium-dr"
   "vaultwarden vaultwarden-dr"
+  "website fb-search-deps-dr"
 )
 
 PV_RESOURCES=(
+  "authelia-dr-pv"
   "loki-dr-pv"
   "alertmanager-dr-pv"
   "grafana-dr-pv"
   "prometheus-dr-pv"
-  "portainer-dr-pv"
   "trilium-dr-pv"
   "vaultwarden-dr-pv"
+  "fb-search-deps-dr-pv"
 )
 
 LH_VOLUMES=(
+  "dr-restore-authelia-authelia-data"
   "dr-restore-logging-loki"
   "dr-restore-monitoring-alertmanager"
   "dr-restore-monitoring-grafana"
   "dr-restore-monitoring-prometheus"
-  "dr-restore-portainer"
   "dr-restore-trilium"
   "dr-restore-vaultwarden"
+  "dr-restore-website-fb-search-deps"
 )
 
 echo "============================================================"

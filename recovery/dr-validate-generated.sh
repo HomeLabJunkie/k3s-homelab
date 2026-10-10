@@ -4,14 +4,14 @@ set -o pipefail
 
 KUBECTL="${KUBECTL:-kubectl}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
-DR_NODE="${DR_NODE:-k3s-dr-test}"
+DR_NODE="${DR_NODE:-$(hostname -s)}"
 
 PASS=0
 WARN=0
 FAIL=0
 
 pass() { printf 'PASS: %s\n' "$*"; PASS=$((PASS + 1)); }
-# shellcheck disable=SC2317 # kept alongside pass/fail; no check warns yet
+# shellcheck disable=SC2317,SC2329 # kept alongside pass/fail; no check warns yet
 warn() { printf 'WARN: %s\n' "$*"; WARN=$((WARN + 1)); }
 fail() { printf 'FAIL: %s\n' "$*"; FAIL=$((FAIL + 1)); }
 
@@ -23,7 +23,7 @@ Usage:
 Environment overrides:
   KUBECTL      Kubernetes CLI command. Default: kubectl
   LONGHORN_NS  Longhorn namespace. Default: longhorn-system
-  DR_NODE      DR Longhorn node. Default: k3s-dr-test
+  DR_NODE      DR Longhorn node. Default: this host's short hostname
 
 Resume-aware collision behavior:
   - Existing matching completed restore volume: PASS / SKIP-COMPLETE

@@ -61,7 +61,6 @@ vaultwarden-cert.yaml
 vaultwarden-longhorn-v2.yaml
 traefik-dashboard.yaml
 vaultwarden-longhorn.yaml
-portainer-ingress.yaml
 longhorn-ingress.yaml
 trilium-cert.yaml
 website.yaml

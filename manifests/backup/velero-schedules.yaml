@@ -13,7 +13,6 @@ spec:
       - trilium
       - vaultwarden
       - authelia
-      - portainer
       - monitoring
       # logging (Loki) is left out: its Longhorn snapshot clone intermittently
       # fails and left the whole backup PartiallyFailed. Longhorn's

@@ -6,7 +6,7 @@ set -u
 set -o pipefail
 
 KUBECTL="${KUBECTL:-sudo k3s kubectl}"
-DR_NODE="${DR_NODE:-k3s-dr-test}"
+DR_NODE="${DR_NODE:-$(hostname -s)}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
 MIN_FREE_GIB="${MIN_FREE_GIB:-150}"
 

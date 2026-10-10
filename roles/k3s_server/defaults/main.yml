@@ -25,6 +25,10 @@ metal_lb_type: native
 
 retry_count: 20
 
+# Root-only file the transient k3s-init service reads the cluster token from,
+# instead of its command line. It is removed once initial bootstrap finishes.
+k3s_server_init_token_file: /etc/rancher/k3s/server-init-token
+
 # yamllint disable rule:line-length
 server_init_args: >-
   {% if groups[group_name_master | default('master')] | length > 1 %}
@@ -33,7 +37,7 @@ server_init_args: >-
     {% else %}
       --server https://{{ hostvars[groups[group_name_master | default('master')][0]].k3s_node_ip | split(",") | first | ansible.utils.ipwrap }}:6443
     {% endif %}
-    --token {{ k3s_token }}
+    --token-file {{ k3s_server_init_token_file }}
   {% endif %}
   {{ extra_server_args }}
 

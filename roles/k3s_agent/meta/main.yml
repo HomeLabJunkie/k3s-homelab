@@ -14,6 +14,11 @@ argument_specs:
         description: Name of the master group
         default: master
 
+      k3s_agent_wait_for_ready:
+        description: Wait for the node to be Ready instead of only registered
+        type: bool
+        default: true
+
       k3s_token:
         description: Token used to communicate between masters
 

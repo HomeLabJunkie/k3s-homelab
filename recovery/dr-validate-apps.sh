@@ -59,11 +59,12 @@ pass "Kubernetes API reachable"
 declare -a APPS=(
     "trilium:trilium-dr-validation"
     "vaultwarden:vaultwarden-dr-validation"
-    "portainer:portainer-dr-validation"
     "monitoring:grafana-dr-validation"
     "monitoring:prometheus-dr-validation"
     "monitoring:alertmanager-dr-validation"
     "logging:loki-dr-validation"
+    "authelia:authelia-dr-validation"
+    "website:fb-search-deps-dr-validation"
 )
 
 echo
@@ -177,10 +178,6 @@ run_http_contains vaultwarden \
     "Vaultwarden /alive reachable" \
     "http://vaultwarden-dr-validation/alive" ""
 
-run_http_contains portainer \
-    "Portainer /api/status reachable" \
-    "http://portainer-dr-validation:9000/api/status" ""
-
 GRAFANA_JSON="$(run_http_raw monitoring \
     "http://grafana-dr-validation:3000/api/health" \
     "$HTTP_RETRIES" "$HTTP_RETRY_DELAY" || true)"
@@ -228,11 +225,24 @@ else
     fail "Vaultwarden restored db.sqlite3 is missing or empty"
 fi
 
-if $KUBECTL -n portainer exec portainer-dr-validation -- \
-    sh -c 'test -s /data/portainer.db' >/dev/null 2>&1; then
-    pass "Portainer restored portainer.db is present and non-empty"
+# Authelia is not started (it needs its production configuration); check
+# that its restored database is a SQLite file rather than merely present.
+# shellcheck disable=SC2016 # expanded in the pod
+if $KUBECTL -n authelia exec authelia-dr-validation -- \
+    sh -c 'test "$(head -c 15 /data/db.sqlite3)" = "SQLite format 3"' >/dev/null 2>&1; then
+    pass "Authelia restored db.sqlite3 is a SQLite database"
 else
-    warn "Portainer portainer.db could not be verified from inside the container"
+    fail "Authelia restored db.sqlite3 is missing or not a SQLite database"
+fi
+
+# The fb-search volume holds its installed Python dependencies and the
+# marker its init container writes once the install is complete.
+# shellcheck disable=SC2016 # expanded in the pod
+if $KUBECTL -n website exec fb-search-deps-dr-validation -- \
+    sh -c 'test -s /deps/.installed && test "$(ls /deps | wc -l)" -gt 0' >/dev/null 2>&1; then
+    pass "fb-search restored dependencies and install marker are present"
+else
+    fail "fb-search restored dependencies or install marker are missing"
 fi
 
 # An instant query at "now" is not a valid DR historical-data test because

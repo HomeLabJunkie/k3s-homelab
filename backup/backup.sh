@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# The bundle holds an etcd snapshot, so nothing staged here may be readable by
+# other users, and the published copy inherits these modes.
+umask 077
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
@@ -258,7 +262,9 @@ echo "==> Publishing completed bundle to ${NAS}:${EXPORT} through ${STORAGE_SSH_
 storage_mount
 storage_sudo mkdir -p "$DEST"
 REMOTE_DEST_CREATED=1
-tar -C "$STAGE_DEST" -cf - . | storage_sudo tar --no-same-owner -C "$DEST" -xf -
+storage_sudo chmod 700 "$DEST"
+tar -C "$STAGE_DEST" -cf - . | storage_sudo tar --no-same-owner -p -C "$DEST" -xf -
+storage_restrict_bundle "$DEST"
 storage_root_script "$DEST" <<'REMOTE'
 set -Eeuo pipefail
 destination="$1"

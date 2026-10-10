@@ -32,7 +32,6 @@ Core platform:
 | External access | Cloudflare Tunnel |
 | Persistent storage | Longhorn |
 | Cluster management | Rancher |
-| Secondary management | Portainer |
 | Metrics | kube-prometheus-stack |
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
@@ -64,8 +63,9 @@ has a read-only check to run first.
 
 | I want to... | Run | Changes the cluster? |
 | --- | --- | --- |
-| Check overall health | `./repo-doctor.sh` (`--quick` skips preflight and DR) | No |
+| Check overall health | `./repo-doctor.sh` (`--quick` skips preflight, manifests and DR) | No |
 | Check a deployment would be safe | `./deploy.sh --preflight-only` | No |
+| Validate manifests before applying | `./scripts/validate-manifests.sh` | No |
 | Deploy or converge the cluster | `./deploy.sh` | Yes |
 | Check one node | `./maintain-node.sh <NODE_IP>` | No |
 | Reconcile one node | `./maintain-node.sh <NODE_IP> --apply` | Yes |
@@ -93,7 +93,7 @@ established cluster.
 | Step-by-step maintenance and OS updates | [Maintenance cheat sheet](cheat-sheet.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
-| Rancher, Portainer, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
+| Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
 | Prometheus, Grafana, alerts, Loki | [Monitoring and logging](docs/observability.md) |
 | What is protected, backup layers, DR rehearsal | [Backup and disaster recovery](docs/backup-and-dr.md) |
 | Backup commands, schedules, troubleshooting | [Backup procedures](backup-procedures.md) |

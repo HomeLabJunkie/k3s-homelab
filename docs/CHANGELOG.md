@@ -6,6 +6,202 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-10: Full rebuild with deploy.sh tested on an isolated cluster
+
+On 2026-10-10, `./deploy.sh --bootstrap` built the whole stack from empty VMs
+on the isolated test cluster, in one pass of 25 minutes with no errors and no
+intervention: six nodes Ready, 117 pods running, nine Let's Encrypt
+certificates issued, seven Longhorn volumes healthy with the backup target
+available, and Rancher answering from the internet through a Cloudflare
+tunnel. It used a separate domain, tunnel and API token, and ran from a
+separate clone of the repository; `docs/backup-and-dr.md` describes the
+setup. The domain's DNS zone was compared with a backup afterwards and was
+unchanged. This also proved the Rancher `--set-file` password change from
+2026-10-09, which had not run live.
+
+Getting there took twelve partial runs. Most stops were gaps in the test
+environment, now fixed in `recovery/dr-test-cluster.sh`: each node gets a
+200 GB dedicated Longhorn disk and 4 vCPUs, a seventh VM stands in for the
+backup NAS, and disk syncs on the test dataset are relaxed so etcd keeps up.
+
+The runs also found faults in `deploy.sh`, fixed here and proven with four
+further runs:
+
+- Vaultwarden was not restarted when its secrets changed, so a new mail
+  password or admin token had no effect until something else restarted it.
+  Its deployment is now stamped with a hash of those values, as Authelia's
+  already was.
+- The website was only waited on when its nginx config had just changed, so
+  a run could report success with the site's pods failing. `deploy.sh` now
+  always waits for the site and its certificate, and restarts it when the
+  nginx config or the deploy key changes.
+- After a deployment had been stuck, the next run could fail once at the
+  same step on the stale status. The waits for Authelia, Vaultwarden and
+  the website now ride that out.
+
+Two prerequisites of a real rebuild are now documented: every node needs its
+storage disk mounted at `/var/lib/storage` beforehand, and the mail login
+must work, because Authelia will not start and the Vaultwarden invitation
+fails without it.
+
+## 2026-10-10: Rehearsal checks for Authelia and fb-search; iLO login in secrets
+
+DR rehearsals now validate all eight restored volumes. Authelia is not
+started, since it needs its production configuration; a small pod mounts
+each of the two remaining volumes read-only and the rehearsal checks that
+Authelia's `db.sqlite3` is a SQLite database and that the `fb-search`
+dependencies and install marker are present. A full rehearsal on 2026-10-10
+passed in 39 minutes with 21 checks and 0 failures, up from 17.
+
+`recovery/dr-host-power.sh` still reads the iLO login from
+`~/.config/ilo-ubuntu-hp`, and now falls back to `DR_ILO_USERNAME` and
+`DR_ILO_PASSWORD` in `.secrets.enc` when that file does not exist, so a
+replacement laptop can power the DR server on. The old DR VM on Unraid,
+kept as a fallback since the move to `ubuntu-hp`, was deleted.
+
+## 2026-10-10: Fresh bootstrap tested on an isolated cluster
+
+On 2026-10-10, `site.yml` was run from scratch against six new VMs on
+`ubuntu-hp` (three servers, three workers), created by the new
+`recovery/dr-test-cluster.sh` on a NAT network that is firewalled off from
+the LAN. The run passed in 8 minutes with no failures: all six nodes Ready on
+`v1.36.5+k3s1`, every pod running, and secrets encryption enabled from first
+boot. It confirmed the 2026-10-09 fixes on a real bootstrap: the servers
+joined one at a time without deadlocking, and the cluster token was not on
+any K3s command line and its staging file was gone afterwards.
+
+The first attempt found a second deadlock of the same kind. The agent role
+waited for each worker to be Ready, but on a fresh cluster no node is Ready
+until Cilium is installed by the play that follows. `site.yml` now lets
+workers register without that wait
+(`k3s_agent_wait_for_ready: false`) and verifies that every node is Ready at
+the end; node maintenance still waits for Ready as before. The test covers
+the cluster layer only. `deploy.sh` and the applications were not run.
+
+## 2026-10-10: DR host moved to ubuntu-hp; full rehearsal passed
+
+On 2026-10-10, the DR host was rebuilt as a VM on the `ubuntu-hp` server
+(KVM/libvirt, 8 vCPUs, 32 GB, 500 GB disk on the `tank` ZFS pool) at
+`192.168.1.127`, replacing the 4 vCPU / 11 GB VM on Unraid. It was built with
+the new `recovery/dr-host-build.sh`, which reads its versions from
+production: K3s `v1.36.5+k3s1`, Cilium `1.20.2` and Longhorn `1.12.1`. The
+old host was a K3s minor version behind. A full
+`./recovery/dr-rehearsal.sh --execute` against the new host passed in 36
+minutes: 8 volumes restored and bound, the six validated applications
+started on their restored data (17 checks, 0 failures), and cleanup left a
+clean preflight. Authelia's volume and `fb-search-deps` are restored and
+bound but have no validation checks.
+
+Two gaps showed up and were fixed. The bind and cleanup steps knew six
+volumes while the restore plan had eight, so a rehearsal would have stopped
+at BIND; and three DR helpers had the old node name `k3s-dr-test` hardcoded.
+The rehearsal's help text and the docs also claimed that `--execute` asks
+for `RESTORE`, `BIND` and `CLEANUP`; it runs unattended, and the text now
+says so.
+
+`ubuntu-hp` is powered on only for rehearsals. `recovery/dr-host-power.sh`
+switches it on through its iLO and off again, and with
+`DR_HOST_ON_DEMAND=true` `dr-status.sh` notes an unreachable DR host and
+skips its checks instead of failing. The server also keeps a copy of the NAS
+backup share in `tank/backup/k3s` (165 GB on the first run), refreshed and
+snapshotted each time it boots. The `k3s-dr` SSH alias now points at the new
+VM; the old VM is shut down on Unraid, with autostart disabled, and kept as
+a fallback for now.
+
+## 2026-10-09: etcd snapshot restore tested with encrypted Secrets
+
+On 2026-10-09, the etcd snapshot from cluster bundle `20261009-132622`, the
+first taken after secrets encryption was enabled, was restored into a
+throwaway K3s `v1.36.5+k3s1` server in a Docker container on the operator
+laptop. The container ran on an internal network with no route to the LAN and
+with the agent disabled, so no workloads started. The snapshot's checksum
+matched the bundle's `SHA256SUMS`, the `--cluster-reset` restore succeeded and
+the restored API became ready with all 34 namespaces. All 180 Secrets were
+readable; 179 matched production by hash and the other had since been
+replaced in production. The restored etcd database still held its Secrets as
+AES-CBC records. The restore refused to run without the cluster token, and
+again with a wrong one, and the `K3S_TOKEN` in `.secrets.enc` matched the
+live cluster's token. The test covers the control plane and Secrets only: no
+workloads were started. Every test artifact was removed afterwards. The steps
+are in [Backup and disaster recovery](backup-and-dr.md).
+
+## 2026-10-09: K3s secrets encryption at rest
+
+On 2026-10-09, secrets encryption was enabled on the running cluster, so
+Secrets are now stored encrypted in etcd and in etcd snapshots (K3s's default
+AES-CBC provider). `--secrets-encryption` was added to `extra_server_args`,
+and the documented K3s procedure for an existing HA cluster was followed:
+`k3s secrets-encrypt enable` on `k3s-node-0`, each of the three servers
+reconciled in turn with `maintain-node.sh --apply`, `rotate-keys` on
+`k3s-node-0`, which re-encrypted all 180 Secrets, then a second restart of
+each server. All three report `Encryption Status: Enabled` with matching
+hashes. As a check, a throwaway Secret and ConfigMap were created and an etcd
+snapshot taken: the Secret's value did not appear in the snapshot and the
+ConfigMap's did. Every `maintain-node.sh` run passed its post-maintenance
+validation, Longhorn volumes returned to healthy between servers, and no pods
+were left unhealthy. Cluster bundles were taken before (`20261009-124046`)
+and after (`20261009-132622`); the first is the last one whose snapshot holds
+Secrets unencrypted. Restoring a snapshot now needs the cluster's
+`K3S_TOKEN`, as described in
+[Backup and disaster recovery](backup-and-dr.md). A snapshot restore was
+tested later the same day; see the entry above.
+
+## 2026-10-09: Portainer removed
+
+On 2026-10-09, Portainer was removed; Rancher is the only management UI. The
+Helm release (chart `245.1.0`), its IngressRoute and certificate, and the
+`portainer` namespace were deleted, which also deleted the 20 GiB Longhorn
+volume. Its data was not kept: the Longhorn backup volume and its 42 backups
+were deleted from the NAS as well. `deploy.sh` no longer installs it, and it
+was taken out of `recovery/apps.conf`, the DR rehearsal scripts, the Velero
+`protected-apps-daily` schedule (applied the same day) and the documentation.
+Afterwards `dr-status.sh` reported 7 protected workloads with 7 fresh
+backups, and a DR rehearsal now restores six volumes instead of seven. Two
+things clear on their own: the Authelia access rule for the Portainer
+hostname goes with the next `deploy.sh` run, and the Velero backups that
+still contain the namespace expire by 2026-10-16.
+
+`repo-doctor.sh` also gained a manifest-validation section the same day; it
+is skipped under `--quick`.
+
+## 2026-10-09: Manifest validation against the cluster's CRDs
+
+On 2026-10-09, `scripts/validate-manifests.sh` was added. It runs
+`kubeconform` in strict mode over every Kubernetes manifest in the
+repository, including the rendered ones that Git ignores, and is read-only.
+A first run against the public CRD schema catalog had reported
+`task: system-backup` on a Longhorn RecurringJob as invalid although the
+installed Longhorn accepts it, so the script validates against schemas
+exported from the cluster's own CRDs and against its Kubernetes version
+instead. The exported schemas are closed, so a misspelt field in a custom
+resource is rejected. Schemas are cached under
+`~/.cache/k3s-homelab/manifest-schemas` and reused with `--offline`. On both
+laptops all 118 resources in 34 files validated against Kubernetes 1.36.5 and
+227 exported CRD schemas. The run on the T480 also turned up a stale,
+gitignored `apps/longhorn/longhorn-ingress.yaml` from September that nothing
+used; it was deleted. The check needs `kubeconform` on the laptop and is not
+part of CI or `repo-doctor.sh`.
+
+## 2026-10-09: Credential handling, backup permissions and bootstrap hardened
+
+On 2026-10-09, three findings from a repository security audit were fixed.
+`deploy.sh` now passes the Rancher bootstrap password to Helm with
+`--set-file` instead of on the command line, and the `k3s_server` role has
+`k3s-init` read the cluster token from a root-only file
+(`k3s_server_init_token_file`) that is removed when bootstrap finishes, so
+neither credential appears in a process list. `backup.sh` stages under
+`umask 077` and strips group and other access from the published bundle,
+failing the backup if any entry is still open; before, the etcd snapshot,
+which holds every Kubernetes Secret, was published world-readable. Bundles
+already on the NAS keep their old permissions, and the snapshot is still
+stored unencrypted. Finally, a fresh multi-server bootstrap could not
+complete: the servers play runs one host at a time, but each server waited
+for every control-plane node to join. Each server now waits only for itself,
+and a separate play in `site.yml` verifies full membership afterwards.
+Redeploys of an existing cluster were never affected. The backup change is
+covered by a new test and the playbooks pass a syntax check; none of the
+three has yet been used on a live bootstrap, Rancher install or backup run.
+
 ## 2026-10-08: Traefik rejects encoded null characters
 
 On 2026-10-08, the `web` and `websecure` entrypoints were set to reject

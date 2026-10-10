@@ -46,6 +46,10 @@ if ! $KUBECTL get --raw='/readyz' >/dev/null 2>&1; then
     exit 1
 fi
 
+# Image for the pods that only inspect restored files; the same one
+# dr-validate-apps.sh uses for its HTTP checks, so the DR host already has it.
+DATA_CHECK_IMAGE="${DATA_CHECK_IMAGE:-curlimages/curl:8.22.0}"
+
 get_image() {
     local ns="$1"
     local type="$2"
@@ -62,14 +66,13 @@ get_image() {
 
 TRILIUM_IMAGE="$(get_image trilium deployment trilium trilium)"
 VAULTWARDEN_IMAGE="$(get_image vaultwarden deployment vaultwarden vaultwarden)"
-PORTAINER_IMAGE="$(get_image portainer deployment portainer portainer)"
 GRAFANA_IMAGE="$(get_image monitoring deployment monitoring-grafana grafana)"
 PROM_IMAGE="$(get_image monitoring statefulset prometheus-monitoring-kube-prometheus-prometheus prometheus)"
 ALERT_IMAGE="$(get_image monitoring statefulset alertmanager-monitoring-kube-prometheus-alertmanager alertmanager)"
 LOKI_IMAGE="$(get_image logging statefulset loki loki)"
 
 for VAR in \
-    TRILIUM_IMAGE VAULTWARDEN_IMAGE PORTAINER_IMAGE GRAFANA_IMAGE \
+    TRILIUM_IMAGE VAULTWARDEN_IMAGE GRAFANA_IMAGE \
     PROM_IMAGE ALERT_IMAGE LOKI_IMAGE
 do
     if [[ -z "${!VAR}" || "${!VAR}" == "null" ]]; then
@@ -104,7 +107,6 @@ cat > "$OUTPUT" <<EOF
 # Production images captured at generation time:
 # Trilium:      $TRILIUM_IMAGE
 # Vaultwarden:  $VAULTWARDEN_IMAGE
-# Portainer:    $PORTAINER_IMAGE
 # Grafana:      $GRAFANA_IMAGE
 # Prometheus:   $PROM_IMAGE
 # Alertmanager: $ALERT_IMAGE
@@ -231,41 +233,6 @@ spec:
     - name: data
       persistentVolumeClaim:
         claimName: vaultwarden-dr
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: portainer-dr-validation
-  namespace: portainer
-spec:
-  selector:
-    app: portainer-dr-validation
-  ports:
-    - port: 9000
-      targetPort: 9000
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: portainer-dr-validation
-  namespace: portainer
-  labels:
-    app: portainer-dr-validation
-spec:
-  restartPolicy: Never
-  enableServiceLinks: false
-  containers:
-    - name: portainer
-      image: $PORTAINER_IMAGE
-      ports:
-        - containerPort: 9000
-      volumeMounts:
-        - name: data
-          mountPath: /data
-  volumes:
-    - name: data
-      persistentVolumeClaim:
-        claimName: portainer-dr
 ---
 apiVersion: v1
 kind: Service
@@ -500,15 +467,54 @@ spec:
       emptyDir: {}
 EOF
 
+# Authelia cannot start without its production configuration and secrets, and
+# the fb-search volume only holds installed dependencies, so neither is
+# started as an application. A small pod mounts each restored volume
+# read-only and dr-validate-apps.sh inspects the files.
+data_check_pod() {
+    local ns="$1" name="$2" claim="$3" mount="$4"
+    cat >> "$OUTPUT" <<EOF
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name
+  namespace: $ns
+  labels:
+    app: $name
+spec:
+  restartPolicy: Never
+  enableServiceLinks: false
+  automountServiceAccountToken: false
+  securityContext:
+    runAsUser: 0
+  containers:
+    - name: check
+      image: $DATA_CHECK_IMAGE
+      command: ["sleep", "86400"]
+      volumeMounts:
+        - name: data
+          mountPath: $mount
+          readOnly: true
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: $claim
+EOF
+}
+
+data_check_pod authelia authelia-dr-validation authelia-dr /data
+data_check_pod website fb-search-deps-dr-validation fb-search-deps-dr /deps
+
 echo "Generated: $OUTPUT"
 echo
 echo "Captured images:"
 printf '  %-14s %s\n' "Trilium" "$TRILIUM_IMAGE"
 printf '  %-14s %s\n' "Vaultwarden" "$VAULTWARDEN_IMAGE"
-printf '  %-14s %s\n' "Portainer" "$PORTAINER_IMAGE"
 printf '  %-14s %s\n' "Grafana" "$GRAFANA_IMAGE"
 printf '  %-14s %s\n' "Prometheus" "$PROM_IMAGE"
 printf '  %-14s %s\n' "Alertmanager" "$ALERT_IMAGE"
 printf '  %-14s %s\n' "Loki" "$LOKI_IMAGE"
+printf '  %-14s %s\n' "Data checks" "$DATA_CHECK_IMAGE"
 echo
 echo "No Kubernetes resources were applied."

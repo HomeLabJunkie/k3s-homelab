@@ -94,7 +94,7 @@ Traefik is installed separately with Helm rather than using the K3s bundled Trae
 It handles application ingress and TLS-enabled service exposure.
 
 Routes that use a Traefik middleware are `IngressRoute` objects, not Kubernetes
-`Ingress` objects: Longhorn, Grafana, Prometheus, Portainer, Trilium, the
+`Ingress` objects: Longhorn, Grafana, Prometheus, Trilium, the
 `www` redirect and the Traefik dashboard. Traefik reads Ingresses and its own
 CRDs through two separate providers. At startup the Ingress routes used to load
 a moment before the middlewares, and each one logged

@@ -46,7 +46,8 @@ Default:
   Run the full DR rehearsal.
 
 Safety:
-  - Never auto-types RESTORE, BIND, or CLEANUP.
+  - --execute runs unattended: restore, bind and cleanup are not confirmed
+    one by one. Everything it changes is on the DR host.
   - Validation failure preserves DR state.
   - Cleanup is not started after failed validation.
 EOF

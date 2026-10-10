@@ -12,6 +12,7 @@ fi
 
 RUN_DR=true
 RUN_PREFLIGHT=true
+RUN_MANIFESTS=true
 
 PASS=0
 WARN=0
@@ -48,12 +49,14 @@ section() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./repo-doctor.sh [--quick] [--no-dr] [--no-preflight]
+  ./repo-doctor.sh [--quick] [--no-dr] [--no-preflight] [--no-manifests]
 
 Options:
-  --quick         Skip DR readiness and deployment preflight.
+  --quick         Skip DR readiness, deployment preflight and manifest
+                  validation.
   --no-dr         Skip ./dr-status.sh.
   --no-preflight  Skip ./deploy.sh --preflight-only.
+  --no-manifests  Skip ./scripts/validate-manifests.sh.
   -h, --help      Show this help.
 
 Exit codes:
@@ -74,6 +77,7 @@ while (( $# > 0 )); do
     --quick)
       RUN_DR=false
       RUN_PREFLIGHT=false
+      RUN_MANIFESTS=false
       shift
       ;;
     --no-dr)
@@ -82,6 +86,10 @@ while (( $# > 0 )); do
       ;;
     --no-preflight)
       RUN_PREFLIGHT=false
+      shift
+      ;;
+    --no-manifests)
+      RUN_MANIFESTS=false
       shift
       ;;
     -h|--help)
@@ -309,7 +317,27 @@ else
   fail_check "kubectl is not installed"
 fi
 
-section "6. SECURITY / LOCAL FILE HYGIENE"
+section "6. KUBERNETES MANIFESTS"
+
+if [[ "$RUN_MANIFESTS" != true ]]; then
+  skip "Manifest validation skipped by request"
+elif ! command -v kubeconform >/dev/null 2>&1; then
+  skip "Manifest validation needs kubeconform, which is not installed"
+elif [[ -x "$ROOT_DIR/scripts/validate-manifests.sh" ]]; then
+  set +e
+  manifest_output="$("$ROOT_DIR/scripts/validate-manifests.sh" 2>&1)"
+  manifest_rc=$?
+  set -e
+  printf '%s\n' "$manifest_output"
+
+  (( manifest_rc == 0 )) \
+    && pass "Kubernetes manifests are valid for this cluster" \
+    || fail_check "One or more Kubernetes manifests are invalid"
+else
+  fail_check "Manifest validator is missing or not executable"
+fi
+
+section "7. SECURITY / LOCAL FILE HYGIENE"
 
 if [[ -f "$ROOT_DIR/.secrets.enc" ]]; then
   mode="$(stat -c '%a' "$ROOT_DIR/.secrets.enc" 2>/dev/null || true)"
@@ -348,7 +376,7 @@ if [[ -e "$ROOT_DIR/k3s-server-token.sha256" ]]; then
   fi
 fi
 
-section "7. DISASTER RECOVERY READINESS"
+section "8. DISASTER RECOVERY READINESS"
 
 if [[ "$RUN_DR" == true ]]; then
   if [[ -x "$ROOT_DIR/dr-status.sh" ]]; then

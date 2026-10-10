@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 KUBECTL="${KUBECTL:-kubectl}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
-DR_NODE="${DR_NODE:-k3s-dr-test}"
+DR_NODE="${DR_NODE:-$(hostname -s)}"
 VALIDATOR="${VALIDATOR:-}"
 POLL_SECONDS="${POLL_SECONDS:-10}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-3600}"
@@ -19,7 +19,7 @@ Usage:
 Environment:
   KUBECTL           Default: kubectl
   LONGHORN_NS       Default: longhorn-system
-  DR_NODE           Default: k3s-dr-test
+  DR_NODE           Default: this host's short hostname
   VALIDATOR         Path to dr-validate-generated.sh
   POLL_SECONDS      Default: 10
   TIMEOUT_SECONDS   Per-volume restore timeout, default: 3600

@@ -9,14 +9,13 @@ day-to-day commands and verification criteria are in
 
 ## Protected persistent workloads
 
-The DR configuration in `recovery/apps.conf` currently protects eight persistent workloads:
+The DR configuration in `recovery/apps.conf` currently protects seven persistent workloads:
 
 | Application | Namespace | Persistent data |
 | --- | --- | --- |
 | Trilium | `trilium` | `trilium-data` |
 | Vaultwarden | `vaultwarden` | `vaultwarden-data` |
 | Authelia | `authelia` | `authelia-data` |
-| Portainer | `portainer` | `portainer` |
 | Grafana | `monitoring` | `monitoring-grafana` |
 | Loki | `logging` | `storage-loki-0` |
 | Prometheus | `monitoring` | Prometheus StatefulSet PVC |
@@ -58,6 +57,88 @@ The cluster bundle contains:
 - SHA256 checksums
 
 Bundles are stored on the configured NFS cluster-backup export and a `latest` symlink identifies the newest recovery bundle.
+
+Bundles are published readable only by their owner on the NAS, because the
+etcd snapshot holds every Kubernetes Secret.
+
+#### Secrets encryption at rest
+
+The servers run with `--secrets-encryption` (set in `extra_server_args` in
+`inventory/k3s-ansible/group_vars/all.yml`), so Secrets are stored encrypted
+in etcd with K3s's default AES-CBC provider, and they are encrypted inside
+every etcd snapshot too. ConfigMaps and other resources are not encrypted.
+
+```bash
+ssh <control-plane-node> sudo k3s secrets-encrypt status
+```
+
+should report `Encryption Status: Enabled` and `All hashes match` on each
+server.
+
+What this means for recovery:
+
+- The encryption key lives on each server in
+  `/var/lib/rancher/k3s/server/cred/encryption-config.json`. K3s also keeps it
+  in the cluster's bootstrap data inside etcd, protected by the cluster token.
+- Restoring an etcd snapshot onto new servers therefore needs the same
+  `K3S_TOKEN` the cluster was built with. It is kept in `.secrets.enc`, which
+  every bundle carries. Without that token the Secrets in a snapshot cannot
+  be read.
+- Snapshots taken before 2026-10-09 still hold Secrets unencrypted.
+- To rotate the key, run `sudo k3s secrets-encrypt rotate-keys` on one server,
+  wait for `reencrypt_finished`, then restart K3s on each server in turn. See
+  the [K3s documentation](https://docs.k3s.io/cli/secrets-encrypt); a wrong
+  rotation procedure can corrupt the cluster.
+
+#### Testing an etcd snapshot restore
+
+`recovery/dr-rehearsal.sh` restores Longhorn volumes; it does not restore the
+etcd snapshot. That is tested separately, in a container that cannot reach
+the LAN and runs no workloads, so kube-vip, MetalLB and cloudflared never
+start against the real addresses or tunnel. Tested on 2026-10-09 against the
+first snapshot taken after encryption was enabled: all 180 Secrets were
+readable, and 179 matched production by hash (the other had since been
+replaced in production).
+
+With the snapshot copied out of a bundle to `$W/snapshot` and an env file
+`$W/env` (mode 0600) holding `K3S_TOKEN=<the cluster token>`:
+
+```bash
+IMG=rancher/k3s:v1.36.5-k3s1   # match the cluster's K3s version
+ARGS="--disable-agent --secrets-encryption --flannel-backend=none \
+  --disable-network-policy --disable servicelb --disable traefik"
+
+docker network create --internal etcd-restore-test
+docker volume create etcd-restore-data
+GW="$(docker network inspect etcd-restore-test -f '{{(index .IPAM.Config 0).Gateway}}')"
+
+# K3s needs a default route to start; on an internal network it leads nowhere.
+docker run --rm --privileged --network etcd-restore-test \
+  --tmpfs /run --tmpfs /var/run --env-file "$W/env" \
+  -v "$W":/restore:ro -v etcd-restore-data:/var/lib/rancher/k3s \
+  --entrypoint sh "$IMG" -c "ip route add default via $GW && exec k3s server \
+    --cluster-reset --cluster-reset-restore-path=/restore/snapshot $ARGS"
+
+docker run -d --name etcd-restore --privileged --network etcd-restore-test \
+  --tmpfs /run --tmpfs /var/run --env-file "$W/env" \
+  -v etcd-restore-data:/var/lib/rancher/k3s \
+  --entrypoint sh "$IMG" -c "ip route add default via $GW && exec k3s server $ARGS"
+
+docker exec etcd-restore kubectl get --raw=/readyz
+docker exec etcd-restore kubectl get secrets -A
+```
+
+Afterwards remove the container, volume, network and the files in `$W`.
+
+- Without a token the restore stops with `please pass --token to complete the
+  restoration`; with the wrong one it stops with `bootstrap data already found
+  and encrypted with different token`.
+- `k3s secrets-encrypt status` fails in this test cluster because it has no
+  node of its own. Readable Secrets are the evidence.
+- The test covers the control plane and Secrets only. No workloads start, so
+  it says nothing about applications running on the restored state.
+- A real recovery uses the same `--cluster-reset` and
+  `--cluster-reset-restore-path` flags on a server, with the same token.
 
 ### 2. Longhorn Application Backups
 
@@ -123,6 +204,142 @@ recovery/DR-RUNBOOK.md
 
 The DR process has been validated end-to-end against a dedicated K3s DR host.
 
+### The DR host
+
+Rehearsals restore into `k3s-dr`, a single-node K3s cluster with Cilium and
+Longhorn that points at the production Longhorn backup target. It is a VM
+(8 vCPUs, 32 GB, 500 GB disk) on the `ubuntu-hp` server, under KVM/libvirt,
+with its disk on the `tank` ZFS pool. `ubuntu-hp` is powered on only for
+rehearsals.
+
+```bash
+./recovery/dr-host-power.sh status   # server power state, DR host reachability
+./recovery/dr-host-power.sh on       # power on through the iLO, wait for SSH
+./recovery/dr-host-power.sh off      # shut down the VMs and the server
+```
+
+The script reads `DR_HYPERVISOR_HOST` and `DR_ILO_HOST` from
+`config/cluster.env`, and the iLO login from `~/.config/ilo-ubuntu-hp` (mode
+0600, username on line 1, password on line 2). When that file does not
+exist, for example on a replacement laptop, it reads `DR_ILO_USERNAME` and
+`DR_ILO_PASSWORD` from `.secrets.enc` instead. The VM starts automatically
+when the server boots.
+
+`recovery/dr-host-build.sh` builds the DR host on a fresh Ubuntu machine, or
+converges an existing one. It reads the K3s, Cilium and Longhorn versions and
+the Longhorn backup target from production, so the DR host matches the
+cluster it has to recover, and installs the DR helpers under
+`/usr/local/libexec/k3s-dr/`. It needs passwordless sudo on the host;
+`--lock-sudo` then restricts passwordless sudo to the helpers. To regain
+general sudo afterwards, set a password from the server with
+`virsh set-user-password k3s-dr jeff <password>`.
+
+`ubuntu-hp` also holds a copy of the NAS backup share in `tank/backup/k3s`,
+refreshed by `/usr/local/sbin/k3s-backup-replicate` each time the server
+boots and snapshotted after each run. It is only as fresh as the last time
+the server was on. The script is `recovery/k3s-backup-replicate.sh`, installed
+by hand on the server with its settings in `/etc/k3s-backup-replicate.env` and
+run by the `k3s-backup-replicate.service` unit. It mounts the NAS read-only,
+and refuses to run against an empty share so a failed mount cannot empty the
+copy.
+
+With `DR_HOST_ON_DEMAND=true`, `dr-status.sh` treats an unreachable DR host
+as powered off: it prints a note, skips the DR preflight and capacity checks,
+and can still report `DR READY`. That result then says nothing about the DR
+host itself, which is only checked when it is on.
+
+### Testing a fresh bootstrap
+
+`recovery/dr-test-cluster.sh` builds a throwaway six-node cluster on
+`ubuntu-hp` (three servers, three workers) and runs the real `site.yml`
+against it, with the production `group_vars`:
+
+```bash
+./recovery/dr-test-cluster.sh create      # network and seven VMs, about 3 minutes
+./recovery/dr-test-cluster.sh bootstrap   # site.yml, about 8 minutes
+./recovery/dr-test-cluster.sh status
+./recovery/dr-test-cluster.sh destroy
+```
+
+The VMs sit on their own NAT network, `10.90.0.0/24`. They can reach the
+internet to download K3s and images, and a firewall table on the server
+drops their traffic to every private network, which `create` verifies from
+inside a VM. The cluster has its own random token and addresses; nothing
+from production is copied into it. It is reachable only through the server,
+which has `kubectl` and `k9s` for looking at it.
+
+Each node has 4 vCPUs (12 GB for servers, 8 GB for workers) and a 200 GB
+second disk mounted as `/dev/sda1` on `/var/lib/storage`, which
+`longhorn-host-prep.yml` requires. A seventh VM, `k3s-test-nas` at
+`10.90.0.8`, stands in for the backup NAS with the same SMB share and NFS
+export paths. `create` checks the storage mount on every node and writes to
+the share before it finishes.
+
+`bootstrap` tests the cluster layer that `site.yml` builds: K3s, kube-vip,
+Cilium and MetalLB. It does not run `deploy.sh`, so no applications.
+
+### Testing a full rebuild
+
+A full `deploy.sh --bootstrap` can be run against the same VMs, which proves
+a rebuild from nothing: the cluster, cert-manager, Traefik, Longhorn,
+Authelia, monitoring, logging, Rancher, the Cloudflare tunnel, Trilium,
+Vaultwarden and the website. It takes about 25 minutes after `create`.
+
+Never run it from the normal checkout. `deploy.sh` renders the inventory and
+the manifests into the repository, so a test run there would overwrite
+production's rendered files and point Ansible at the wrong nodes. Use a
+separate clone with its own settings and secrets:
+
+1. Clone the repository somewhere private, for example
+   `~/.local/state/k3s-homelab/deploy-test/repo`, and copy `.ansible/` into
+   it from the normal checkout.
+2. Write its `config/cluster.env` from production's, replacing every
+   address: `KUBE_VIP=10.90.0.50`, `K3S_NODE_0` to `K3S_NODE_5` as
+   `10.90.0.11` to `.13` and `.21` to `.23`,
+   `METALLB_IP_RANGE=10.90.0.100-10.90.0.120`,
+   `CLOUDFLARE_ORIGIN_IP=10.90.0.100`, `BACKUP_NAS_IP=10.90.0.8`, and an
+   `UNRAID_IP` that nothing answers on. Set `BASE_DOMAIN` to a separate test
+   domain and `CLOUDFLARE_TUNNEL_ID` to a separate test tunnel.
+3. Give it its own `.secrets.enc` with a new `K3S_TOKEN`, the test tunnel's
+   token, a Cloudflare API token scoped to the test zone only, and
+   `LONGHORN_CIFS_USERNAME` and `LONGHORN_CIFS_PASSWORD` both set to
+   `dummy`, the stand-in NAS login. The mail login and the website deploy
+   key must be real: Authelia will not start, and the Vaultwarden invitation
+   fails, when the mail server rejects the login.
+4. In the clone only, set `flannel_iface` and `cilium_iface` to `enp1s0` in
+   `inventory/k3s-ansible/group_vars/all.yml`. The VMs' network interface
+   has that name where the real nodes have `eno1`.
+5. Reach the sealed network through the server. Open a SOCKS proxy with
+   `ssh -f -N -D 127.0.0.1:1080 ubuntu-hp`, then export
+   `HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` as
+   `socks5://127.0.0.1:1080` (not `socks5h`, which breaks the checks that
+   address the load balancer directly) and `NO_PROXY=localhost,127.0.0.1`.
+   Set `ANSIBLE_SSH_COMMON_ARGS` to the same `ProxyJump` options
+   `dr-test-cluster.sh` uses, `KUBECONFIG_TARGET` and `KUBECONFIG` to a file
+   outside `~/.kube`, and `SKIP_SYNC_CHECK=true`.
+6. Run `./deploy.sh --preflight-only --bootstrap`, then
+   `./deploy.sh --bootstrap`, from the clone.
+
+To browse the result, start a browser through the same proxy:
+
+```bash
+chromium --user-data-dir=/tmp/k3s-test-browser \
+  --proxy-server="socks5://127.0.0.1:1080" \
+  --host-resolver-rules="MAP example.test 10.90.0.100, MAP *.example.test 10.90.0.100"
+```
+
+Only the Rancher hostname goes through the Cloudflare tunnel; every other
+name exists only on the test load balancer. Afterwards run
+`dr-test-cluster.sh destroy` and delete the clone, which holds real secrets.
+
+Two things a rebuild of the real cluster needs that `deploy.sh` does not do:
+
+- **A storage disk on every node.** `longhorn-host-prep.yml` stops unless
+  `/var/lib/storage` is an ext4 filesystem on `/dev/sda1`, separate from the
+  root disk. On a reinstalled node, partition the second disk, create the
+  filesystem, add it to `/etc/fstab` and mount it first.
+- **A working mail login.** See step 3.
+
 ### DR Readiness Gate
 
 Before planning or executing a rehearsal, run the read-only readiness dashboard:
@@ -142,7 +359,8 @@ actions. It checks:
 - fresh backup coverage for all protected workloads
 - total protected restore capacity
 - an additional configurable restore-capacity headroom requirement
-- passwordless SSH connectivity to the DR host
+- passwordless SSH connectivity to the DR host (skipped with a note when
+  `DR_HOST_ON_DEMAND=true` and the host is powered off)
 - the protected DR preflight helper
 - DR Longhorn capacity against the current restore requirement
 
@@ -222,13 +440,7 @@ DR preflight
 Generate + validate current restore plan
         |
         v
-RESTORE confirmation
-        |
-        v
 Sequential / resumable Longhorn restore
-        |
-        v
-BIND confirmation
         |
         v
 Static DR PV/PVC bindings
@@ -243,24 +455,16 @@ Isolated validation workloads
 Application + historical-data validation
         |
         v
-CLEANUP confirmation
-        |
-        v
 Guarded cleanup
         |
         v
 Final clean-state preflight
 ```
 
-The individual destructive safety confirmations are intentionally retained:
-
-```text
-RESTORE
-BIND
-CLEANUP
-```
-
-The orchestrator never auto-types these confirmations.
+`--execute` runs unattended. The restore, bind and cleanup helpers each ask
+for a typed confirmation (`RESTORE`, `BIND`, `CLEANUP`) when run by hand, but
+the orchestrator passes `--yes` to all three, so one command runs the whole
+rehearsal, including the cleanup. Everything it changes is on the DR host.
 
 If application validation fails, DR state is preserved for troubleshooting and cleanup does not run automatically.
 

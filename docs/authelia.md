@@ -4,13 +4,13 @@
 
 Authelia (`authelia.yaml`, namespace `authelia`) is the login portal at
 `auth.${BASE_DOMAIN}` in front of the admin UIs: the Traefik dashboard,
-Longhorn, Prometheus, Grafana, Portainer and Trilium. Their routes use the
+Longhorn, Prometheus, Grafana and Trilium. Their routes use the
 shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
 from other namespaces), which asks Authelia about each request. Anyone not
 logged in is redirected to the portal; access needs a password and a second
 factor (Duo Push, TOTP app or security key), and only the `admins` group is allowed. Any
-other hostname sent through the middleware is denied. Portainer and Trilium
-keep their own logins behind Authelia; Grafana signs in through Authelia too.
+other hostname sent through the middleware is denied. Trilium keeps its own
+login behind Authelia; Grafana signs in through Authelia too.
 The middleware accepts at most 64 KiB (`maxResponseBodySize: 65536`) from
 Authelia per check; its answers are about 100 bytes plus the redirect URL.
 Without a limit Traefik logs a `maxResponseBodySize is not configured` warning
@@ -47,7 +47,7 @@ for every protected route at startup.
 - **Protecting another app:** add its hostname to `access_control` in
   `templates/generated/authelia.yaml.template` and route it with an
   `IngressRoute` that lists the `admin-ui-auth` middleware (namespace
-  `traefik`), as in `templates/generated/portainer-ingress.yaml.template`. Do
+  `traefik`), as in `templates/generated/longhorn-ingress.yaml.template`. Do
   not use an `Ingress` with the `router.middlewares` annotation: it works, but
   logs a missing-middleware error each time Traefik starts. Clients that call an app's API directly cannot follow the
   login redirect: keep Vaultwarden out of Authelia.
