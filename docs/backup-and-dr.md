@@ -246,6 +246,31 @@ as powered off: it prints a note, skips the DR preflight and capacity checks,
 and can still report `DR READY`. That result then says nothing about the DR
 host itself, which is only checked when it is on.
 
+### Testing a fresh bootstrap
+
+`recovery/dr-test-cluster.sh` builds a throwaway six-node cluster on
+`ubuntu-hp` (three servers, three workers) and runs the real `site.yml`
+against it, with the production `group_vars`:
+
+```bash
+./recovery/dr-test-cluster.sh create      # network and six VMs, about 3 minutes
+./recovery/dr-test-cluster.sh bootstrap   # site.yml, about 8 minutes
+./recovery/dr-test-cluster.sh status
+./recovery/dr-test-cluster.sh destroy
+```
+
+The VMs sit on their own NAT network, `10.90.0.0/24`. They can reach the
+internet to download K3s and images, and a firewall table on the server
+drops their traffic to every private network, which `create` verifies from
+inside a VM. The cluster has its own random token and addresses; nothing
+from production is copied into it. It is reachable only through the server,
+which has `kubectl` and `k9s` for looking at it.
+
+This tests the cluster layer that `site.yml` builds: K3s, kube-vip, Cilium
+and MetalLB. It does not run `deploy.sh`, so no applications. Running
+`deploy.sh` there as it stands would connect `cloudflared` to the real
+tunnel and request real certificates.
+
 ### DR Readiness Gate
 
 Before planning or executing a rehearsal, run the read-only readiness dashboard:
