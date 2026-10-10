@@ -46,6 +46,10 @@ if ! $KUBECTL get --raw='/readyz' >/dev/null 2>&1; then
     exit 1
 fi
 
+# Image for the pods that only inspect restored files; the same one
+# dr-validate-apps.sh uses for its HTTP checks, so the DR host already has it.
+DATA_CHECK_IMAGE="${DATA_CHECK_IMAGE:-curlimages/curl:8.22.0}"
+
 get_image() {
     local ns="$1"
     local type="$2"
@@ -463,6 +467,45 @@ spec:
       emptyDir: {}
 EOF
 
+# Authelia cannot start without its production configuration and secrets, and
+# the fb-search volume only holds installed dependencies, so neither is
+# started as an application. A small pod mounts each restored volume
+# read-only and dr-validate-apps.sh inspects the files.
+data_check_pod() {
+    local ns="$1" name="$2" claim="$3" mount="$4"
+    cat >> "$OUTPUT" <<EOF
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name
+  namespace: $ns
+  labels:
+    app: $name
+spec:
+  restartPolicy: Never
+  enableServiceLinks: false
+  automountServiceAccountToken: false
+  securityContext:
+    runAsUser: 0
+  containers:
+    - name: check
+      image: $DATA_CHECK_IMAGE
+      command: ["sleep", "86400"]
+      volumeMounts:
+        - name: data
+          mountPath: $mount
+          readOnly: true
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: $claim
+EOF
+}
+
+data_check_pod authelia authelia-dr-validation authelia-dr /data
+data_check_pod website fb-search-deps-dr-validation fb-search-deps-dr /deps
+
 echo "Generated: $OUTPUT"
 echo
 echo "Captured images:"
@@ -472,5 +515,6 @@ printf '  %-14s %s\n' "Grafana" "$GRAFANA_IMAGE"
 printf '  %-14s %s\n' "Prometheus" "$PROM_IMAGE"
 printf '  %-14s %s\n' "Alertmanager" "$ALERT_IMAGE"
 printf '  %-14s %s\n' "Loki" "$LOKI_IMAGE"
+printf '  %-14s %s\n' "Data checks" "$DATA_CHECK_IMAGE"
 echo
 echo "No Kubernetes resources were applied."

@@ -20,6 +20,9 @@ DR_HOST="${DR_HOST:-k3s-dr}"
 DR_HYPERVISOR_HOST="${DR_HYPERVISOR_HOST:-}"
 DR_ILO_HOST="${DR_ILO_HOST:-}"
 DR_ILO_CREDENTIALS="${DR_ILO_CREDENTIALS:-$HOME/.config/ilo-ubuntu-hp}"
+SECRETS_FILE="${SECRETS_FILE:-$ROOT_DIR/.secrets.enc}"
+ILO_USERNAME=""
+ILO_PASSWORD=""
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-600}"
 SHUTDOWN_TIMEOUT_SECONDS="${SHUTDOWN_TIMEOUT_SECONDS:-300}"
 SSH_OPTIONS=(-o BatchMode=yes -o ConnectTimeout=6)
@@ -43,6 +46,9 @@ Settings, from config/cluster.env or the environment:
   DR_ILO_CREDENTIALS    File with the iLO username on line 1 and the
                         password on line 2, mode 0600.
                         Default: ~/.config/ilo-ubuntu-hp
+  SECRETS_FILE          Used when that file does not exist: the sops file
+                        holding DR_ILO_USERNAME and DR_ILO_PASSWORD.
+                        Default: .secrets.enc in the repository
 EOF
 }
 
@@ -55,19 +61,43 @@ require_settings() {
   [[ -n "$DR_ILO_HOST" ]] || fail "DR_ILO_HOST is not set"
   [[ -n "$DR_HYPERVISOR_HOST" ]] || fail "DR_HYPERVISOR_HOST is not set"
   [[ "$DR_ILO_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || fail "unsafe DR_ILO_HOST value"
-  [[ -r "$DR_ILO_CREDENTIALS" ]] || fail "iLO credentials file is not readable: $DR_ILO_CREDENTIALS"
-  [[ "$(stat -c %a "$DR_ILO_CREDENTIALS")" == 600 ]] ||
-    fail "iLO credentials file must be mode 0600: $DR_ILO_CREDENTIALS"
+  if [[ -e "$DR_ILO_CREDENTIALS" ]]; then
+    [[ -r "$DR_ILO_CREDENTIALS" ]] || fail "iLO credentials file is not readable: $DR_ILO_CREDENTIALS"
+    [[ "$(stat -c %a "$DR_ILO_CREDENTIALS")" == 600 ]] ||
+      fail "iLO credentials file must be mode 0600: $DR_ILO_CREDENTIALS"
+  else
+    [[ -r "$SECRETS_FILE" ]] ||
+      fail "no iLO credentials: neither $DR_ILO_CREDENTIALS nor $SECRETS_FILE exists"
+    command -v sops >/dev/null 2>&1 || fail "sops command is required to read $SECRETS_FILE"
+  fi
   command -v curl >/dev/null 2>&1 || fail "curl command is required"
   command -v jq >/dev/null 2>&1 || fail "jq command is required"
+  load_ilo_credentials
+}
+
+# The local file wins, so a power command does not need sops. Without it, for
+# example on a replacement laptop, the login comes from the encrypted secrets.
+load_ilo_credentials() {
+  if [[ -e "$DR_ILO_CREDENTIALS" ]]; then
+    { IFS= read -r ILO_USERNAME; IFS= read -r ILO_PASSWORD || [[ -n "$ILO_PASSWORD" ]]; } <"$DR_ILO_CREDENTIALS"
+  else
+    local decrypted
+    decrypted="$(sops --decrypt "$SECRETS_FILE")" || fail "sops could not decrypt $SECRETS_FILE"
+    # Only the two iLO values leave the subshell.
+    { IFS= read -r ILO_USERNAME; IFS= read -r ILO_PASSWORD; } < <(
+      # shellcheck disable=SC1090
+      source <(printf '%s\n' "$decrypted")
+      printf '%s\n%s\n' "${DR_ILO_USERNAME:-}" "${DR_ILO_PASSWORD:-}"
+    )
+  fi
+  [[ -n "$ILO_USERNAME" && -n "$ILO_PASSWORD" ]] ||
+    fail "the iLO username or password is empty (DR_ILO_USERNAME and DR_ILO_PASSWORD in $SECRETS_FILE)"
 }
 
 # The credentials reach curl on stdin, so they never appear in a process list.
 # iLO ships a self-signed certificate, hence -k.
 ilo() {
-  local username password
-  { IFS= read -r username; IFS= read -r password || [[ -n "$password" ]]; } <"$DR_ILO_CREDENTIALS"
-  printf 'user = "%s:%s"\n' "${username//\"/\\\"}" "${password//\"/\\\"}" |
+  printf 'user = "%s:%s"\n' "${ILO_USERNAME//\"/\\\"}" "${ILO_PASSWORD//\"/\\\"}" |
     curl -sk -m 20 -K - "$@"
 }
 

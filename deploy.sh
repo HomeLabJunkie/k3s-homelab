@@ -209,6 +209,27 @@ apply_manifest() {
   return 1
 }
 
+# Wait for a rollout to finish. A deployment that was stuck before this run
+# still carries its old "progress deadline exceeded" status for a moment after
+# it is fixed, and kubectl gives up at once on seeing it; keep waiting until
+# the timeout instead.
+wait_for_rollout() {
+  local ns="$1" name="$2" timeout="$3"
+  local deadline=$((SECONDS + timeout)) output
+  while true; do
+    if output="$(kubectl -n "$ns" rollout status "deployment/$name" \
+        --timeout="$((deadline - SECONDS))s" 2>&1)"; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    printf '%s\n' "$output"
+    if [[ "$output" != *"exceeded its progress deadline"* ]] || (( SECONDS + 10 >= deadline )); then
+      return 1
+    fi
+    sleep 10
+  done
+}
+
 cd "$K3S_DIR"
 
 PREFLIGHT_ONLY=false
@@ -846,7 +867,7 @@ kubectl -n authelia patch deployment authelia --type merge \
 unset AUTHELIA_CONFIG_HASH
 
 echo "==> Waiting for Authelia deployment..."
-kubectl -n authelia rollout status deployment/authelia --timeout=600s
+wait_for_rollout authelia authelia 600
 
 echo "==> Waiting for Authelia TLS certificate..."
 kubectl -n authelia wait \
@@ -1322,6 +1343,18 @@ kubectl create secret generic vaultwarden-integrations \
 echo "==> Deploying Vaultwarden with Longhorn storage..."
 apply_manifest "$VAULTWARDEN_MANIFEST"
 
+# Vaultwarden reads its secrets only at startup, so roll the pod when one
+# changes. The stored admin-token hash is salted afresh on every run, so the
+# stamp is taken from the values themselves, not from the Secrets.
+VAULTWARDEN_CONFIG_HASH="$(
+  printf '%s\0' "$VAULTWARDEN_ADMIN_TOKEN" "$VAULTWARDEN_SMTP_USERNAME" \
+    "$VAULTWARDEN_SMTP_PASSWORD" "$VAULTWARDEN_YUBICO_SECRET_KEY" |
+    sha256sum | cut -c1-16
+)"
+kubectl -n vaultwarden patch deployment vaultwarden --type merge \
+  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/config-hash\":\"${VAULTWARDEN_CONFIG_HASH}\"}}}}}"
+unset VAULTWARDEN_CONFIG_HASH
+
 echo "==> Waiting for Vaultwarden Longhorn PVC to bind..."
 for i in {1..60}; do
   phase="$(kubectl -n vaultwarden get pvc vaultwarden-data -o jsonpath='{.status.phase}' 2>/dev/null || true)"
@@ -1338,7 +1371,7 @@ for i in {1..60}; do
 done
 
 echo "==> Waiting for Vaultwarden deployment..."
-kubectl -n vaultwarden rollout status deployment/vaultwarden --timeout=600s
+wait_for_rollout vaultwarden vaultwarden 600
 
 echo "==> Waiting for Vaultwarden TLS certificate..."
 kubectl -n vaultwarden wait \
@@ -1440,21 +1473,32 @@ kubectl create secret generic jeffriffle-git \
   --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# nginx reads its config only at start-up, so restart the site when it changes.
-website_nginx_changed=false
-if ! kubectl diff -f "$WEBSITE_NGINX" >/dev/null 2>&1; then
-  website_nginx_changed=true
-fi
 apply_manifest "$WEBSITE_NGINX"
 
 echo "==> Deploying application ingress and certificates..."
 apply_manifest "$K3S_DIR/website.yaml"
 remove_replaced_ingress website website-www
-if [[ "$website_nginx_changed" == true ]]; then
-  echo "==> jeffriffle.com nginx config changed; restarting the site..."
-  kubectl -n website rollout restart deployment/jeffriffle
-  kubectl -n website rollout status deployment/jeffriffle --timeout=180s
-fi
+
+# nginx reads its config, and git-sync its deploy key, only at start-up, so
+# roll the site when either changes. kubectl apply leaves this annotation alone.
+WEBSITE_CONFIG_HASH="$(
+  {
+    kubectl -n website get configmap jeffriffle -o jsonpath='{.data}'
+    kubectl -n website get secret jeffriffle-git -o jsonpath='{.data}'
+  } | sha256sum | cut -c1-16
+)"
+kubectl -n website patch deployment jeffriffle --type merge \
+  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/config-hash\":\"${WEBSITE_CONFIG_HASH}\"}}}}}"
+unset WEBSITE_CONFIG_HASH
+
+echo "==> Waiting for jeffriffle.com deployment..."
+wait_for_rollout website jeffriffle 300
+
+echo "==> Waiting for jeffriffle.com TLS certificate..."
+kubectl -n website wait \
+  --for=condition=Ready \
+  certificate/tls-website \
+  --timeout=300s
 
 echo
 echo "===== NODES ====="
