@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-10: Traefik chart 41.7.1; ansible-core 2.21.5
+
+On 2026-10-10, the Traefik Helm chart pin moved from `41.7.0` to `41.7.1`.
+The Traefik version stays at `v3.7.14`; the chart only adds support for newer
+Traefik Hub releases, and it renders the same manifests with this
+repository's values. The supported `ansible-core` minimum was raised from
+`2.21.4` to `2.21.5`, so each laptop's `.venv` has to be updated before
+`deploy.sh` or the maintenance scripts will run.
+
 ## 2026-10-10: Full rebuild with deploy.sh tested on an isolated cluster
 
 On 2026-10-10, `./deploy.sh --bootstrap` built the whole stack from empty VMs
