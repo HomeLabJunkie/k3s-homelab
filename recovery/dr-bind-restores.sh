@@ -49,12 +49,14 @@ command -v awk >/dev/null || { echo "ERROR: awk is required" >&2; exit 2; }
 
 mapping() {
     case "$1" in
+        dr-restore-authelia-authelia-data)  printf '%s\t%s\n' authelia authelia-dr ;;
         dr-restore-logging-loki)            printf '%s\t%s\n' logging loki-dr ;;
         dr-restore-monitoring-alertmanager) printf '%s\t%s\n' monitoring alertmanager-dr ;;
         dr-restore-monitoring-grafana)      printf '%s\t%s\n' monitoring grafana-dr ;;
         dr-restore-monitoring-prometheus)   printf '%s\t%s\n' monitoring prometheus-dr ;;
         dr-restore-trilium)                 printf '%s\t%s\n' trilium trilium-dr ;;
         dr-restore-vaultwarden)             printf '%s\t%s\n' vaultwarden vaultwarden-dr ;;
+        dr-restore-website-fb-search-deps)  printf '%s\t%s\n' website fb-search-deps-dr ;;
         *) return 1 ;;
     esac
 }

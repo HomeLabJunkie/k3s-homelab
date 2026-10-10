@@ -202,6 +202,12 @@ done
 dr_kubectl -n longhorn-system rollout status daemonset/longhorn-manager --timeout=900s
 dr_kubectl -n longhorn-system rollout status deployment/longhorn-driver-deployer --timeout=900s
 
+echo "==> Creating the namespaces restored volumes are bound into..."
+for namespace in authelia logging monitoring trilium vaultwarden website; do
+  dr_kubectl create namespace "$namespace" --dry-run=client -o yaml |
+    "${SSH[@]}" 'sudo -n k3s kubectl apply -f - >/dev/null'
+done
+
 echo "==> Pointing Longhorn at the production backup target..."
 # The credential goes from one cluster to the other through a pipe and is
 # never written to disk or shown.
