@@ -6,6 +6,25 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-10: Fresh bootstrap tested on an isolated cluster
+
+On 2026-10-10, `site.yml` was run from scratch against six new VMs on
+`ubuntu-hp` (three servers, three workers), created by the new
+`recovery/dr-test-cluster.sh` on a NAT network that is firewalled off from
+the LAN. The run passed in 8 minutes with no failures: all six nodes Ready on
+`v1.36.5+k3s1`, every pod running, and secrets encryption enabled from first
+boot. It confirmed the 2026-10-09 fixes on a real bootstrap: the servers
+joined one at a time without deadlocking, and the cluster token was not on
+any K3s command line and its staging file was gone afterwards.
+
+The first attempt found a second deadlock of the same kind. The agent role
+waited for each worker to be Ready, but on a fresh cluster no node is Ready
+until Cilium is installed by the play that follows. `site.yml` now lets
+workers register without that wait
+(`k3s_agent_wait_for_ready: false`) and verifies that every node is Ready at
+the end; node maintenance still waits for Ready as before. The test covers
+the cluster layer only. `deploy.sh` and the applications were not run.
+
 ## 2026-10-10: DR host moved to ubuntu-hp; full rehearsal passed
 
 On 2026-10-10, the DR host was rebuilt as a VM on the `ubuntu-hp` server

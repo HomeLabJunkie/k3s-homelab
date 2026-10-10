@@ -71,6 +71,10 @@
   roles:
     - role: k3s_agent
       become: true
+      vars:
+        # The CNI is installed by the next play, so agents can register here
+        # but cannot be Ready yet. Readiness is verified once it is in place.
+        k3s_agent_wait_for_ready: false
 
 - name: Configure k3s cluster
   hosts: master
@@ -78,6 +82,26 @@
   roles:
     - role: k3s_server_post
       become: true
+
+- name: Verify k3s nodes are ready
+  hosts: master
+  gather_facts: false
+  environment: "{{ proxy_env | default({}) }}"
+  tasks:
+    - name: Verify that every node is Ready
+      ansible.builtin.command:
+        cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} get nodes -o=jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Ready\")].status}{\"\\n\"}{end}'" # yamllint disable-line rule:line-length
+      register: node_readiness
+      until: >-
+        node_readiness.rc == 0
+        and (node_readiness.stdout_lines | length) == (groups['k3s_cluster'] | length)
+        and (node_readiness.stdout_lines | unique) == ['True']
+      retries: 60
+      delay: 10
+      changed_when: false
+      become: true
+      run_once: true
+      when: not ansible_check_mode
 
 - name: Storing kubeconfig in the playbook directory
   hosts: master

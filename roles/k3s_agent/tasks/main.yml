@@ -83,7 +83,7 @@
     - not k3s_agent_token.changed
     - not (k3s_binary_changed | default(false))
 
-- name: Wait for k3s agent node to become Ready
+- name: Wait for k3s agent node to register and become Ready
   ansible.builtin.command:
     cmd: >-
       k3s kubectl get node {{ ansible_facts.hostname }}
@@ -96,5 +96,7 @@
   delay: 2
   until:
     - k3s_agent_ready.rc == 0
-    - k3s_agent_ready.stdout | trim == 'True'
+    - >-
+      k3s_agent_ready.stdout | trim == 'True'
+      or (not (k3s_agent_wait_for_ready | bool) and k3s_agent_ready.stdout | trim | length > 0)
   when: not ansible_check_mode
