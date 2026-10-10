@@ -258,12 +258,12 @@ Check filesystem capacity:
 Check Longhorn node:
 
     sudo k3s kubectl -n longhorn-system get \
-      nodes.longhorn.io k3s-dr-test -o wide
+      nodes.longhorn.io "$(hostname -s)" -o wide
 
 Check Longhorn disk:
 
     sudo k3s kubectl -n longhorn-system get \
-      nodes.longhorn.io k3s-dr-test -o json |
+      nodes.longhorn.io "$(hostname -s)" -o json |
     jq -r '
       .status.diskStatus
       | to_entries[]
@@ -286,7 +286,7 @@ Check Longhorn disk:
 Confirm disk conditions:
 
     sudo k3s kubectl -n longhorn-system get \
-      nodes.longhorn.io k3s-dr-test -o json |
+      nodes.longhorn.io "$(hostname -s)" -o json |
     jq -r '
       .status.diskStatus
       | to_entries[]

@@ -44,6 +44,9 @@ Environment overrides:
   BACKUP_VERIFY             Production backup verifier.
   NOTIFY_CHECK              SMTP notification configuration checker.
   DR_HOST                   SSH host/alias for DR server. Default: k3s-dr
+  DR_HOST_ON_DEMAND         true when the DR host is only powered on for
+                            rehearsals. An unreachable host is then noted
+                            and its checks skipped. Default: false
   DR_PREFLIGHT              Protected DR preflight helper.
   MAX_BACKUP_AGE_HOURS      Max cluster recovery-bundle age. Default: 30
   MAX_APP_BACKUP_AGE_HOURS  Max protected Longhorn backup age. Default: 30
@@ -385,9 +388,19 @@ fi
 # ---------------------------------------------------------------------------
 section "7. DR HOST CONNECTIVITY"
 
+DR_HOST_ON_DEMAND="${DR_HOST_ON_DEMAND:-false}"
+dr_host_skipped=0
+
 if ssh -o BatchMode=yes -o ConnectTimeout=8 "$DR_HOST" 'true' >/dev/null 2>&1; then
     pass "Passwordless SSH to DR host works"
     dr_ssh_ok=1
+elif [[ "$DR_HOST_ON_DEMAND" == true ]]; then
+    # An on-demand host is expected to be off between rehearsals, so this is
+    # not a failure. It also means nothing below can vouch for the host.
+    echo "NOTE: DR host is unreachable and DR_HOST_ON_DEMAND=true; assuming it is powered off."
+    echo "NOTE: Power it on with recovery/dr-host-power.sh on to check it."
+    dr_ssh_ok=0
+    dr_host_skipped=1
 else
     fail "Cannot reach DR host with passwordless SSH"
     dr_ssh_ok=0
@@ -430,6 +443,8 @@ if (( dr_ssh_ok == 1 )); then
     else
         fail "DR preflight failed"
     fi
+elif (( dr_host_skipped == 1 )); then
+    echo "NOTE: DR preflight skipped; the on-demand DR host is off."
 else
     fail "DR preflight could not run because SSH failed"
 fi
@@ -451,6 +466,8 @@ if [[ "$dr_available_gib" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     else
         fail "DR Longhorn capacity is below protected restore requirement"
     fi
+elif (( dr_host_skipped == 1 )); then
+    echo "NOTE: Restore-capacity headroom skipped; the on-demand DR host is off."
 else
     warn "Could not independently evaluate DR restore-capacity headroom"
 fi
@@ -461,6 +478,9 @@ section "DR READINESS SUMMARY"
 printf '%-8s %s\n' "PASS:" "$PASS"
 printf '%-8s %s\n' "WARN:" "$WARN"
 printf '%-8s %s\n' "FAIL:" "$FAIL"
+if (( dr_host_skipped == 1 )); then
+    echo "DR host: powered off; its preflight and capacity checks were skipped"
+fi
 echo
 
 if (( FAIL > 0 )); then

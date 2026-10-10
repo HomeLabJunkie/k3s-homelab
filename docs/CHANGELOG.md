@@ -6,6 +6,36 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-10: DR host moved to ubuntu-hp; full rehearsal passed
+
+On 2026-10-10, the DR host was rebuilt as a VM on the `ubuntu-hp` server
+(KVM/libvirt, 8 vCPUs, 32 GB, 500 GB disk on the `tank` ZFS pool) at
+`192.168.1.127`, replacing the 4 vCPU / 11 GB VM on Unraid. It was built with
+the new `recovery/dr-host-build.sh`, which reads its versions from
+production: K3s `v1.36.5+k3s1`, Cilium `1.20.2` and Longhorn `1.12.1`. The
+old host was a K3s minor version behind. A full
+`./recovery/dr-rehearsal.sh --execute` against the new host passed in 36
+minutes: 8 volumes restored and bound, the six validated applications
+started on their restored data (17 checks, 0 failures), and cleanup left a
+clean preflight. Authelia's volume and `fb-search-deps` are restored and
+bound but have no validation checks.
+
+Two gaps showed up and were fixed. The bind and cleanup steps knew six
+volumes while the restore plan had eight, so a rehearsal would have stopped
+at BIND; and three DR helpers had the old node name `k3s-dr-test` hardcoded.
+The rehearsal's help text and the docs also claimed that `--execute` asks
+for `RESTORE`, `BIND` and `CLEANUP`; it runs unattended, and the text now
+says so.
+
+`ubuntu-hp` is powered on only for rehearsals. `recovery/dr-host-power.sh`
+switches it on through its iLO and off again, and with
+`DR_HOST_ON_DEMAND=true` `dr-status.sh` notes an unreachable DR host and
+skips its checks instead of failing. The server also keeps a copy of the NAS
+backup share in `tank/backup/k3s` (165 GB on the first run), refreshed and
+snapshotted each time it boots. The `k3s-dr` SSH alias now points at the new
+VM; the old VM is shut down on Unraid, with autostart disabled, and kept as
+a fallback for now.
+
 ## 2026-10-09: etcd snapshot restore tested with encrypted Secrets
 
 On 2026-10-09, the etcd snapshot from cluster bundle `20261009-132622`, the
