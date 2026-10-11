@@ -57,11 +57,46 @@ Expected sensitive values include:
   characters such as `&`, `;`, `|`, `$`, spaces or `#` after a space
 - `WEBSITE_DEPLOY_KEY_B64`: the jeffriffle.com repo's read-only deploy key
   (private key, base64-encoded on one line), used by git-sync
+- `ARGOCD_CONFIG_REPO_KEY_B64`: the read-only deploy key Argo CD uses to read
+  the private configuration repository (private key, base64-encoded on one
+  line). See [The private configuration repository](#the-private-configuration-repository)
 
 The tracked Vaultwarden values template references Kubernetes Secrets and must
 not contain credential values directly. `deploy.sh` creates or updates
 `vaultwarden-admin` and `vaultwarden-integrations` from the corresponding
 values in `.secrets.enc`.
+
+## The private configuration repository
+
+Applications that Argo CD deploys cannot read `config/cluster.env`, which
+exists only on a laptop. Their environment-specific settings live in a second,
+private GitHub repository, `HomeLabJunkie/k3s-homelab-config`. Argo CD reads
+it next to this one: an Application names a chart here and a values file
+there.
+
+| File in the private repository | Used by |
+| --- | --- |
+| `website/values.yaml` (`domain`) | The `website` application (`charts/website`) |
+
+Argo CD reads it over SSH with a read-only deploy key. `deploy.sh` creates the
+`repo-k3s-homelab-config` Secret in the `argocd` namespace from
+`ARGOCD_CONFIG_REPO_KEY_B64`. To replace the key:
+
+```bash
+ssh-keygen -t ed25519 -N '' -f /dev/shm/argocd-config-key
+gh repo deploy-key add /dev/shm/argocd-config-key.pub \
+  --repo HomeLabJunkie/k3s-homelab-config --title "Argo CD (read-only)"
+```
+
+Put `base64 -w0 < /dev/shm/argocd-config-key` in `.secrets.enc` as
+`ARGOCD_CONFIG_REPO_KEY_B64`, run `deploy.sh`, then delete the key files and
+the old deploy key on GitHub.
+
+The website's domain is therefore set in two places: `BASE_DOMAIN` in
+`config/cluster.env`, for everything `deploy.sh` still deploys, and `domain`
+in the private repository. Keep them the same. A rebuild needs both
+repositories; the private one is on GitHub and cloned beside this one on each
+laptop.
 
 ## K3s cluster token
 

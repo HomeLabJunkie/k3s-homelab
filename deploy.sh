@@ -69,9 +69,10 @@ ARGOCD_INGRESS_MANIFEST="${ARGOCD_INGRESS_MANIFEST:-$K3S_DIR/argocd-ingress.yaml
 ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
 ARGOCD_PROJECT="${ARGOCD_PROJECT:-$K3S_DIR/apps/argocd/project.yaml}"
 ARGOCD_ROOT_APP="${ARGOCD_ROOT_APP:-$K3S_DIR/apps/argocd/root.yaml}"
+# The private repository holding this cluster's own settings (its domain).
+ARGOCD_CONFIG_REPO_URL="${ARGOCD_CONFIG_REPO_URL:-git@github.com:HomeLabJunkie/k3s-homelab-config.git}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
-WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
 WEBSITE_DASHBOARD="${WEBSITE_DASHBOARD:-$K3S_DIR/dashboards/jeffriffle-website.json}"
 MONITORING_SCRAPE_TARGETS="${MONITORING_SCRAPE_TARGETS:-$K3S_DIR/monitoring-scrape-targets.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
@@ -392,8 +393,6 @@ for file in \
   "$LOKI_DATASOURCE" \
   "$MONITORING_DASHBOARDS_V2" \
   "$MONITORING_SCRAPE_TARGETS" \
-  "$K3S_DIR/website.yaml" \
-  "$WEBSITE_NGINX" \
   "$WEBSITE_DASHBOARD" \
   "$TRIVY_OPERATOR_DASHBOARD" \
   "$ARGOCD_VALUES" \
@@ -450,6 +449,7 @@ for var in \
   DUO_INTEGRATION_KEY \
   DUO_SECRET_KEY \
   WEBSITE_DEPLOY_KEY_B64 \
+  ARGOCD_CONFIG_REPO_KEY_B64 \
   CLOUDFLARE_ANALYTICS_TOKEN
 do
   require_var "$var"
@@ -1129,6 +1129,27 @@ kubectl -n argocd wait \
   certificate/tls-argocd-ingress \
   --timeout=300s
 
+# Argo CD reads the private configuration repository with a read-only deploy
+# key. The URL must match the one in the Application manifests.
+echo "==> Creating/updating the Argo CD credential for the configuration repository..."
+kubectl create secret generic repo-k3s-homelab-config \
+  --namespace argocd \
+  --from-literal=type=git \
+  --from-literal=url="$ARGOCD_CONFIG_REPO_URL" \
+  --from-file=sshPrivateKey=<(printf '%s' "$ARGOCD_CONFIG_REPO_KEY_B64" | base64 -d) \
+  --dry-run=client -o yaml \
+  | kubectl label --local -f - argocd.argoproj.io/secret-type=repository -o yaml \
+  | kubectl apply -f -
+
+# The website's pods cannot start without this key, so it is in place before
+# Argo CD creates them.
+echo "==> Creating/updating jeffriffle.com git-sync deploy key..."
+ensure_namespace website
+kubectl create secret generic jeffriffle-git \
+  --namespace website \
+  --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo "==> Handing the Argo CD applications to Argo CD..."
 kubectl apply -f "$ARGOCD_PROJECT"
 kubectl apply -f "$ARGOCD_ROOT_APP"
@@ -1539,39 +1560,18 @@ esac
 cleanup
 PF_PID=""
 
-echo "==> Creating/updating jeffriffle.com git-sync deploy key..."
-ensure_namespace website
-kubectl create secret generic jeffriffle-git \
-  --namespace website \
-  --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
-  --dry-run=client -o yaml | kubectl apply -f -
+# Argo CD deploys the website (charts/website) and waits for its pods and
+# certificate. The chart rolls the pods when the nginx config changes; the
+# deploy key is not in the chart, so roll them here when it changes. Argo CD
+# leaves an annotation it did not set alone.
+echo "==> Waiting for Argo CD to deploy jeffriffle.com..."
+wait_for_argocd_app website 900
 
-apply_manifest "$WEBSITE_NGINX"
-
-echo "==> Deploying application ingress and certificates..."
-apply_manifest "$K3S_DIR/website.yaml"
-remove_replaced_ingress website website-www
-
-# nginx reads its config, and git-sync its deploy key, only at start-up, so
-# roll the site when either changes. kubectl apply leaves this annotation alone.
-WEBSITE_CONFIG_HASH="$(
-  {
-    kubectl -n website get configmap jeffriffle -o jsonpath='{.data}'
-    kubectl -n website get secret jeffriffle-git -o jsonpath='{.data}'
-  } | sha256sum | cut -c1-16
-)"
+WEBSITE_KEY_HASH="$(kubectl -n website get secret jeffriffle-git -o jsonpath='{.data}' | sha256sum | cut -c1-16)"
 kubectl -n website patch deployment jeffriffle --type merge \
-  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/config-hash\":\"${WEBSITE_CONFIG_HASH}\"}}}}}"
-unset WEBSITE_CONFIG_HASH
-
-echo "==> Waiting for jeffriffle.com deployment..."
+  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/deploy-key-hash\":\"${WEBSITE_KEY_HASH}\"}}}}}"
+unset WEBSITE_KEY_HASH
 wait_for_rollout website jeffriffle 300
-
-echo "==> Waiting for jeffriffle.com TLS certificate..."
-kubectl -n website wait \
-  --for=condition=Ready \
-  certificate/tls-website \
-  --timeout=300s
 
 # Checked last, once every namespace the policies name exists.
 echo "==> Waiting for Argo CD to apply the network policies..."

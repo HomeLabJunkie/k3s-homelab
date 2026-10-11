@@ -40,7 +40,8 @@
 │   ├── scan-secrets.sh                     # CI secret/config scan
 │   ├── validate-manifests.sh               # kubeconform against the cluster's CRDs
 │   └── install-velero-backup.sh
-├── apps/                           # longhorn/ trilium/ (Helm values / manifests)
+├── apps/                           # Helm values and manifests per application; argocd/ holds the Argo CD Applications
+├── charts/                         # Local Helm charts that Argo CD renders (website/)
 ├── templates/                      # envsubst sources rendered to rendered/
 ├── manifests/backup/              # Longhorn snapshot class, recurring + Velero schedules
 ├── backup/                         # backup.sh, remote-storage.sh, verify-*.sh
@@ -69,7 +70,7 @@
 Additional manifests and Helm values at the repository root (`traefik-*.yaml`,
 `longhorn-*.yaml`, `monitoring-*.yaml`, `loki-values.yaml`, `alloy-values.yaml`,
 `trilium-*.yaml`, `vaultwarden-*.yaml`, `cloudflared*.yaml`,
-`clusterissuer-letsencrypt.yaml`, `website.yaml`, dashboards, and ingress files)
+`clusterissuer-letsencrypt.yaml`, dashboards, and ingress files)
 define Traefik, Longhorn, monitoring, logging, Trilium, Vaultwarden,
 Cloudflare, certificates, and ingress behavior used by `deploy.sh`. Many are
 environment-specific and generated from `templates/`, so they are git-ignored.

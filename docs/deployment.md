@@ -331,7 +331,7 @@ repository with `kubeconform`, including the rendered ones that Git ignores:
 
 ```bash
 ./scripts/validate-manifests.sh
-./scripts/validate-manifests.sh --offline website.yaml
+./scripts/validate-manifests.sh --offline authelia.yaml
 ```
 
 It validates in strict mode against the cluster's own Kubernetes version and

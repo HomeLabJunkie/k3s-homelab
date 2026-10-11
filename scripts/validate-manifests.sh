@@ -174,6 +174,17 @@ if (( ${#FILES[@]} == 0 )); then
       -o -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z
   )
   (( ${#FILES[@]} > 0 )) || fail "no manifests found under $REPO_DIR"
+
+  # Local Helm charts are rendered with their ci-values.yaml (placeholder
+  # settings) and the output is validated like any other manifest.
+  for chart in charts/*/; do
+    [[ -f "${chart}Chart.yaml" ]] || continue
+    command -v helm >/dev/null 2>&1 || fail "helm command is required to validate $chart"
+    rendered="$CACHE_DIR/chart-$(basename "$chart").yaml"
+    helm template "$(basename "$chart")" "$chart" --values "${chart}ci-values.yaml" >"$rendered" ||
+      fail "helm could not render $chart"
+    FILES+=("$rendered")
+  done
 fi
 
 echo "==> Validating ${#FILES[@]} file(s) against Kubernetes $KUBERNETES_VERSION..."

@@ -6,6 +6,34 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD deploys the website; private configuration repository
+
+On 2026-10-11, the website moved to Argo CD. Its manifests became a small
+Helm chart, `charts/website`, replacing `templates/generated/website.yaml.template`
+and `website-nginx.yaml`. The chart renders the same eight resources as
+before, plus a checksum of the nginx config on the pods, so a config change
+now rolls them without `deploy.sh`. The route for `/fb-search` moved into
+the chart from `apps/fb-search/ingress.yaml`, which removes the last
+hard-coded domain from that directory.
+
+The domain comes from a new private repository,
+`HomeLabJunkie/k3s-homelab-config`, which Argo CD reads with a read-only
+deploy key (`ARGOCD_CONFIG_REPO_KEY_B64` in `.secrets.enc`, a new required
+value). `deploy.sh` creates that credential and the website's git-sync key
+before handing over to Argo CD, then waits for the `website` application.
+Handing over rolled the pods once for the new checksum; 424 of 424 requests
+during the sync returned 200.
+
+fb-search was planned for the same stage and did not move. Its source
+(`apps/fb-search/src/`) is deliberately kept out of this public repository,
+so Argo CD cannot build it from here. It is still deployed with
+`kubectl apply -k apps/fb-search`.
+
+`scripts/validate-manifests.sh` now renders each chart in `charts/` with its
+`ci-values.yaml` and validates the result. The chart is in `charts/` because
+`.gitignore` excludes `apps/website/`, a rule from when site content lived
+there.
+
 ## 2026-10-11: Argo CD deploys Trivy Operator, Kyverno and the policies
 
 On 2026-10-11, five Argo CD applications took over what `deploy.sh` used to
