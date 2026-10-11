@@ -157,3 +157,21 @@ spec:
             summary: >-
               Kyverno's admission controller is not reporting; pods are being
               admitted without policy checks
+    - name: homelab.gitops.rules
+      rules:
+        - alert: ArgoCDAppOutOfSync
+          expr: argocd_app_info{sync_status!="Synced"} == 1
+          for: 30m
+          labels: {severity: warning}
+          annotations:
+            summary: >-
+              Argo CD application {{ $labels.name }} has differed from git
+              for 30 minutes ({{ $labels.sync_status }})
+        - alert: ArgoCDAppUnhealthy
+          expr: argocd_app_info{health_status!~"Healthy|Progressing"} == 1
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: >-
+              Argo CD application {{ $labels.name }} is
+              {{ $labels.health_status }}

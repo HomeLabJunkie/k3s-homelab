@@ -1,0 +1,23 @@
+# The one Application deploy.sh applies by hand. It makes Argo CD read
+# apps/argocd/applications on the main branch and create every Application
+# found there, so adding an application is a commit, not a command.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  source:
+    repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+    targetRevision: main
+    path: apps/argocd/applications
+  syncPolicy:
+    # Deleting an Application file does not delete the Application: that
+    # would be the first step towards removing what it deployed.
+    automated:
+      selfHeal: true
+      prune: false

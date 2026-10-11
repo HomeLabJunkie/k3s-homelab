@@ -62,18 +62,13 @@ LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-18.14.0}"
 ALLOY_CHART_VERSION="${ALLOY_CHART_VERSION:-1.13.0}"
 LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
 ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
-TRIVY_OPERATOR_CHART_VERSION="${TRIVY_OPERATOR_CHART_VERSION:-0.37.0}"
-TRIVY_OPERATOR_VALUES="${TRIVY_OPERATOR_VALUES:-$K3S_DIR/apps/trivy-operator/values.yaml}"
 TRIVY_OPERATOR_DASHBOARD="${TRIVY_OPERATOR_DASHBOARD:-$K3S_DIR/dashboards/trivy-operator.json}"
-KYVERNO_CHART_VERSION="${KYVERNO_CHART_VERSION:-3.9.1}"
-KYVERNO_VALUES="${KYVERNO_VALUES:-$K3S_DIR/apps/kyverno/values.yaml}"
-KYVERNO_POLICIES_VALUES="${KYVERNO_POLICIES_VALUES:-$K3S_DIR/apps/kyverno/policies-values.yaml}"
-KYVERNO_POLICIES_DIR="${KYVERNO_POLICIES_DIR:-$K3S_DIR/apps/kyverno/policies}"
-NETWORK_POLICIES_DIR="${NETWORK_POLICIES_DIR:-$K3S_DIR/apps/network-policies}"
 ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.10.2}"
 ARGOCD_VALUES="${ARGOCD_VALUES:-$K3S_DIR/apps/argocd/values.yaml}"
 ARGOCD_INGRESS_MANIFEST="${ARGOCD_INGRESS_MANIFEST:-$K3S_DIR/argocd-ingress.yaml}"
 ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
+ARGOCD_PROJECT="${ARGOCD_PROJECT:-$K3S_DIR/apps/argocd/project.yaml}"
+ARGOCD_ROOT_APP="${ARGOCD_ROOT_APP:-$K3S_DIR/apps/argocd/root.yaml}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
@@ -242,6 +237,25 @@ wait_for_rollout() {
   done
 }
 
+# Wait until Argo CD reports an Application both in sync with git and healthy.
+wait_for_argocd_app() {
+  local app="$1" timeout="$2"
+  local deadline=$((SECONDS + timeout)) sync="" health=""
+  while (( SECONDS < deadline )); do
+    sync="$(kubectl -n argocd get application "$app" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+    health="$(kubectl -n argocd get application "$app" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+    if [[ "$sync" == "Synced" && "$health" == "Healthy" ]]; then
+      echo "Argo CD application $app is Synced and Healthy."
+      return 0
+    fi
+    sleep 10
+  done
+  echo "ERROR: Argo CD application $app is '${sync:-missing}' / '${health:-unknown}' after ${timeout}s."
+  kubectl -n argocd get application "$app" \
+    -o jsonpath='{range .status.conditions[*]}{.type}: {.message}{"\n"}{end}' || true
+  return 1
+}
+
 cd "$K3S_DIR"
 
 PREFLIGHT_ONLY=false
@@ -381,12 +395,11 @@ for file in \
   "$K3S_DIR/website.yaml" \
   "$WEBSITE_NGINX" \
   "$WEBSITE_DASHBOARD" \
-  "$TRIVY_OPERATOR_VALUES" \
   "$TRIVY_OPERATOR_DASHBOARD" \
-  "$KYVERNO_VALUES" \
-  "$KYVERNO_POLICIES_VALUES" \
   "$ARGOCD_VALUES" \
-  "$ARGOCD_INGRESS_MANIFEST"
+  "$ARGOCD_INGRESS_MANIFEST" \
+  "$ARGOCD_PROJECT" \
+  "$ARGOCD_ROOT_APP"
 do
   require_file "$file"
 done
@@ -603,8 +616,6 @@ helm repo add longhorn https://charts.longhorn.io --force-update
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 helm repo add grafana-community https://grafana-community.github.io/helm-charts --force-update
 helm repo add grafana https://grafana.github.io/helm-charts --force-update
-helm repo add aqua https://aquasecurity.github.io/helm-charts --force-update
-helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
 
@@ -1097,54 +1108,12 @@ kubectl -n logging rollout status deployment/alloy --timeout=600s
 echo "==> Logging stack is ready."
 
 # ------------------------------------------------------------------------------
-# Security scanning - Trivy Operator
-# ------------------------------------------------------------------------------
-
-# Installed after monitoring because the chart creates a ServiceMonitor. The
-# scans start by themselves and run in the background; nothing waits for them.
-echo "==> Installing Trivy Operator ${TRIVY_OPERATOR_CHART_VERSION}..."
-helm upgrade --install trivy-operator aqua/trivy-operator \
-  --version "$TRIVY_OPERATOR_CHART_VERSION" \
-  --namespace trivy-system \
-  --create-namespace \
-  --values "$TRIVY_OPERATOR_VALUES" \
-  --wait --timeout=600s
-
-echo "==> Applying security scanning dashboard..."
-kubectl create configmap grafana-trivy-operator \
-  --namespace monitoring \
-  --from-file=trivy-operator.json="$TRIVY_OPERATOR_DASHBOARD" \
-  --dry-run=client -o yaml \
-  | kubectl label --local -f - grafana_dashboard=1 -o yaml \
-  | kubectl apply -f -
-
-# ------------------------------------------------------------------------------
-# Policy - Kyverno
-# ------------------------------------------------------------------------------
-
-# Every policy is in Audit mode, so this cannot block the steps that follow.
-# The engine and the policies use the same chart version.
-echo "==> Installing Kyverno ${KYVERNO_CHART_VERSION}..."
-helm upgrade --install kyverno kyverno/kyverno \
-  --version "$KYVERNO_CHART_VERSION" \
-  --namespace kyverno \
-  --create-namespace \
-  --values "$KYVERNO_VALUES" \
-  --wait --timeout=600s
-
-echo "==> Installing Kyverno audit policies..."
-helm upgrade --install kyverno-policies kyverno/kyverno-policies \
-  --version "$KYVERNO_CHART_VERSION" \
-  --namespace kyverno \
-  --values "$KYVERNO_POLICIES_VALUES" \
-  --wait --timeout=300s
-kubectl apply -f "$KYVERNO_POLICIES_DIR"
-
-# ------------------------------------------------------------------------------
 # GitOps - Argo CD
 # ------------------------------------------------------------------------------
 
-# Only the engine. It manages nothing until an Application resource says so.
+# deploy.sh installs the engine; Argo CD then deploys what the Application
+# manifests in apps/argocd/applications describe, from the main branch on
+# GitHub, not from this working copy.
 echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
 helm upgrade --install argocd argo/argo-cd \
   --version "$ARGOCD_CHART_VERSION" \
@@ -1159,6 +1128,25 @@ kubectl -n argocd wait \
   --for=condition=Ready \
   certificate/tls-argocd-ingress \
   --timeout=300s
+
+echo "==> Handing the Argo CD applications to Argo CD..."
+kubectl apply -f "$ARGOCD_PROJECT"
+kubectl apply -f "$ARGOCD_ROOT_APP"
+
+# network-policies is not in this list: it names namespaces that are created
+# further down, and is checked at the end.
+echo "==> Waiting for Argo CD to deploy Trivy Operator and Kyverno..."
+for argocd_app in trivy-operator kyverno kyverno-policies kyverno-custom-policies; do
+  wait_for_argocd_app "$argocd_app" 900
+done
+
+echo "==> Applying security scanning dashboard..."
+kubectl create configmap grafana-trivy-operator \
+  --namespace monitoring \
+  --from-file=trivy-operator.json="$TRIVY_OPERATOR_DASHBOARD" \
+  --dry-run=client -o yaml \
+  | kubectl label --local -f - grafana_dashboard=1 -o yaml \
+  | kubectl apply -f -
 
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system
@@ -1585,9 +1573,9 @@ kubectl -n website wait \
   certificate/tls-website \
   --timeout=300s
 
-# Applied last, once every namespace they name exists.
-echo "==> Applying network policies..."
-kubectl apply -f "$NETWORK_POLICIES_DIR"
+# Checked last, once every namespace the policies name exists.
+echo "==> Waiting for Argo CD to apply the network policies..."
+wait_for_argocd_app network-policies 900
 
 echo
 echo "===== NODES ====="
