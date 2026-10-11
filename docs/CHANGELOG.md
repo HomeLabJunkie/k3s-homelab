@@ -6,6 +6,29 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Kyverno enforces restricted pods in the application namespaces
+
+On 2026-10-11, a first blocking policy, `enforce-app-namespaces`, was added
+in Deny mode for the `authelia`, `cloudflared`, `trilium`, `vaultwarden` and
+`website` namespaces. It refuses pods and workloads that run as root, lack a
+read-only root filesystem, seccomp profile or dropped capabilities, use host
+access, or use unpinned images or unlisted registries. It was applied in Audit
+mode first; all 13 existing pods and Deployments passed. In Deny mode a
+non-compliant pod and Deployment were refused in those namespaces, a compliant
+pod was accepted, a non-compliant pod in `default` was still accepted, and a
+real `rollout restart` of cloudflared completed. The other 20 policies stay in
+Audit mode.
+
+`recovery/restore.sh` creates helper pods in the application namespaces, so
+its health-check and restore-inspect pods now run as restricted, non-root
+pods using the application's own user ID. `--health-check` for Trilium and
+Vaultwarden and a `--restore-app` / `--cleanup-test` cycle for Trilium passed
+with the new pods. A consequence of enforcement is that `kubectl rollout
+undo` to a revision from before the hardening is refused.
+
+The "Homelab - Security Scanning" dashboard gained a "Policy (Kyverno)" row,
+and a `KyvernoAdmissionControllerDown` alert was added.
+
 ## 2026-10-11: Kyverno added in audit mode
 
 On 2026-10-11, Kyverno (chart `3.9.1`, Kyverno `v1.19.1`) was installed in a

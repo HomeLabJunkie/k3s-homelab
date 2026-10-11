@@ -27,6 +27,7 @@ spec:
         object.spec.?ephemeralContainers.orValue([])
     # An image name has a registry only if its first part looks like a host
     # ("quay.io/...", "localhost:5000/..."); otherwise it is on Docker Hub.
+    # Keep in step with enforce-app-namespaces.yaml.
     - name: allowedRegistries
       expression: >-
         ["docker.io", "index.docker.io", "quay.io", "ghcr.io", "registry.k8s.io",

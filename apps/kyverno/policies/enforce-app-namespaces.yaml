@@ -1,0 +1,130 @@
+# The one policy that blocks. In the namespaces of the applications this
+# repository defines, a pod (or a workload that would create one) is refused
+# unless it is restricted the way those applications already are.
+#
+# Everything else in the cluster is only audited. To bring another namespace
+# under enforcement, first make its policy report clean
+# (kubectl -n <namespace> get policyreports), then add it to the list below.
+apiVersion: policies.kyverno.io/v1beta1
+kind: ValidatingPolicy
+metadata:
+  name: enforce-app-namespaces
+  annotations:
+    policies.kyverno.io/title: Enforce Restricted Pods In Application Namespaces
+    policies.kyverno.io/category: Homelab
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Pods in the application namespaces must run as non-root with a read-only
+      root filesystem, no added capabilities, no privilege escalation, a seccomp
+      profile, no host access, and pinned images from the allowed registries.
+spec:
+  # If Kyverno cannot answer, admit the request. The engine also runs with
+  # forceFailurePolicyIgnore, so this policy never blocks while Kyverno is down.
+  failurePolicy: Ignore
+  validationActions:
+    - Deny
+  # ReplicaSets are left out on purpose: the Deployment controller keeps
+  # updating old ReplicaSets, and refusing those updates would stall rollouts.
+  # A Deployment is checked itself, and so is every pod it creates.
+  autogen:
+    podControllers:
+      controllers:
+        - deployments
+        - statefulsets
+        - daemonsets
+        - jobs
+        - cronjobs
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - authelia
+            - cloudflared
+            - trilium
+            - vaultwarden
+            - website
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: allContainers
+      expression: >-
+        object.spec.containers +
+        object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
+    - name: podNonRoot
+      expression: object.spec.?securityContext.?runAsNonRoot.orValue(false)
+    - name: podSeccomp
+      expression: object.spec.?securityContext.?seccompProfile.?type.orValue("")
+    # Keep in step with restrict-image-registries.yaml.
+    - name: allowedRegistries
+      expression: >-
+        ["docker.io", "index.docker.io", "quay.io", "ghcr.io", "registry.k8s.io",
+         "mirror.gcr.io", "mcr.microsoft.com", "reg.kyverno.io"]
+  validations:
+    - expression: >-
+        variables.allContainers.all(c,
+          c.?securityContext.?runAsNonRoot.orValue(variables.podNonRoot) == true)
+      message: >-
+        Blocked by enforce-app-namespaces: every container must run as
+        non-root (set securityContext.runAsNonRoot: true on the pod).
+    - expression: >-
+        variables.allContainers.all(c,
+          c.?securityContext.?allowPrivilegeEscalation.orValue(true) == false)
+      message: >-
+        Blocked by enforce-app-namespaces: every container must set
+        securityContext.allowPrivilegeEscalation: false.
+    - expression: >-
+        variables.allContainers.all(c,
+          c.?securityContext.?capabilities.?drop.orValue([]).exists(d, d == "ALL") &&
+          c.?securityContext.?capabilities.?add.orValue([]).all(a, a == "NET_BIND_SERVICE"))
+      message: >-
+        Blocked by enforce-app-namespaces: every container must drop ALL
+        capabilities and may add back only NET_BIND_SERVICE.
+    - expression: >-
+        variables.allContainers.all(c,
+          c.?securityContext.?seccompProfile.?type.orValue(variables.podSeccomp)
+            in ["RuntimeDefault", "Localhost"])
+      message: >-
+        Blocked by enforce-app-namespaces: the pod must set
+        securityContext.seccompProfile.type to RuntimeDefault.
+    - expression: >-
+        variables.allContainers.all(c,
+          c.?securityContext.?readOnlyRootFilesystem.orValue(false) == true)
+      message: >-
+        Blocked by enforce-app-namespaces: every container must set
+        securityContext.readOnlyRootFilesystem: true and write only to volumes.
+    - expression: >-
+        variables.allContainers.all(c,
+          c.?securityContext.?privileged.orValue(false) == false) &&
+        object.spec.?hostNetwork.orValue(false) == false &&
+        object.spec.?hostPID.orValue(false) == false &&
+        object.spec.?hostIPC.orValue(false) == false &&
+        object.spec.?volumes.orValue([]).all(v, !has(v.hostPath))
+      message: >-
+        Blocked by enforce-app-namespaces: privileged containers, the host's
+        network, process or IPC namespaces, and hostPath volumes are not
+        allowed.
+    - expression: >-
+        variables.allContainers.all(c,
+          c.image.contains("@") ||
+          (c.image.lastIndexOf(":") > c.image.lastIndexOf("/") &&
+           !c.image.endsWith(":latest")))
+      message: >-
+        Blocked by enforce-app-namespaces: every image must name a version tag
+        or a digest, not latest.
+    - expression: >-
+        variables.allContainers.all(c,
+          (c.image.contains("/") &&
+           (c.image.split("/")[0].contains(".") ||
+            c.image.split("/")[0].contains(":") ||
+            c.image.split("/")[0] == "localhost")
+           ? c.image.split("/")[0] : "docker.io") in variables.allowedRegistries)
+      message: >-
+        Blocked by enforce-app-namespaces: an image comes from a registry that
+        is not on the allowed list.

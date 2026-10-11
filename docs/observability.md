@@ -134,8 +134,8 @@ Kyverno runs in the `kyverno` namespace, installed by `deploy.sh` from
 or changed and re-checks everything in the background. Where Trivy reports
 what is wrong today, Kyverno states the rule and keeps checking it.
 
-Every policy is in **Audit** mode: it writes a result and never blocks. There
-are 20:
+There are 21 policies. Twenty are in **Audit** mode: they write a result and
+never block.
 
 - 17 from the `kyverno-policies` chart, the Kubernetes Pod Security Standards
   at the "restricted" level (`apps/kyverno/policies-values.yaml`).
@@ -158,6 +158,42 @@ Kyverno's webhook sees every pod and workload create and update outside
 `kube-system` and `kyverno`. Two settings keep it from ever standing in the
 way: each policy has `failurePolicy: Ignore`, and the engine runs with
 `forceFailurePolicyIgnore`, so if Kyverno is down requests are admitted
-unchecked. To make a policy enforce, change its action from `Audit` to `Deny`
-only after its report shows no failures you intend to keep, and exclude the
-platform namespaces first.
+unchecked. The `KyvernoAdmissionControllerDown` alert fires when that has been
+the case for 15 minutes.
+
+### The one policy that blocks
+
+`apps/kyverno/policies/enforce-app-namespaces.yaml` is in **Deny** mode for
+the `authelia`, `cloudflared`, `trilium`, `vaultwarden` and `website`
+namespaces. There, a pod, or a Deployment, StatefulSet, DaemonSet, Job or
+CronJob that would create one, is refused unless it:
+
+- runs as non-root, with no privilege escalation and all capabilities dropped;
+- has a read-only root filesystem and a seccomp profile;
+- uses no host network, process or IPC namespace, no hostPath volume and no
+  privileged container;
+- uses images with a version tag or digest from the allowed registries.
+
+The refusal names the policy and the rule, for example:
+
+```text
+Policy enforce-app-namespaces failed: Blocked by enforce-app-namespaces:
+every container must run as non-root ...
+```
+
+Things to know:
+
+- `kubectl rollout undo` to a revision from before 2026-10-11 is refused,
+  because those pod templates ran as root.
+- A debug or test pod in one of these namespaces needs the same security
+  context. `recovery/restore.sh` creates its health-check and restore-inspect
+  pods that way, running as the application's own user.
+- To add a namespace, make its policy report clean first, then add it to the
+  list in the policy file. To stop enforcing in an emergency, change `Deny` to
+  `Audit` in the file and apply it, or delete the policy:
+  `kubectl delete validatingpolicy enforce-app-namespaces`.
+
+The "Policy (Kyverno)" row on the "Homelab - Security Scanning" dashboard
+shows blocked requests, the trend of failed checks by policy and namespace,
+and the time Kyverno adds to a request. The failure counts are a trend, not an
+exact total; `kubectl get policyreports -A` has the current state.

@@ -149,3 +149,11 @@ spec:
             summary: >-
               Trivy found a credential inside {{ $labels.image_repository }}
               ({{ $labels.namespace }}/{{ $labels.resource_name }})
+        - alert: KyvernoAdmissionControllerDown
+          expr: absent(up{job="kyverno-svc-metrics"} == 1)
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: >-
+              Kyverno's admission controller is not reporting; pods are being
+              admitted without policy checks
