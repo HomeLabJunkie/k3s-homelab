@@ -65,6 +65,10 @@ ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
 TRIVY_OPERATOR_CHART_VERSION="${TRIVY_OPERATOR_CHART_VERSION:-0.37.0}"
 TRIVY_OPERATOR_VALUES="${TRIVY_OPERATOR_VALUES:-$K3S_DIR/apps/trivy-operator/values.yaml}"
 TRIVY_OPERATOR_DASHBOARD="${TRIVY_OPERATOR_DASHBOARD:-$K3S_DIR/dashboards/trivy-operator.json}"
+KYVERNO_CHART_VERSION="${KYVERNO_CHART_VERSION:-3.9.1}"
+KYVERNO_VALUES="${KYVERNO_VALUES:-$K3S_DIR/apps/kyverno/values.yaml}"
+KYVERNO_POLICIES_VALUES="${KYVERNO_POLICIES_VALUES:-$K3S_DIR/apps/kyverno/policies-values.yaml}"
+KYVERNO_POLICIES_DIR="${KYVERNO_POLICIES_DIR:-$K3S_DIR/apps/kyverno/policies}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
@@ -373,7 +377,9 @@ for file in \
   "$WEBSITE_NGINX" \
   "$WEBSITE_DASHBOARD" \
   "$TRIVY_OPERATOR_VALUES" \
-  "$TRIVY_OPERATOR_DASHBOARD"
+  "$TRIVY_OPERATOR_DASHBOARD" \
+  "$KYVERNO_VALUES" \
+  "$KYVERNO_POLICIES_VALUES"
 do
   require_file "$file"
 done
@@ -591,6 +597,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add grafana-community https://grafana-community.github.io/helm-charts --force-update
 helm repo add grafana https://grafana.github.io/helm-charts --force-update
 helm repo add aqua https://aquasecurity.github.io/helm-charts --force-update
+helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update
 helm repo update >/dev/null
 
 echo "==> Installing cert-manager ${CERT_MANAGER_CHART_VERSION}..."
@@ -1102,6 +1109,28 @@ kubectl create configmap grafana-trivy-operator \
   --dry-run=client -o yaml \
   | kubectl label --local -f - grafana_dashboard=1 -o yaml \
   | kubectl apply -f -
+
+# ------------------------------------------------------------------------------
+# Policy - Kyverno
+# ------------------------------------------------------------------------------
+
+# Every policy is in Audit mode, so this cannot block the steps that follow.
+# The engine and the policies use the same chart version.
+echo "==> Installing Kyverno ${KYVERNO_CHART_VERSION}..."
+helm upgrade --install kyverno kyverno/kyverno \
+  --version "$KYVERNO_CHART_VERSION" \
+  --namespace kyverno \
+  --create-namespace \
+  --values "$KYVERNO_VALUES" \
+  --wait --timeout=600s
+
+echo "==> Installing Kyverno audit policies..."
+helm upgrade --install kyverno-policies kyverno/kyverno-policies \
+  --version "$KYVERNO_CHART_VERSION" \
+  --namespace kyverno \
+  --values "$KYVERNO_POLICIES_VALUES" \
+  --wait --timeout=300s
+kubectl apply -f "$KYVERNO_POLICIES_DIR"
 
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system

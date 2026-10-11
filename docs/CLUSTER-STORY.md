@@ -181,6 +181,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 92.2.0 |
 | Logging | Loki + Alloy | chart 18.14.0 / 1.13.0 |
 | Security scanning | Trivy Operator | chart 0.37.0 |
+| Policy | Kyverno | chart 3.9.1 |
 | Second backup | Velero → Garage | chart 12.2.0 |
 
 ---

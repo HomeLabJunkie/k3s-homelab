@@ -1,0 +1,28 @@
+# Kyverno: a policy engine that checks every resource against written rules
+# when it is created or changed, and re-checks existing resources in the
+# background. The results are PolicyReport resources
+# (kubectl get policyreports -A).
+#
+# All policies in this repository run in Audit mode: they report and never
+# block. This file is the whole configuration for the engine, so a GitOps tool
+# can install the same release from the chart version in deploy.sh.
+
+features:
+  # Kyverno sits in the path of every create and update. If its pods are down
+  # (node maintenance, a bad upgrade), let requests through unchecked instead
+  # of refusing them, whatever an individual policy asks for.
+  forceFailurePolicyIgnore:
+    enabled: true
+
+admissionController:
+  serviceMonitor:
+    enabled: true
+backgroundController:
+  serviceMonitor:
+    enabled: true
+cleanupController:
+  serviceMonitor:
+    enabled: true
+reportsController:
+  serviceMonitor:
+    enabled: true

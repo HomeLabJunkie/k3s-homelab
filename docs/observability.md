@@ -126,3 +126,38 @@ Two alerts in `monitoring-longhorn-v2.yaml` cover the scanner:
 `TrivyOperatorDown` (no metrics for 30 minutes) and
 `TrivyExposedSecretInImage` (a credential found inside an image). Vulnerability
 counts do not alert, because most findings wait on the image's publisher.
+
+## Policy
+
+Kyverno runs in the `kyverno` namespace, installed by `deploy.sh` from
+`apps/kyverno/`. It checks pods against written rules when they are created
+or changed and re-checks everything in the background. Where Trivy reports
+what is wrong today, Kyverno states the rule and keeps checking it.
+
+Every policy is in **Audit** mode: it writes a result and never blocks. There
+are 20:
+
+- 17 from the `kyverno-policies` chart, the Kubernetes Pod Security Standards
+  at the "restricted" level (`apps/kyverno/policies-values.yaml`).
+- 3 written for this cluster in `apps/kyverno/policies/`: images only from the
+  registries already in use, no `latest` or missing image tags, and read-only
+  root filesystems.
+
+```bash
+kubectl get validatingpolicies
+kubectl get policyreports -A
+kubectl -n vaultwarden describe policyreport
+```
+
+The applications this repository defines (Authelia, cloudflared, Trilium,
+Vaultwarden, the website and fb-search) pass all 20. Most failures come from
+platform components that need host access to work: Longhorn, Cilium, MetalLB,
+kube-vip and Velero's node agents.
+
+Kyverno's webhook sees every pod and workload create and update outside
+`kube-system` and `kyverno`. Two settings keep it from ever standing in the
+way: each policy has `failurePolicy: Ignore`, and the engine runs with
+`forceFailurePolicyIgnore`, so if Kyverno is down requests are admitted
+unchecked. To make a policy enforce, change its action from `Audit` to `Deny`
+only after its report shows no failures you intend to keep, and exclude the
+platform namespaces first.

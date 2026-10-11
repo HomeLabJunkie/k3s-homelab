@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Kyverno added in audit mode
+
+On 2026-10-11, Kyverno (chart `3.9.1`, Kyverno `v1.19.1`) was installed in a
+new `kyverno` namespace and added to `deploy.sh`, with 20 policies that only
+report: the 17 Pod Security Standards "restricted" policies from the
+`kyverno-policies` chart, and three in `apps/kyverno/policies/` (allowed image
+registries, no `latest` tags, read-only root filesystems). The engine runs
+with `forceFailurePolicyIgnore`, so a Kyverno outage cannot stop pods being
+created. The first background scan wrote 380 policy reports with no
+evaluation errors. The six applications this repository defines pass every
+policy; the failures are in platform components that need host access.
+`docs/observability.md` has the details.
+
 ## 2026-10-11: Vaultwarden runs as non-root
 
 On 2026-10-11, the Vaultwarden pod stopped running as root. It now runs as
