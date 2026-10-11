@@ -41,6 +41,12 @@ Protected PVC:
 vaultwarden/vaultwarden-data
 ```
 
+The pod runs as user 1000 with a read-only root filesystem, no Linux
+capabilities and the default seccomp profile. Vaultwarden listens on 8080
+inside the pod (`ROCKET_PORT`); the Service still exposes port 80. The files
+on the data volume were created by root, and `fsGroup: 1000` gives the group
+write access to them.
+
 The admin token and initial invitation address come from local encrypted secrets.
 
 General sign-up/invitation behavior is controlled by the deployment manifest rather than documented with real credentials here.
