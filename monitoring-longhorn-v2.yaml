@@ -133,3 +133,19 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: No cert-manager certificate metrics; expiry alerts cannot fire
+    - name: homelab.security.rules
+      rules:
+        - alert: TrivyOperatorDown
+          expr: absent(up{job="trivy-operator"} == 1)
+          for: 30m
+          labels: {severity: warning}
+          annotations:
+            summary: Trivy Operator is not reporting; vulnerability findings are stale
+        - alert: TrivyExposedSecretInImage
+          expr: sum by (namespace, resource_kind, resource_name, image_repository) (trivy_image_exposedsecrets) > 0
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: >-
+              Trivy found a credential inside {{ $labels.image_repository }}
+              ({{ $labels.namespace }}/{{ $labels.resource_name }})

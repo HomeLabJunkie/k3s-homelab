@@ -117,4 +117,12 @@ disk and downloads it again if the pod moves.
 
 Prometheus scrapes the totals through the chart's ServiceMonitor, for example
 `trivy_image_vulnerabilities` (per workload and severity) and
-`trivy_resource_configaudits`.
+`trivy_resource_configaudits`. The "Homelab - Security Scanning" Grafana
+dashboard (`dashboards/trivy-operator.json`) shows them: totals with each
+image counted once, the trend, the worst images, workloads failing manifest
+checks, benchmark results and risky roles.
+
+Two alerts in `monitoring-longhorn-v2.yaml` cover the scanner:
+`TrivyOperatorDown` (no metrics for 30 minutes) and
+`TrivyExposedSecretInImage` (a credential found inside an image). Vulnerability
+counts do not alert, because most findings wait on the image's publisher.

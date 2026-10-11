@@ -64,6 +64,7 @@ LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
 ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
 TRIVY_OPERATOR_CHART_VERSION="${TRIVY_OPERATOR_CHART_VERSION:-0.37.0}"
 TRIVY_OPERATOR_VALUES="${TRIVY_OPERATOR_VALUES:-$K3S_DIR/apps/trivy-operator/values.yaml}"
+TRIVY_OPERATOR_DASHBOARD="${TRIVY_OPERATOR_DASHBOARD:-$K3S_DIR/dashboards/trivy-operator.json}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
@@ -370,7 +371,9 @@ for file in \
   "$MONITORING_SCRAPE_TARGETS" \
   "$K3S_DIR/website.yaml" \
   "$WEBSITE_NGINX" \
-  "$WEBSITE_DASHBOARD"
+  "$WEBSITE_DASHBOARD" \
+  "$TRIVY_OPERATOR_VALUES" \
+  "$TRIVY_OPERATOR_DASHBOARD"
 do
   require_file "$file"
 done
@@ -1091,6 +1094,14 @@ helm upgrade --install trivy-operator aqua/trivy-operator \
   --create-namespace \
   --values "$TRIVY_OPERATOR_VALUES" \
   --wait --timeout=600s
+
+echo "==> Applying security scanning dashboard..."
+kubectl create configmap grafana-trivy-operator \
+  --namespace monitoring \
+  --from-file=trivy-operator.json="$TRIVY_OPERATOR_DASHBOARD" \
+  --dry-run=client -o yaml \
+  | kubectl label --local -f - grafana_dashboard=1 -o yaml \
+  | kubectl apply -f -
 
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system

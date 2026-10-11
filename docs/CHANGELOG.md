@@ -19,6 +19,13 @@ pods failed with "cache may be in use by another process". Its configuration is
 `apps/trivy-operator/values.yaml`, and Prometheus scrapes the findings as
 `trivy_*` metrics. `docs/observability.md` describes how to read the reports.
 
+The same day a Grafana dashboard, "Homelab - Security Scanning"
+(`dashboards/trivy-operator.json`), and two alerts were added:
+`TrivyOperatorDown` and `TrivyExposedSecretInImage`. There is deliberately no
+alert on vulnerability counts: the first scan found 19 critical and 318 high
+findings across 63 images, most of them waiting on the image's publisher, so
+such an alert would never clear.
+
 ## 2026-10-10: Traefik chart 41.7.1; ansible-core 2.21.5
 
 On 2026-10-10, the Traefik Helm chart pin moved from `41.7.0` to `41.7.1`.
