@@ -1,0 +1,9 @@
+# Values for the kyverno-policies chart: the Kubernetes Pod Security Standards
+# written as Kyverno policies. "restricted" includes the baseline rules.
+podSecurityStandard: restricted
+
+# Report only. Change a policy to Deny here only after its report is clean.
+validationFailureAction: Audit
+
+# If a policy cannot be evaluated, admit the request.
+failurePolicy: Ignore

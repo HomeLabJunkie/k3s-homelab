@@ -1,0 +1,36 @@
+apiVersion: policies.kyverno.io/v1beta1
+kind: ValidatingPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow Latest Tag
+    policies.kyverno.io/category: Homelab
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Every image must name a version tag or a digest. An image with no tag or the latest tag can change between restarts without any change in git.
+spec:
+  failurePolicy: Ignore
+  validationActions:
+    - Audit
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: allContainers
+      expression: >-
+        object.spec.containers +
+        object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
+  validations:
+    - expression: >-
+        variables.allContainers.all(c,
+          c.image.contains("@") ||
+          (c.image.lastIndexOf(":") > c.image.lastIndexOf("/") &&
+           !c.image.endsWith(":latest")))
+      message: >-
+        An image has no tag or uses the latest tag. Pin a version tag or a
+        digest.

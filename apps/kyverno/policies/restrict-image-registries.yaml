@@ -1,0 +1,44 @@
+apiVersion: policies.kyverno.io/v1beta1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-image-registries
+  annotations:
+    policies.kyverno.io/title: Restrict Image Registries
+    policies.kyverno.io/category: Homelab
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Images may only come from the registries this cluster already uses. A new registry is a decision, not an accident: add it to the list here.
+spec:
+  failurePolicy: Ignore
+  validationActions:
+    - Audit
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: allContainers
+      expression: >-
+        object.spec.containers +
+        object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
+    # An image name has a registry only if its first part looks like a host
+    # ("quay.io/...", "localhost:5000/..."); otherwise it is on Docker Hub.
+    - name: allowedRegistries
+      expression: >-
+        ["docker.io", "index.docker.io", "quay.io", "ghcr.io", "registry.k8s.io",
+         "mirror.gcr.io", "mcr.microsoft.com", "reg.kyverno.io"]
+  validations:
+    - expression: >-
+        variables.allContainers.all(c,
+          (c.image.contains("/") &&
+           (c.image.split("/")[0].contains(".") ||
+            c.image.split("/")[0].contains(":") ||
+            c.image.split("/")[0] == "localhost")
+           ? c.image.split("/")[0] : "docker.io") in variables.allowedRegistries)
+      message: >-
+        An image comes from a registry that is not on the allowed list in
+        apps/kyverno/policies/restrict-image-registries.yaml.
