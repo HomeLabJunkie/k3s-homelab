@@ -34,23 +34,42 @@ spec:
         app: trilium
     spec:
       enableServiceLinks: false
+      # The data volume is already owned by 1000:1000 (the image's node user).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: trilium
           image: triliumnext/trilium:v0.106.0
           imagePullPolicy: IfNotPresent
+          # The image's own start script runs as root to chown the data and
+          # then switches to the node user. Starting the server directly as
+          # that user needs no root at all.
+          workingDir: /usr/src/app
+          command: ["node", "./main.mjs"]
           ports:
             - name: http
               containerPort: 8080
           env:
             - name: TRILIUM_PORT
               value: "8080"
-            - name: USER_UID
-              value: "1000"
-            - name: USER_GID
-              value: "1000"
+            - name: HOME
+              value: /home/node
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           volumeMounts:
             - name: data
               mountPath: /home/node/trilium-data
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             tcpSocket:
               port: http
@@ -75,6 +94,8 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: trilium-data
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

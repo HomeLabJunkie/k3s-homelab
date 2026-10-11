@@ -6,6 +6,22 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Trilium runs as non-root
+
+On 2026-10-11, the Trilium pod stopped starting as root. The image's start
+script runs as root to `chown` the data and then switches to the `node` user;
+the Deployment now starts the server directly as user 1000
+(`node ./main.mjs`), with a read-only root filesystem, no Linux capabilities,
+no privilege escalation, the default seccomp profile and an `emptyDir` at
+`/tmp`. The `USER_UID` and `USER_GID` variables, which only the start script
+read, were removed. The data was already owned by 1000:1000; `fsGroup: 1000`
+added group write permission and the setgid bit to the files on the volume.
+After the restart Trilium reported the same 580 notes, passed its consistency
+check and answered its health check. Trivy's manifest audit for the workload
+went from 3 high and 4 medium findings to 1 medium (the image registry check).
+A Longhorn backup of the volume from 09:20 UTC the same day existed before the
+change.
+
 ## 2026-10-11: fb-search runs with a restricted security context
 
 On 2026-10-11, both fb-search containers were given a read-only root
