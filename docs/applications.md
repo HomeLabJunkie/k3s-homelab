@@ -51,7 +51,8 @@ In that repo, the text lives in content files that can be edited online at
 the site onto the `deploy` branch. Each pod runs
 [git-sync](https://github.com/kubernetes/git-sync) as a sidecar. It checks
 `deploy` every 60 seconds with a read-only deploy key, so edits go live without
-a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout.
+a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout. The
+pod sets `runAsNonRoot`, so no container in it can start as root.
 
 `deploy.sh` creates the `jeffriffle-git` Secret from `WEBSITE_DEPLOY_KEY_B64`
 (the base64-encoded private deploy key). Cloudflare Access, configured in the
