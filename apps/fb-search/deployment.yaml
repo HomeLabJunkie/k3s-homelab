@@ -20,9 +20,12 @@ spec:
       # namespace the pause container is PID 1 and reaps them; uvicorn does not.
       shareProcessNamespace: true
       securityContext:
+        runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         # Dependencies persist on the fb-search-deps volume. They are reinstalled
         # (hash-verified) only when requirements.txt or the Python version
@@ -45,7 +48,15 @@ spec:
           env:
             - name: HOME
               value: /tmp
+          securityContext: &restricted
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           volumeMounts:
+            # pip's build and temporary files
+            - name: deps-tmp
+              mountPath: /tmp
             - name: deps
               mountPath: /deps
             - name: requirements
@@ -72,6 +83,10 @@ spec:
               value: "Bellevue, NE"
             - name: PYTHONPATH
               value: /deps
+            # The root filesystem is read-only. Chromium's profile and caches
+            # and the location lookup cache go to the /tmp volume instead.
+            - name: HOME
+              value: /tmp
           envFrom:
             - secretRef:
                 name: fb-search
@@ -96,6 +111,7 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          securityContext: *restricted
           resources:
             requests:
               cpu: 100m
@@ -110,7 +126,13 @@ spec:
             - name: app
               mountPath: /app
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: deps-tmp
+          emptyDir: {}
         - name: deps
           persistentVolumeClaim:
             claimName: fb-search-deps
