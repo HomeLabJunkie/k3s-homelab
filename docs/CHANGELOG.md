@@ -6,6 +6,20 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Vaultwarden runs as non-root
+
+On 2026-10-11, the Vaultwarden pod stopped running as root. It now runs as
+user 1000 with a read-only root filesystem, no Linux capabilities, no
+privilege escalation, the default seccomp profile and an `emptyDir` at `/tmp`,
+and listens on 8080 inside the pod instead of the privileged port 80; the
+Service port is unchanged. The existing data files stay owned by root;
+`fsGroup: 1000` changed their group to 1000 and added group write permission.
+After the restart Vaultwarden logged no errors or warnings, `/alive` and
+`/api/config` answered 200 through the public hostname, and the database file
+kept its size. Trivy's manifest audit for the workload went from 3 high and 5
+medium findings to 1 medium (the image registry check). A Longhorn snapshot,
+`pre-nonroot-vaultwarden-20261011`, was taken just before the change.
+
 ## 2026-10-11: Trilium runs as non-root
 
 On 2026-10-11, the Trilium pod stopped starting as root. The image's start

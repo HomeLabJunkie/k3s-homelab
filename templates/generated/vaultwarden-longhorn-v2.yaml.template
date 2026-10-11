@@ -34,14 +34,28 @@ spec:
         app: vaultwarden
     spec:
       enableServiceLinks: false
+      # Vaultwarden needs no root. The files on the data volume were created
+      # by root; fsGroup gives the group write access to them, so user 1000
+      # can use them without a chown.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: vaultwarden
           image: vaultwarden/server:1.37.4
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
           env:
+            # Port 80 is a privileged port; the Service still listens on 80.
+            - name: ROCKET_PORT
+              value: "8080"
             - name: DOMAIN
               value: "https://vaultwarden.${BASE_DOMAIN}"
             - name: SIGNUPS_ALLOWED
@@ -84,9 +98,16 @@ spec:
                 secretKeyRef:
                   name: vaultwarden-integrations
                   key: YUBICO_SECRET_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             tcpSocket:
               port: http
@@ -111,6 +132,8 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: vaultwarden-data
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
