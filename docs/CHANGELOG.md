@@ -6,6 +6,24 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Network policies for the website namespace
+
+On 2026-10-11, the `website` namespace got its first network policies
+(`apps/network-policies/website.yaml`, applied by `deploy.sh`): deny by
+default, then allow Traefik in, Prometheus to the fb-search metrics port,
+cluster DNS, git-sync out to the internet on port 22 and fb-search out on 443.
+The rules were written from traffic recorded with Hubble, which was already
+running. They were trialled in Cilium's per-endpoint audit mode: normal use,
+including a real fb-search search, produced no would-be drops, while test
+connections to the Kubernetes API and to the Unraid server were flagged. Once
+enforced, those connections and one to Home Assistant timed out, the site and
+a search still worked, git-sync kept updating, Prometheus kept scraping, and a
+restart of the site started cleanly. `docs/platform.md` describes the method.
+
+A restart of the site drops one or two requests in a one-second window. The
+same happens with the policies removed, so it is an existing gap in how the
+old pods shut down, not an effect of the policies.
+
 ## 2026-10-11: Kyverno enforces restricted pods in the application namespaces
 
 On 2026-10-11, a first blocking policy, `enforce-app-namespaces`, was added

@@ -54,6 +54,55 @@ The current configuration uses:
 - kube-proxy-compatible K3s networking configuration
 - Flannel disabled
 
+### Watching traffic with Hubble
+
+Hubble records every connection Cilium handles, with the pods on each end and
+whether policy allowed it. The relay and UI run in `kube-system`. The UI is
+not published; reach it with
+`kubectl -n kube-system port-forward svc/hubble-ui 12000:80` and open
+<http://localhost:12000>. From the command line, the Cilium agent carries the
+`hubble` client:
+
+```bash
+RELAY="$(kubectl -n kube-system get svc hubble-relay -o jsonpath='{.spec.clusterIP}')"
+kubectl -n kube-system exec ds/cilium -c cilium-agent -- \
+  hubble observe --server "$RELAY:80" --namespace website --verdict DROPPED -f
+```
+
+Each node keeps only its last few thousand flows, about a minute on this
+cluster, so follow (`-f`) while the traffic happens.
+
+### Network policies
+
+`apps/network-policies/` holds standard Kubernetes NetworkPolicies, applied by
+`deploy.sh` and enforced by Cilium. A namespace listed there denies all
+traffic by default and allows only what its file names. Namespaces without a
+file are unrestricted.
+
+| Namespace | Allowed in | Allowed out |
+| --- | --- | --- |
+| `website` | Traefik to nginx (8080) and fb-search (8000); Prometheus to fb-search metrics (9100) | Cluster DNS; git-sync to the internet on 22 (GitHub); fb-search to the internet on 443 |
+
+"The internet" excludes the private ranges, so these pods cannot reach the
+home network, the nodes, the Kubernetes API or other pods. The kubelet's
+probes need no rule: Cilium always lets a node reach its own pods.
+
+To write policies for another namespace without risking an outage:
+
+1. Record what it does: `hubble observe --namespace <ns> -f` while using the
+   application.
+2. Put its endpoints in audit mode, so policy is evaluated but nothing is
+   dropped. On the node running each pod:
+   `cilium-dbg endpoint config <id> PolicyAuditMode=Enabled`, with the ID from
+   `kubectl -n <ns> get ciliumendpoints`.
+3. Apply the policies and watch `hubble observe --namespace <ns> --verdict AUDIT`.
+   Anything listed would have been dropped.
+4. When only unwanted traffic is listed, set `PolicyAuditMode=Disabled`.
+
+Audit mode is per pod and is lost when the pod restarts, after which the
+policy is enforced. Deleting the policies restores open networking at once:
+`kubectl delete -f apps/network-policies/<namespace>.yaml`.
+
 ## kube-vip
 
 kube-vip provides the highly available Kubernetes API endpoint across the K3s server nodes.
