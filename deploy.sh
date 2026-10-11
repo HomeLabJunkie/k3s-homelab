@@ -69,6 +69,7 @@ KYVERNO_CHART_VERSION="${KYVERNO_CHART_VERSION:-3.9.1}"
 KYVERNO_VALUES="${KYVERNO_VALUES:-$K3S_DIR/apps/kyverno/values.yaml}"
 KYVERNO_POLICIES_VALUES="${KYVERNO_POLICIES_VALUES:-$K3S_DIR/apps/kyverno/policies-values.yaml}"
 KYVERNO_POLICIES_DIR="${KYVERNO_POLICIES_DIR:-$K3S_DIR/apps/kyverno/policies}"
+NETWORK_POLICIES_DIR="${NETWORK_POLICIES_DIR:-$K3S_DIR/apps/network-policies}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
@@ -1556,6 +1557,10 @@ kubectl -n website wait \
   --for=condition=Ready \
   certificate/tls-website \
   --timeout=300s
+
+# Applied last, once every namespace they name exists.
+echo "==> Applying network policies..."
+kubectl apply -f "$NETWORK_POLICIES_DIR"
 
 echo
 echo "===== NODES ====="
