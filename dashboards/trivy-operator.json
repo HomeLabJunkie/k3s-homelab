@@ -2,7 +2,7 @@
   "title": "Homelab - Security Scanning",
   "uid": "homelab-trivy",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "timezone": "browser",
   "tags": [
     "homelab",
@@ -613,6 +613,308 @@
           }
         }
       ]
+    },
+    {
+      "id": 100,
+      "title": "Policy (Kyverno)",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "panels": []
+    },
+    {
+      "id": 101,
+      "title": "Policy: requests blocked (24h)",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(kyverno_admission_requests_total{request_allowed=\"false\"}[24h])) or vector(0)",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Creates and updates Kyverno refused. Only enforce-app-namespaces can block, so each one is a pod or workload in an application namespace that broke its rules.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 102,
+      "title": "Policy: blocking-policy failures (24h)",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(kyverno_validating_policy_results_total{policy_validation_mode=\"Deny\",result=\"fail\"}[24h])) or vector(0)",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Failed checks of policies in Deny mode, from admission and from the background scan.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 103,
+      "title": "Policy: Kyverno controllers up",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(up{namespace=\"kyverno\"}) or vector(0)",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Four controllers are expected. While the admission controller is down, requests are admitted unchecked.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 104,
+      "title": "Policy: admission check time (p95)",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(kyverno_admission_review_duration_seconds_bucket[15m])))",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Time Kyverno adds to a create or update.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "-",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 105,
+      "title": "Policy: failed background checks per hour, by policy",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (policy_name) (increase(kyverno_validating_policy_results_total{result=\"fail\",execution_cause=\"background_scan\"}[1h]))",
+          "legendFormat": "{{policy_name}}",
+          "refId": "A"
+        }
+      ],
+      "description": "A trend, not an exact count: the background scan re-checks every resource several times an hour. For the current state run: kubectl get policyreports -A",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 106,
+      "title": "Policy: failed background checks per hour, by namespace",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (resource_namespace) (increase(kyverno_validating_policy_results_total{result=\"fail\",execution_cause=\"background_scan\"}[1h]))",
+          "legendFormat": "{{resource_namespace}}",
+          "refId": "A"
+        }
+      ],
+      "description": "Application namespaces should stay at zero. Platform namespaces fail because their components need host access.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 107,
+      "title": "Policy: admission requests",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (request_allowed) (rate(kyverno_admission_requests_total[5m]))",
+          "legendFormat": "allowed={{request_allowed}}",
+          "refId": "A"
+        }
+      ],
+      "description": "Creates and updates passing through Kyverno's webhook, per second.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
     }
   ]
 }

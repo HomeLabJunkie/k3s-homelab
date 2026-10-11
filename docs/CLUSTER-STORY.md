@@ -120,7 +120,7 @@ The goal is to find out about a problem *before* it becomes an outage, and to ha
 | --- | --- |
 | **Prometheus** | Collects measurements (processor use, memory, disk space, network traffic) every few seconds and stores them over time. |
 | **Grafana** | Turns those measurements into charts and dashboards. |
-| **Alertmanager** | Sends an **email** when something is wrong. There are **149 alert rules** watching the cluster. |
+| **Alertmanager** | Sends an **email** when something is wrong. There are **150 alert rules** watching the cluster. |
 | **Loki** | Stores the text logs that every app writes, so you can search what happened and when. |
 | **Alloy** | Collects logs from every computer and sends them to Loki. |
 
@@ -159,7 +159,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 - **Private services:** a password manager, a notes app, a website, and a Marketplace search tool.
 - **Secure access:** automatic HTTPS and a private tunnel, with no open ports on the home router.
 - **Durable data:** every app's data is stored three times, with snapshots every 6 hours.
-- **Visibility:** dashboards, searchable logs, and 149 alert rules that email you.
+- **Visibility:** dashboards, searchable logs, and 150 alert rules that email you.
 - **A tested recovery plan:** three layers of backup, and a rehearsal that has been run and passed.
 - **Careful upkeep:** updates one computer at a time, with checks before and after each.
 

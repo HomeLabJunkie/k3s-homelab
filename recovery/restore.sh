@@ -292,6 +292,20 @@ EOF
   esac
 }
 
+# The user and group the app's own pods run as, "uid gid". The helper pods
+# below run as the same IDs so they can read the app's files, and as a
+# restricted pod so admission policy accepts them in the app's namespace.
+app_run_ids() {
+  local app="$1" ns="$2" kind name uid gid
+  kind="$(app_field "$app" 4)"
+  name="$(app_field "$app" 5)"
+  uid="$(kubectl -n "$ns" get "$kind" "$name" -o jsonpath='{.spec.template.spec.securityContext.runAsUser}' 2>/dev/null || true)"
+  gid="$(kubectl -n "$ns" get "$kind" "$name" -o jsonpath='{.spec.template.spec.securityContext.runAsGroup}' 2>/dev/null || true)"
+  [[ "$uid" =~ ^[1-9][0-9]*$ ]] || uid=65534
+  [[ "$gid" =~ ^[1-9][0-9]*$ ]] || gid="$uid"
+  echo "$uid $gid"
+}
+
 http_health_check() {
   local app="$1" ns="$2"
   local url=""
@@ -308,10 +322,30 @@ http_health_check() {
   local pod="dr-health-${app}-$$"
   echo "==> HTTP health check: $url"
 
-  kubectl -n "$ns" run "$pod" \
-    --restart=Never \
-    --image=curlimages/curl:8.22.0 \
-    --command -- sh -c "curl --connect-timeout 10 --max-time 30 -fsS '$url'" >/dev/null
+  kubectl apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod}
+  namespace: ${ns}
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: curl
+      image: curlimages/curl:8.22.0
+      command: ["curl", "--connect-timeout", "10", "--max-time", "30", "-fsS", "${url}"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+EOF
 
   local deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
   local phase=""
@@ -431,7 +465,7 @@ wait_restore_complete() {
 
 restore_app() {
   local app="$1"
-  local ns pvc volume backup_line backup backup_url restore_vol pv pod cap size_bytes replicas frontend access_mode
+  local ns pvc volume backup_line backup backup_url restore_vol pv pod cap size_bytes replicas frontend access_mode run_uid run_gid
   local existing_source
 
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; exit 1; }
@@ -451,6 +485,7 @@ restore_app() {
   restore_vol="${app}-restore-test"
   pv="${restore_vol}-pv"
   pod="${app}-restore-inspect"
+  read -r run_uid run_gid <<<"$(app_run_ids "$app" "$ns")"
   cap="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.resources.requests.storage}')"
   size_bytes="$(kubectl -n longhorn-system get volume "$volume" -o jsonpath='{.spec.size}')"
   replicas="$(kubectl -n longhorn-system get volume "$volume" -o jsonpath='{.spec.numberOfReplicas}')"
@@ -563,9 +598,20 @@ metadata:
   namespace: ${ns}
 spec:
   restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: ${run_uid}
+    runAsGroup: ${run_gid}
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: inspect
       image: busybox:1.37
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
       command:
         - sh
         - -c
