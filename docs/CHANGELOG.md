@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD installed (engine only)
+
+On 2026-10-11, Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) was installed in a
+new `argocd` namespace and added to `deploy.sh`. It manages nothing yet: no
+`Application` exists. Its UI is at `argocd.<domain>` through Traefik, with a
+Let's Encrypt certificate, behind Authelia (the hostname was added to the
+`admins` two-factor rule, which restarted Authelia and ended existing
+sessions) and Argo CD's own login. The hostname is not on the Cloudflare
+tunnel. The bundled Dex and notifications controller are off, and Prometheus
+scrapes all four components. Redis comes from `ecr-public.aws.com`, which was
+added to Kyverno's allowed registries. `docs/platform.md` lists the stages in
+which applications will move to Argo CD.
+
 ## 2026-10-11: Website restarts no longer drop requests
 
 On 2026-10-11, the website's nginx container gained a 10-second `preStop`

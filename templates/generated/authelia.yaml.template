@@ -83,6 +83,7 @@ data:
             - prometheus.${BASE_DOMAIN}
             - grafana.${BASE_DOMAIN}
             - trilium.${BASE_DOMAIN}
+            - argocd.${BASE_DOMAIN}
           subject: group:admins
           policy: two_factor
     # Sessions are kept in memory (one replica): an Authelia restart logs

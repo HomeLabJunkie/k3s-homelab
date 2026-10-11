@@ -70,6 +70,10 @@ KYVERNO_VALUES="${KYVERNO_VALUES:-$K3S_DIR/apps/kyverno/values.yaml}"
 KYVERNO_POLICIES_VALUES="${KYVERNO_POLICIES_VALUES:-$K3S_DIR/apps/kyverno/policies-values.yaml}"
 KYVERNO_POLICIES_DIR="${KYVERNO_POLICIES_DIR:-$K3S_DIR/apps/kyverno/policies}"
 NETWORK_POLICIES_DIR="${NETWORK_POLICIES_DIR:-$K3S_DIR/apps/network-policies}"
+ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.10.2}"
+ARGOCD_VALUES="${ARGOCD_VALUES:-$K3S_DIR/apps/argocd/values.yaml}"
+ARGOCD_INGRESS_MANIFEST="${ARGOCD_INGRESS_MANIFEST:-$K3S_DIR/argocd-ingress.yaml}"
+ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
@@ -79,7 +83,7 @@ LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}
 
 # Refuse to push a placeholder hostname into the cluster.
 for hostname_var in RANCHER_HOSTNAME LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
-  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME AUTHELIA_HOSTNAME; do
+  VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME AUTHELIA_HOSTNAME ARGOCD_HOSTNAME; do
   if [[ "${!hostname_var}" == *.invalid ]]; then
     echo "ERROR: $hostname_var is the placeholder ${!hostname_var}."
     echo "Set BASE_DOMAIN (or $hostname_var) in $ENV_FILE."
@@ -380,7 +384,9 @@ for file in \
   "$TRIVY_OPERATOR_VALUES" \
   "$TRIVY_OPERATOR_DASHBOARD" \
   "$KYVERNO_VALUES" \
-  "$KYVERNO_POLICIES_VALUES"
+  "$KYVERNO_POLICIES_VALUES" \
+  "$ARGOCD_VALUES" \
+  "$ARGOCD_INGRESS_MANIFEST"
 do
   require_file "$file"
 done
@@ -599,6 +605,7 @@ helm repo add grafana-community https://grafana-community.github.io/helm-charts 
 helm repo add grafana https://grafana.github.io/helm-charts --force-update
 helm repo add aqua https://aquasecurity.github.io/helm-charts --force-update
 helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update
+helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
 
 echo "==> Installing cert-manager ${CERT_MANAGER_CHART_VERSION}..."
@@ -1133,6 +1140,26 @@ helm upgrade --install kyverno-policies kyverno/kyverno-policies \
   --wait --timeout=300s
 kubectl apply -f "$KYVERNO_POLICIES_DIR"
 
+# ------------------------------------------------------------------------------
+# GitOps - Argo CD
+# ------------------------------------------------------------------------------
+
+# Only the engine. It manages nothing until an Application resource says so.
+echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
+helm upgrade --install argocd argo/argo-cd \
+  --version "$ARGOCD_CHART_VERSION" \
+  --namespace argocd \
+  --create-namespace \
+  --values "$ARGOCD_VALUES" \
+  --wait --timeout=600s
+
+echo "==> Deploying Argo CD HTTPS ingress..."
+apply_manifest "$ARGOCD_INGRESS_MANIFEST"
+kubectl -n argocd wait \
+  --for=condition=Ready \
+  certificate/tls-argocd-ingress \
+  --timeout=300s
+
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system
 
@@ -1643,6 +1670,7 @@ echo "==========================================================================
 echo " Kubernetes API: https://${KUBE_VIP}:6443"
 echo " Rancher:        https://${RANCHER_HOSTNAME}"
 echo " Longhorn:       https://${LONGHORN_HOSTNAME}"
+echo " Argo CD:        https://${ARGOCD_HOSTNAME}"
 echo " Authelia:       https://${AUTHELIA_HOSTNAME}"
 echo " Trilium:        https://${TRILIUM_HOSTNAME}"
 echo " Vaultwarden:    https://${VAULTWARDEN_HOSTNAME}"

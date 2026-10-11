@@ -65,7 +65,8 @@ spec:
     - name: allowedRegistries
       expression: >-
         ["docker.io", "index.docker.io", "quay.io", "ghcr.io", "registry.k8s.io",
-         "mirror.gcr.io", "mcr.microsoft.com", "reg.kyverno.io"]
+         "mirror.gcr.io", "mcr.microsoft.com", "reg.kyverno.io",
+         "ecr-public.aws.com"]
   validations:
     - expression: >-
         variables.allContainers.all(c,
