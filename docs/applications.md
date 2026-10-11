@@ -55,9 +55,13 @@ Image upgrades are recorded in the [changelog](CHANGELOG.md).
 
 ## Website (jeffriffle.com)
 
-`website.yaml` runs the `jeffriffle` Deployment in the `website` namespace. It
-serves the site from the private `HomeLabJunkie/jeffriffle.com` repo at
-`${BASE_DOMAIN}`, and `www.${BASE_DOMAIN}` redirects there.
+The `charts/website` Helm chart runs the `jeffriffle` Deployment in the
+`website` namespace. Argo CD deploys it (the `website` application, see
+[Argo CD](platform.md#argo-cd)) and takes the domain from
+`website/values.yaml` in the private configuration repository. The site is
+served from the private `HomeLabJunkie/jeffriffle.com` repo at that domain,
+and `www.` redirects there. The chart also holds the route for `/fb-search`,
+because it is a path on the same host.
 
 In that repo, the text lives in content files that can be edited online at
 `/admin/` (Sveltia CMS). Each save commits to `main`, and a GitHub Action builds
@@ -70,13 +74,13 @@ pod sets `runAsNonRoot`, so no container in it can start as root. nginx waits
 sending to the pod, so a rollout does not fail requests.
 
 `deploy.sh` creates the `jeffriffle-git` Secret from `WEBSITE_DEPLOY_KEY_B64`
-(the base64-encoded private deploy key). Cloudflare Access, configured in the
+(the base64-encoded private deploy key); the Secret is not in the chart. Cloudflare Access, configured in the
 Cloudflare dashboard rather than in this repo, puts a login in front of
 `/admin/`.
 
-The nginx config lives in `website-nginx.yaml`, outside `templates/` so that
-`envsubst` doesn't strip nginx's `$variables`. `deploy.sh` restarts the site when
-it changes. nginx writes one JSON line per request, including Cloudflare's
+The nginx config lives in `charts/website/templates/configmap.yaml`. The
+Deployment carries a checksum of it, so merging a change to the config rolls
+the pods. nginx writes one JSON line per request, including Cloudflare's
 visitor IP and country, to Loki.
 
 The **jeffriffle.com - Website** Grafana dashboard (`dashboards/jeffriffle-website.json`)

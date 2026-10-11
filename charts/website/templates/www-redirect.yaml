@@ -1,0 +1,32 @@
+# www.{{ .Values.domain }} permanently redirects to the bare domain, keeping the path.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-www
+  namespace: website
+spec:
+  redirectRegex:
+    regex: ^https?://www\.(.+)
+    replacement: https://${1}
+    permanent: true
+---
+# An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
+# together, so the route never starts up before its middleware exists.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: website-www
+  namespace: website
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`www.{{ .Values.domain }}`)
+      kind: Rule
+      middlewares:
+        - name: redirect-www
+      services:
+        - name: jeffriffle
+          port: 80
+  tls:
+    secretName: tls-website

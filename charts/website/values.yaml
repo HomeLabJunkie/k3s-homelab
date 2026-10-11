@@ -1,0 +1,4 @@
+# The site's bare domain, for example example.com. www.<domain> redirects to
+# it. The real value comes from website/values.yaml in the private
+# configuration repository; rendering fails without one.
+domain: ""
