@@ -1,0 +1,28 @@
+# fb-search (apps/fb-search) is served under a path of the website's host and
+# uses its certificate, so its route lives here with the other routes for
+# that host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fb-search
+  namespace: website
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: {{ .Values.domain }}
+      http:
+        paths:
+          - path: /fb-search
+            pathType: Prefix
+            backend:
+              service:
+                name: fb-search
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - {{ .Values.domain }}
+      secretName: tls-website

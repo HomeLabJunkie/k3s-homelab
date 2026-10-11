@@ -64,7 +64,7 @@ vaultwarden-longhorn.yaml
 longhorn-ingress.yaml
 argocd-ingress.yaml
 trilium-cert.yaml
-website.yaml
+/website.yaml
 clusterissuer-letsencrypt.yaml
 traefik-dashboard-cert.yaml
 trilium-longhorn.yaml

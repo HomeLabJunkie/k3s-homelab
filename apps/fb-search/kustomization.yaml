@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: website
-# The Ingress for /fb-search is in the website chart (apps/website), which
+# The Ingress for /fb-search is in the website chart (charts/website), which
 # knows the domain.
 resources:
   - pvc.yaml

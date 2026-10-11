@@ -24,6 +24,7 @@ exclude_paths:
   # are not Ansible content.
   - .sops.yaml
   - apps/
+  - charts/
   - manifests/
   - recovery/generated-*.yaml
   - collections/requirements.yml
@@ -42,7 +43,6 @@ exclude_paths:
   - monitoring-longhorn-v2.yaml
   - monitoring-values.yaml
   - traefik-dashboard-cert.yaml
-  - website-nginx.yaml
   - traefik-dashboard.yaml
   - traefik-values.yaml
   - trilium-cert.yaml
@@ -52,7 +52,6 @@ exclude_paths:
   - vaultwarden-cert.yaml
   - vaultwarden-longhorn-v2.yaml
   - vaultwarden-longhorn.yaml
-  - website.yaml
 
 skip_list:
   - var-naming[no-role-prefix]

@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-website
+  namespace: website
+spec:
+  secretName: tls-website
+  dnsNames:
+  - {{ .Values.domain }}
+  - www.{{ .Values.domain }}
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

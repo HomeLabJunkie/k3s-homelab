@@ -1,0 +1,43 @@
+# The website, and every route for its host including /fb-search. The
+# jeffriffle-git Secret (git-sync's deploy key) is created by deploy.sh.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: website
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: website
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: main
+      path: charts/website
+      helm:
+        releaseName: website
+        valueFiles:
+          - $config/website/values.yaml
+    # ...and the domain, from the private configuration repository. Argo CD
+    # reads it with the deploy key in the repo-k3s-homelab-config Secret.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: main
+      ref: config
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
