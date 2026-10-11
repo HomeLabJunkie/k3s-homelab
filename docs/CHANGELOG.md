@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: cloudflared runs with a restricted security context
+
+On 2026-10-11, the cloudflared Deployment gained a security context: it must
+run as the image's non-root user (65532), with a read-only root filesystem,
+all Linux capabilities dropped, no privilege escalation and the runtime's
+default seccomp profile. Both pods were replaced, each registered its four
+tunnel connections with no errors, and the public sites kept answering.
+Trivy's manifest audit for the workload went from 3 high and 4 medium
+findings to 1 medium (the image registry check, which is a policy matter).
+
 ## 2026-10-11: Trivy Operator added
 
 On 2026-10-11, Trivy Operator (chart `0.37.0`, operator `0.35.0`) was

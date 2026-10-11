@@ -118,6 +118,10 @@ A Cloudflare Tunnel provides external connectivity without exposing the Kubernet
 
 The tunnel token is injected into a Kubernetes Secret during deployment.
 
+The pods run with a restricted security context: the image's non-root user
+(65532), a read-only root filesystem, no Linux capabilities, no privilege
+escalation, and the runtime's default seccomp profile.
+
 ## Authelia
 
 Authelia is the login portal in front of the admin UIs. See [Authelia](authelia.md).
