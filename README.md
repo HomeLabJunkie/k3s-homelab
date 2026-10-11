@@ -35,6 +35,7 @@ Core platform:
 | Metrics | kube-prometheus-stack |
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
+| Security scanning | Trivy Operator |
 | Backup storage | Garage S3 on Unraid plus NFS and SMB on a separate NAS |
 | DR | Dedicated K3s DR host + automated rehearsal tooling |
 

@@ -1,0 +1,28 @@
+# Trivy Operator: scans every workload's images for known vulnerabilities and
+# exposed secrets, audits manifests and RBAC, and scores the cluster against
+# the CIS, NSA and Pod Security benchmarks. It only reads the cluster and
+# writes report resources (kubectl get vulnerabilityreports -A); it never
+# changes or blocks a workload.
+#
+# This file is the whole configuration, so a GitOps tool can install the same
+# release from the chart version in deploy.sh and this values file.
+
+operator:
+  # The chart default of 10 parallel scan jobs is a lot for the first scan of
+  # every image in the cluster.
+  scanJobsConcurrentLimit: 3
+  # One long-running Trivy server holds the vulnerability database and the
+  # scan cache. Without it every scan job downloads the database itself, and
+  # the containers of a multi-container pod fight over one cache directory
+  # ("cache may be in use by another process").
+  builtInTrivyServer: true
+
+trivy:
+  # Keep the server's database on the node's disk instead of a Longhorn
+  # volume. It is only a cache and is downloaded again if the pod moves.
+  storageClassEnabled: false
+
+# Prometheus picks the monitor up without extra labels; the findings become
+# trivy_* metrics (counts per workload and severity).
+serviceMonitor:
+  enabled: true
