@@ -1,0 +1,43 @@
+# Argo CD: watches git and makes the cluster match it. This is the engine
+# only; what it manages is listed as Application resources, added one
+# application at a time.
+#
+# deploy.sh installs this release, because something has to exist before Argo
+# CD can manage anything. It holds no hostnames or secrets, so it is the same
+# on any cluster.
+
+configs:
+  params:
+    # Traefik terminates TLS (argocd-ingress.yaml), so the server speaks
+    # plain HTTP inside the cluster.
+    server.insecure: true
+
+# Single sign-on comes later through Authelia's OpenID Connect provider, not
+# the bundled Dex.
+dex:
+  enabled: false
+
+# Nothing to notify yet; Alertmanager already sends the cluster's alerts.
+notifications:
+  enabled: false
+
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+server:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+repoServer:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+applicationSet:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

@@ -36,6 +36,7 @@ Core platform:
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
 | Security scanning | Trivy Operator |
+| GitOps | Argo CD (engine installed; applications move to it in stages) |
 | Policy | Kyverno (enforced in the application namespaces, audit elsewhere) |
 | Backup storage | Garage S3 on Unraid plus NFS and SMB on a separate NAS |
 | DR | Dedicated K3s DR host + automated rehearsal tooling |

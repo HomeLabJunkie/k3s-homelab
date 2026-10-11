@@ -1,0 +1,36 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-argocd-ingress
+  namespace: argocd
+spec:
+  secretName: tls-argocd-ingress
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - argocd.${BASE_DOMAIN}
+---
+# An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
+# together, so the route never starts up before its middleware exists.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`argocd.${BASE_DOMAIN}`)
+      kind: Rule
+      middlewares:
+        # Argo CD keeps its own login behind Authelia; see authelia.yaml.template.
+        - name: admin-ui-auth
+          namespace: traefik
+      services:
+        - name: argocd-server
+          port: 80
+  tls:
+    secretName: tls-argocd-ingress

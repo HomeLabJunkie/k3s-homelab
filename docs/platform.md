@@ -211,3 +211,35 @@ The deployment process:
 7. Removes default status from `local-path`.
 
 Persistent application data is intentionally stored on Longhorn so it can be protected through Longhorn backup and restored independently during DR.
+
+## Argo CD
+
+Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) runs in the `argocd` namespace. It
+watches git and makes the cluster match it. `deploy.sh` installs the engine
+from `apps/argocd/values.yaml`; each thing it manages is an `Application`
+resource. Until an application is handed over, `deploy.sh` still deploys it.
+
+| Stage | What moves to Argo CD | State |
+| --- | --- | --- |
+| 1 | The engine itself, UI behind Authelia | Done 2026-10-11 |
+| 2 | Trivy Operator, Kyverno and its policies, network policies | Not started |
+| 3 | Website and fb-search (needs the private configuration repository) | Not started |
+| 4 | cloudflared and Authelia (needs secrets in git, encrypted with sops) | Not started |
+| 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Not started |
+
+K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
+Rancher installs Fleet, another GitOps engine; nothing in this repository
+uses it, and the two must not manage the same resources.
+
+The UI is at `https://argocd.${BASE_DOMAIN}`, behind Authelia (two-factor,
+`admins` group) and then Argo CD's own login. The hostname is not on the
+Cloudflare tunnel. From the home network, point the name at Traefik
+(`192.168.0.200`) in `/etc/hosts`, or skip the ingress:
+
+```bash
+kubectl -n argocd port-forward svc/argocd-server 8080:80   # http://localhost:8080
+```
+
+The first login is user `admin` with the generated password in the
+`argocd-initial-admin-secret` Secret. Read it in your own terminal, change it
+in the UI, then delete that Secret.
