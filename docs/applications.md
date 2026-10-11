@@ -24,6 +24,13 @@ Protected PVC:
 trilium/trilium-data
 ```
 
+The pod runs as the image's `node` user (1000) with a read-only root
+filesystem, no Linux capabilities and the default seccomp profile. The image's
+own start script needs root to `chown` the data before it switches user, so
+the Deployment starts the server directly (`node ./main.mjs`) instead. The
+data volume must therefore be owned by 1000:1000; `fsGroup: 1000` keeps it
+group-writable.
+
 ## Vaultwarden
 
 Vaultwarden is deployed with persistent Longhorn storage.
