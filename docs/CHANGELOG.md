@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Website restarts no longer drop requests
+
+On 2026-10-11, the website's nginx container gained a 10-second `preStop`
+sleep. Before it, each rollout failed one or two requests in the second after
+an old pod stopped, because Traefik was still sending to it. Three restarts
+with a request every half second then returned 200 every time. A rollout now
+takes about ten seconds longer.
+
 ## 2026-10-11: Network policies for cloudflared, Trilium and Vaultwarden
 
 On 2026-10-11, the `cloudflared`, `trilium` and `vaultwarden` namespaces got

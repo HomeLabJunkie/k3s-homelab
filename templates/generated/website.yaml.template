@@ -95,6 +95,13 @@ spec:
           readOnly: true
         - name: nginx-tmp
           mountPath: /tmp
+        # Keep serving for a few seconds after the pod is told to stop, so
+        # Traefik has dropped it from its list before nginx goes away.
+        # Without this a rollout fails the requests already on their way.
+        lifecycle:
+          preStop:
+            sleep:
+              seconds: 10
         readinessProbe:
           httpGet:
             path: /healthz
