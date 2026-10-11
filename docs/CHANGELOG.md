@@ -6,6 +6,22 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Network policies for cloudflared, Trilium and Vaultwarden
+
+On 2026-10-11, the `cloudflared`, `trilium` and `vaultwarden` namespaces got
+default-deny network policies (`apps/network-policies/`), written from Hubble
+recordings and trialled in Cilium's audit mode in the same way as `website`.
+cloudflared may reach Cloudflare (7844, 443) and Traefik's pods; Trilium the
+internet on 443; Vaultwarden the internet on 443 and 587. Each accepts only
+Traefik, plus Prometheus for cloudflared. In audit mode, requests to every
+tunnel hostname, Vaultwarden icon downloads and the `restore.sh` health checks
+produced no would-be drops. Once enforced, all tunnel hostnames answered as
+before, connections from Trilium and Vaultwarden to the Kubernetes API and the
+Unraid server timed out, Vaultwarden still reached Gmail's SMTP port, the
+health checks passed, and a cloudflared restart registered its eight tunnel
+connections. The only drops recorded were cloudflared's start-up ICMP probes,
+which this tunnel does not need.
+
 ## 2026-10-11: Network policies for the website namespace
 
 On 2026-10-11, the `website` namespace got its first network policies
