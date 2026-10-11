@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Trivy Operator added
+
+On 2026-10-11, Trivy Operator (chart `0.37.0`, operator `0.35.0`) was
+installed in a new `trivy-system` namespace and added to `deploy.sh`. It scans
+the images of every workload for known vulnerabilities and exposed secrets,
+audits manifests and RBAC, and scores the cluster against the CIS, NSA and Pod
+Security benchmarks. It only reads the cluster and writes report resources; it
+uses no persistent storage and blocks nothing. One Trivy server pod holds the
+vulnerability database for all scan jobs; without it, scans of multi-container
+pods failed with "cache may be in use by another process". Its configuration is
+`apps/trivy-operator/values.yaml`, and Prometheus scrapes the findings as
+`trivy_*` metrics. `docs/observability.md` describes how to read the reports.
+
 ## 2026-10-10: Traefik chart 41.7.1; ansible-core 2.21.5
 
 On 2026-10-10, the Traefik Helm chart pin moved from `41.7.0` to `41.7.1`.

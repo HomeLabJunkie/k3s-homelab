@@ -86,3 +86,35 @@ whenever it reconnects to a pod's log stream, so for a pod that has been quiet
 longer than that, Loki would reject the same stale line on every reconnect.
 Alloy's `drop_stale` stage drops lines older than 167h before sending them;
 `loki_process_dropped_lines_total` counts them.
+
+## Security scanning
+
+Trivy Operator runs in the `trivy-system` namespace, installed by `deploy.sh`
+from `apps/trivy-operator/values.yaml`. It only reads the cluster: it starts
+short-lived scan jobs in its own namespace and stores the results as report
+resources next to each workload. It does not change or block anything.
+
+| Report | What it covers |
+| --- | --- |
+| `vulnerabilityreports` | Known vulnerabilities (CVEs) in each container image |
+| `exposedsecretreports` | Credentials found inside image layers |
+| `configauditreports` | Manifest problems, such as containers running as root |
+| `rbacassessmentreports`, `clusterrbacassessmentreports` | Over-broad roles |
+| `infraassessmentreports` | Settings of the Kubernetes components themselves |
+| `clustercompliancereports` | Scores against the CIS, NSA and Pod Security benchmarks |
+
+```bash
+kubectl get vulnerabilityreports -A -o wide
+kubectl -n vaultwarden describe vulnerabilityreport <name>
+kubectl get clustercompliancereports
+```
+
+A workload is scanned when it is created or its image changes, and each
+report is replaced after 24 hours, so new vulnerabilities in an unchanged
+image still appear. At most three scan jobs run at a time, and they all ask
+the `trivy-server` pod, which holds the vulnerability database on the node's
+disk and downloads it again if the pod moves.
+
+Prometheus scrapes the totals through the chart's ServiceMonitor, for example
+`trivy_image_vulnerabilities` (per workload and severity) and
+`trivy_resource_configaudits`.

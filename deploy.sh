@@ -62,6 +62,8 @@ LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-18.14.0}"
 ALLOY_CHART_VERSION="${ALLOY_CHART_VERSION:-1.13.0}"
 LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
 ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
+TRIVY_OPERATOR_CHART_VERSION="${TRIVY_OPERATOR_CHART_VERSION:-0.37.0}"
+TRIVY_OPERATOR_VALUES="${TRIVY_OPERATOR_VALUES:-$K3S_DIR/apps/trivy-operator/values.yaml}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
 MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
 WEBSITE_NGINX="${WEBSITE_NGINX:-$K3S_DIR/website-nginx.yaml}"
@@ -585,6 +587,7 @@ helm repo add longhorn https://charts.longhorn.io --force-update
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 helm repo add grafana-community https://grafana-community.github.io/helm-charts --force-update
 helm repo add grafana https://grafana.github.io/helm-charts --force-update
+helm repo add aqua https://aquasecurity.github.io/helm-charts --force-update
 helm repo update >/dev/null
 
 echo "==> Installing cert-manager ${CERT_MANAGER_CHART_VERSION}..."
@@ -1074,6 +1077,20 @@ kubectl -n logging rollout status statefulset/loki --timeout=600s
 kubectl -n logging rollout status deployment/alloy --timeout=600s
 
 echo "==> Logging stack is ready."
+
+# ------------------------------------------------------------------------------
+# Security scanning - Trivy Operator
+# ------------------------------------------------------------------------------
+
+# Installed after monitoring because the chart creates a ServiceMonitor. The
+# scans start by themselves and run in the background; nothing waits for them.
+echo "==> Installing Trivy Operator ${TRIVY_OPERATOR_CHART_VERSION}..."
+helm upgrade --install trivy-operator aqua/trivy-operator \
+  --version "$TRIVY_OPERATOR_CHART_VERSION" \
+  --namespace trivy-system \
+  --create-namespace \
+  --values "$TRIVY_OPERATOR_VALUES" \
+  --wait --timeout=600s
 
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system
