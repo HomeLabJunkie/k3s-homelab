@@ -77,6 +77,13 @@ there.
 | File in the private repository | Used by |
 | --- | --- |
 | `website/values.yaml` (`domain`) | The `website` application (`charts/website`) |
+| `fb-search/` (manifests, `requirements.txt`, `src/`) | The `fb-search` application, built with Kustomize |
+
+fb-search is there whole because its source is deliberately not published.
+To change it, edit the files in the private repository and push to `main`.
+Editing `src/` or `requirements.txt` renames a generated ConfigMap, which
+rolls the pod. Argo CD never deletes, so the ConfigMaps of earlier versions
+stay in the `website` namespace until removed by hand.
 
 Argo CD reads it over SSH with a read-only deploy key. `deploy.sh` creates the
 `repo-k3s-homelab-config` Secret in the `argocd` namespace from

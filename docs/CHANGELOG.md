@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD deploys fb-search from the private repository
+
+On 2026-10-11, `apps/fb-search` moved, manifests and source together, to
+`fb-search/` in the private `k3s-homelab-config` repository, and a
+`fb-search` Argo CD application now builds it from there. Kustomize needs
+the source next to the manifests, and the source is not published, so the
+directory could not stay in this repository. The handover added only Argo
+CD's tracking annotation; the pod was not restarted. `kubectl apply -k` is
+no longer how fb-search is deployed. Its `fb-search` Secret is still
+created by hand.
+
 ## 2026-10-11: Argo CD deploys the website; private configuration repository
 
 On 2026-10-11, the website moved to Argo CD. Its manifests became a small
