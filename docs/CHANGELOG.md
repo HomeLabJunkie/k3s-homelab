@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Website pods must run as non-root
+
+On 2026-10-11, `runAsNonRoot: true` was added to the jeffriffle.com
+Deployment. Its containers already ran as non-root users (git-sync 65533,
+nginx 101) with read-only filesystems and no capabilities; the setting makes
+Kubernetes refuse a future image that would run as root. Both pods were
+replaced one at a time and the site answered 200 on every request during the
+rollout. Trivy's manifest audit for the workload went from 6 medium findings
+to 3, all of them the image registry check. The remaining low findings (user
+IDs below 10000, no CPU limits) are left as they are.
+
 ## 2026-10-11: cloudflared runs with a restricted security context
 
 On 2026-10-11, the cloudflared Deployment gained a security context: it must

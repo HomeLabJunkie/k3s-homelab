@@ -20,6 +20,9 @@ spec:
         app: jeffriffle
     spec:
       securityContext:
+        # Both images already run as non-root users (git-sync 65533, nginx 101);
+        # this makes Kubernetes refuse to start one that would run as root.
+        runAsNonRoot: true
         # git-sync runs as 65533; the group lets it read the deploy key
         fsGroup: 65533
         seccompProfile:
