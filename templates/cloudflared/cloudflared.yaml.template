@@ -13,6 +13,14 @@ spec:
       labels:
         app: cloudflared
     spec:
+      # The image already runs as its nonroot user (65532); stating it lets
+      # Kubernetes refuse to start the pod if a future image runs as root.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: cloudflared
         image: cloudflare/cloudflared:2026.10.0
@@ -32,6 +40,12 @@ spec:
             secretKeyRef:
               name: tunnel-token
               key: token
+        # cloudflared only makes outbound connections and writes no files.
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         resources:
           requests:
             memory: 64Mi
