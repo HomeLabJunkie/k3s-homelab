@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: fb-search runs with a restricted security context
+
+On 2026-10-11, both fb-search containers were given a read-only root
+filesystem, no Linux capabilities and no privilege escalation, and the pod
+now requires a non-root user and the runtime's default seccomp profile. It
+already ran as user 1000. Chromium's profile, its caches and the location
+lookup cache now go to an `emptyDir` at `/tmp` (`HOME=/tmp`), so they are
+still discarded on restart as before. After the change a real search through
+the scraper returned 54 listings in 28 seconds and left no Chromium processes
+behind. Trivy's manifest audit for the workload went from 2 high and 8 medium
+findings to 2 medium, both the image registry check.
+
 ## 2026-10-11: Website pods must run as non-root
 
 On 2026-10-11, `runAsNonRoot: true` was added to the jeffriffle.com
