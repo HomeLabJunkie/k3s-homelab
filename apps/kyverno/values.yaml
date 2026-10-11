@@ -3,9 +3,8 @@
 # background. The results are PolicyReport resources
 # (kubectl get policyreports -A).
 #
-# All policies in this repository run in Audit mode: they report and never
-# block. This file is the whole configuration for the engine, so a GitOps tool
-# can install the same release from the chart version in deploy.sh.
+# Argo CD installs the chart with this file; the chart version is in
+# apps/argocd/applications/kyverno.yaml.
 
 features:
   # Kyverno sits in the path of every create and update. If its pods are down

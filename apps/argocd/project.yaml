@@ -1,0 +1,20 @@
+# The project every Application in this repository belongs to. It limits
+# where Argo CD may read from: this repository and the chart repositories
+# named here. A source anywhere else is refused.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: homelab
+  namespace: argocd
+spec:
+  description: Applications deployed from the k3s-homelab repository
+  sourceRepos:
+    - https://github.com/HomeLabJunkie/k3s-homelab.git
+    - https://aquasecurity.github.io/helm-charts
+    - https://kyverno.github.io/kyverno/
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"

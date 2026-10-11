@@ -4,8 +4,8 @@
 # writes report resources (kubectl get vulnerabilityreports -A); it never
 # changes or blocks a workload.
 #
-# This file is the whole configuration, so a GitOps tool can install the same
-# release from the chart version in deploy.sh and this values file.
+# Argo CD installs the chart with this file; the chart version is in
+# apps/argocd/applications/trivy-operator.yaml.
 
 operator:
   # The chart default of 10 parallel scan jobs is a lot for the first scan of

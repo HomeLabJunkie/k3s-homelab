@@ -92,3 +92,7 @@ recovery/generated-*.yaml
 # session (a cloned Chrome profile), which Meta's terms do not permit. The
 # nightly backup/backup.sh bundle still includes it.
 apps/fb-search/src/
+
+# The rendered-file names above also match files of the same name deeper in
+# the tree. These are source files, not rendered output.
+!apps/network-policies/*.yaml

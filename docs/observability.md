@@ -89,8 +89,8 @@ Alloy's `drop_stale` stage drops lines older than 167h before sending them;
 
 ## Security scanning
 
-Trivy Operator runs in the `trivy-system` namespace, installed by `deploy.sh`
-from `apps/trivy-operator/values.yaml`. It only reads the cluster: it starts
+Trivy Operator runs in the `trivy-system` namespace, installed by Argo CD
+(see [Argo CD](platform.md#argo-cd)) from `apps/trivy-operator/values.yaml`. It only reads the cluster: it starts
 short-lived scan jobs in its own namespace and stores the results as report
 resources next to each workload. It does not change or block anything.
 
@@ -129,7 +129,7 @@ counts do not alert, because most findings wait on the image's publisher.
 
 ## Policy
 
-Kyverno runs in the `kyverno` namespace, installed by `deploy.sh` from
+Kyverno runs in the `kyverno` namespace, installed by Argo CD from
 `apps/kyverno/`. It checks pods against written rules when they are created
 or changed and re-checks everything in the background. Where Trivy reports
 what is wrong today, Kyverno states the rule and keeps checking it.
@@ -189,9 +189,11 @@ Things to know:
   context. `recovery/restore.sh` creates its health-check and restore-inspect
   pods that way, running as the application's own user.
 - To add a namespace, make its policy report clean first, then add it to the
-  list in the policy file. To stop enforcing in an emergency, change `Deny` to
-  `Audit` in the file and apply it, or delete the policy:
-  `kubectl delete validatingpolicy enforce-app-namespaces`.
+  list in the policy file and merge it; Argo CD applies the change.
+- To stop enforcing in an emergency, stop Argo CD's controller first (see
+  [Stopping Argo CD in an emergency](platform.md#stopping-argo-cd-in-an-emergency)),
+  then `kubectl delete validatingpolicy enforce-app-namespaces`. Without that
+  step Argo CD restores the policy, or its `Deny` action, within seconds.
 
 The "Policy (Kyverno)" row on the "Homelab - Security Scanning" dashboard
 shows blocked requests, the trend of failed checks by policy and namespace,

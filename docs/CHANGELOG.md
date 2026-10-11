@@ -6,6 +6,32 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD deploys Trivy Operator, Kyverno and the policies
+
+On 2026-10-11, five Argo CD applications took over what `deploy.sh` used to
+install with Helm and `kubectl`: `trivy-operator`, `kyverno`,
+`kyverno-policies`, `kyverno-custom-policies` and `network-policies`. A
+`root` application creates them from `apps/argocd/applications/`, and all
+belong to a `homelab` project that only allows this repository and the two
+chart repositories as sources. Chart versions now live in the Application
+files, and a change reaches the cluster by merging to `main`.
+
+The handover changed nothing that runs: the comparison showed only Argo CD's
+tracking annotation to add (and a `managed-by` label on four Trivy reports),
+and no pod was replaced. Automated sync with self-heal is on and pruning is
+off. Deleting a managed network policy brought it back in 3 seconds, and
+changing the enforcing Kyverno policy to Audit by hand was undone in 2.
+
+Two things came out of the handover. First, Argo CD showed that
+`apps/network-policies/website.yaml` and `cloudflared.yaml` had never been
+committed: `.gitignore` entries for the rendered `website.yaml` and
+`cloudflared.yaml` at the repository root also matched them. The policies
+were running, applied from one laptop, but were not in git. They are
+committed now. Second, the earlier advice to delete a policy in an emergency
+no longer works by itself, because Argo CD restores it; `docs/platform.md`
+describes stopping the controller first. Two alerts were added:
+`ArgoCDAppOutOfSync` and `ArgoCDAppUnhealthy`.
+
 ## 2026-10-11: Argo CD installed (engine only)
 
 On 2026-10-11, Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) was installed in a

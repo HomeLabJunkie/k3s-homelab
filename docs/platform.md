@@ -75,7 +75,7 @@ cluster, so follow (`-f`) while the traffic happens.
 ### Network policies
 
 `apps/network-policies/` holds standard Kubernetes NetworkPolicies, applied by
-`deploy.sh` and enforced by Cilium. A namespace listed there denies all
+Argo CD (the `network-policies` application) and enforced by Cilium. A namespace listed there denies all
 traffic by default and allows only what its file names. Namespaces without a
 file are unrestricted.
 
@@ -115,7 +115,9 @@ To write policies for another namespace without risking an outage:
 4. When only unwanted traffic is listed, set `PolicyAuditMode=Disabled`.
 
 Audit mode is per pod and is lost when the pod restarts, after which the
-policy is enforced. Deleting the policies restores open networking at once:
+policy is enforced. Argo CD puts a deleted policy back within seconds, so to
+open a namespace's networking in a hurry, follow "Stopping Argo CD in an
+emergency" below and then run
 `kubectl delete -f apps/network-policies/<namespace>.yaml`.
 
 ## kube-vip
@@ -222,7 +224,7 @@ resource. Until an application is handed over, `deploy.sh` still deploys it.
 | Stage | What moves to Argo CD | State |
 | --- | --- | --- |
 | 1 | The engine itself, UI behind Authelia | Done 2026-10-11 |
-| 2 | Trivy Operator, Kyverno and its policies, network policies | Not started |
+| 2 | Trivy Operator, Kyverno and its policies, network policies | Done 2026-10-11 |
 | 3 | Website and fb-search (needs the private configuration repository) | Not started |
 | 4 | cloudflared and Authelia (needs secrets in git, encrypted with sops) | Not started |
 | 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Not started |
@@ -230,6 +232,52 @@ resource. Until an application is handed over, `deploy.sh` still deploys it.
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
 Rancher installs Fleet, another GitOps engine; nothing in this repository
 uses it, and the two must not manage the same resources.
+
+### How a change reaches the cluster
+
+`apps/argocd/root.yaml` is the one Application `deploy.sh` applies. It makes
+Argo CD create every Application in `apps/argocd/applications/`. Each of
+those names a chart version and a values file, or a directory of manifests,
+on the `main` branch of this repository on GitHub.
+
+- To upgrade a chart, change `targetRevision` in its Application file. To
+  change a setting, edit its values file or manifest. Open a pull request;
+  when it merges, Argo CD applies it within about three minutes.
+- Argo CD reads GitHub, not a laptop's working copy. An unmerged edit does
+  nothing, and `deploy.sh` no longer installs these components itself.
+- A manual edit to something Argo CD manages is undone within seconds
+  (self-heal). The two applications that are plain manifests
+  (`kyverno-custom-policies`, `network-policies`) are restored exactly. The
+  three Helm-chart applications use server-side apply, which the charts'
+  large CRDs require; there, a value another tool adds to a list can survive
+  beside Argo CD's own.
+- Argo CD never deletes (`prune: false`). Removing a file from git leaves the
+  resource in the cluster, shown as out of sync, until it is deleted by hand.
+
+```bash
+kubectl -n argocd get applications
+kubectl -n argocd exec argocd-application-controller-0 -- argocd app diff <name> --core
+```
+
+The Helm release records for `trivy-operator`, `kyverno` and
+`kyverno-policies` from before the handover still appear in `helm list`.
+Nothing uses them; do not run `helm upgrade` on those releases.
+
+### Stopping Argo CD in an emergency
+
+To change or delete something Argo CD manages without it being put back,
+stop the controller first, and start it again afterwards:
+
+```bash
+kubectl -n argocd scale statefulset argocd-application-controller --replicas=0
+# ...make the change...
+kubectl -n argocd scale statefulset argocd-application-controller --replicas=1
+```
+
+When the controller starts again it restores what git says, so make the same
+change in git before then if it should last.
+
+### The UI
 
 The UI is at `https://argocd.${BASE_DOMAIN}`, behind Authelia (two-factor,
 `admins` group) and then Argo CD's own login. The hostname is not on the
