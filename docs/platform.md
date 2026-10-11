@@ -82,10 +82,25 @@ file are unrestricted.
 | Namespace | Allowed in | Allowed out |
 | --- | --- | --- |
 | `website` | Traefik to nginx (8080) and fb-search (8000); Prometheus to fb-search metrics (9100) | Cluster DNS; git-sync to the internet on 22 (GitHub); fb-search to the internet on 443 |
+| `cloudflared` | Prometheus to the metrics port (20241) | Cluster DNS; the internet on 7844 (Cloudflare's edge) and 443 (its API); Traefik's pods on 8000 and 8443 |
+| `trilium` | Traefik to Trilium (8080); pods in the same namespace | Cluster DNS; the internet on 443; pods in the same namespace |
+| `vaultwarden` | Traefik to Vaultwarden (8080); pods in the same namespace | Cluster DNS; the internet on 443 and 587 (mail through Gmail); pods in the same namespace |
 
 "The internet" excludes the private ranges, so these pods cannot reach the
 home network, the nodes, the Kubernetes API or other pods. The kubelet's
 probes need no rule: Cilium always lets a node reach its own pods.
+
+Three details that are easy to trip over:
+
+- The tunnel's origin is Traefik's load-balancer address, `192.168.0.200:443`.
+  Cilium translates that to a Traefik pod before it checks policy, so the
+  cloudflared rule names the Traefik pods and their container ports (8000 and
+  8443), not the address.
+- Trilium and Vaultwarden allow traffic within their own namespace because
+  `recovery/restore.sh --health-check` starts a pod there that calls the
+  application's Service.
+- cloudflared's ICMP probes to the internet at start-up are dropped. Only its
+  optional ICMP proxying uses them, which this tunnel does not.
 
 To write policies for another namespace without risking an outage:
 
