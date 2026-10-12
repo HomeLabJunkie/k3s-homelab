@@ -25,3 +25,13 @@ cleanupController:
 reportsController:
   serviceMonitor:
     enabled: true
+
+# The policy CRDs come from a sub-chart that gives them an empty "labels: {}"
+# by default. The API server drops an empty map, so on a freshly installed
+# cluster Argo CD would show those CRDs as out of sync for ever. A real label
+# avoids that.
+kyverno-api:
+  labels:
+    app.kubernetes.io/part-of: kyverno
+  annotations:
+    homelab/crds-from: kyverno-api

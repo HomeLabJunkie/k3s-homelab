@@ -1,26 +1,22 @@
+{{- if not (has "fb-search" .Values.disabled) }}
+# fb-search, built by Kustomize. Its manifests and source are in the private
+# configuration repository, because the source is not published. Its route is
+# in the website application. The fb-search Secret (APP_PASSWORD,
+# SESSION_SECRET) is created by hand and is not in git.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kyverno-policies
+  name: fb-search
   namespace: argocd
 spec:
   project: homelab
   destination:
     server: https://kubernetes.default.svc
-    namespace: kyverno
-  sources:
-    # The chart, at a pinned version...
-    - repoURL: https://kyverno.github.io/kyverno/
-      chart: kyverno-policies
-      targetRevision: 3.9.1
-      helm:
-        releaseName: kyverno-policies
-        valueFiles:
-          - $values/apps/kyverno/policies-values.yaml
-    # ...and its values, from this repository.
-    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
-      targetRevision: main
-      ref: values
+    namespace: website
+  source:
+    repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+    targetRevision: {{ .Values.config.revision }}
+    path: {{ .Values.config.path }}fb-search
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
     # manages. It never deletes: removing something from git leaves it in the
@@ -38,6 +34,4 @@ spec:
         maxDuration: 5m
     syncOptions:
       - CreateNamespace=true
-      # Server-side apply: these charts carry CRDs too large for the
-      # annotation that client-side apply writes.
-      - ServerSideApply=true
+{{- end }}

@@ -18,6 +18,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/config/cluster.env}"
 SECRETS_FILE="${SECRETS_FILE:-$ROOT_DIR/.secrets.enc}"
 CONFIG_REPO="${CONFIG_REPO:-$ROOT_DIR/../k3s-homelab-config}"
+# Directory inside the configuration repository to write to, with a trailing
+# slash. Empty is production; a test cluster's clone sets "envs/test/", the
+# same value as ARGOCD_APPS_CONFIG_PATH in its config/cluster.env.
+# It is read after config/cluster.env is loaded, below.
 
 CHECK=false
 case "${1:-}" in
@@ -49,6 +53,9 @@ decrypted_secrets="$(sops --decrypt "$SECRETS_FILE")" || fail "sops could not de
 source <(printf '%s\n' "$decrypted_secrets")
 unset decrypted_secrets
 set +a
+
+CONFIG_PATH="${CONFIG_PATH:-${ARGOCD_APPS_CONFIG_PATH:-}}"
+[[ -z "$CONFIG_PATH" || "$CONFIG_PATH" == */ ]] || fail "CONFIG_PATH must end with a slash: $CONFIG_PATH"
 
 for var in ADMIN_EMAIL CLOUDFLARE_TUNNEL_TOKEN ADMIN_UI_USERNAME ADMIN_UI_PASSWORD \
   AUTHELIA_SESSION_SECRET AUTHELIA_STORAGE_ENCRYPTION_KEY AUTHELIA_JWT_SECRET \
@@ -229,9 +236,9 @@ if [[ "$CHECK" == true ]]; then
   exit "$status"
 fi
 
-write_secret "$WORK/tunnel-token.yaml" "$CONFIG_REPO/cloudflared/tunnel-token.enc.yaml"
-write_secret "$WORK/authelia-secrets.yaml" "$CONFIG_REPO/authelia/authelia-secrets.enc.yaml"
-write_secret "$WORK/vaultwarden-admin.yaml" "$CONFIG_REPO/vaultwarden/vaultwarden-admin.enc.yaml"
+write_secret "$WORK/tunnel-token.yaml" "$CONFIG_REPO/${CONFIG_PATH}cloudflared/tunnel-token.enc.yaml"
+write_secret "$WORK/authelia-secrets.yaml" "$CONFIG_REPO/${CONFIG_PATH}authelia/authelia-secrets.enc.yaml"
+write_secret "$WORK/vaultwarden-admin.yaml" "$CONFIG_REPO/${CONFIG_PATH}vaultwarden/vaultwarden-admin.enc.yaml"
 write_secret "$WORK/vaultwarden-integrations.yaml" \
-  "$CONFIG_REPO/vaultwarden/vaultwarden-integrations.enc.yaml"
+  "$CONFIG_REPO/${CONFIG_PATH}vaultwarden/vaultwarden-integrations.enc.yaml"
 echo "Commit and push $CONFIG_REPO for Argo CD to apply any change."

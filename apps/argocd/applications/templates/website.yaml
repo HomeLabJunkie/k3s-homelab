@@ -1,3 +1,4 @@
+{{- if not (has "website" .Values.disabled) }}
 # The website, and every route for its host including /fb-search. The
 # jeffriffle-git Secret (git-sync's deploy key) is created by deploy.sh.
 apiVersion: argoproj.io/v1alpha1
@@ -13,16 +14,16 @@ spec:
   sources:
     # The chart, from this repository...
     - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
-      targetRevision: main
+      targetRevision: {{ .Values.revision }}
       path: charts/website
       helm:
         releaseName: website
         valueFiles:
-          - $config/website/values.yaml
+          - $config/{{ .Values.config.path }}website/values.yaml
     # ...and the domain, from the private configuration repository. Argo CD
     # reads it with the deploy key in the repo-k3s-homelab-config Secret.
     - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
-      targetRevision: main
+      targetRevision: {{ .Values.config.revision }}
       ref: config
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
@@ -41,3 +42,4 @@ spec:
         maxDuration: 5m
     syncOptions:
       - CreateNamespace=true
+{{- end }}

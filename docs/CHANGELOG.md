@@ -6,6 +6,40 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Test environment for Argo CD; full rebuild tested
+
+On 2026-10-12, `deploy.sh --bootstrap` was run against the throwaway test
+cluster for the first time since Argo CD took over the applications. It
+needed one thing first: a cluster built from this repository would have
+deployed production's settings and Secrets, including the production tunnel
+token. `apps/argocd/applications` is now a chart, and a cluster's
+`config/cluster.env` can point it at a branch (`ARGOCD_APPS_REVISION`), a
+directory of the configuration repository (`ARGOCD_APPS_CONFIG_PATH`, the
+test cluster uses `envs/test/`) and leave applications out
+(`ARGOCD_APPS_DISABLED`). The test cluster has its own Argo CD age key.
+Production's eleven Applications render exactly as before.
+
+The run found one defect. On a freshly installed cluster the `kyverno`
+application never became Synced, so `deploy.sh` stopped after 15 minutes:
+the chart gives its policy CRDs an empty `labels: {}` and `annotations: {}`,
+which the API server drops, and Argo CD kept seeing a difference.
+`apps/kyverno/values.yaml` now gives them a real label and annotation.
+Production never showed this because Helm had installed those CRDs there.
+
+After that fix the cluster was destroyed and rebuilt from nothing. The run
+went from bare VMs through K3s, the platform charts, Argo CD and Authelia,
+and stopped at the Rancher certificate, where Let's Encrypt answered
+"Certificate not found" while finalizing one order of ten. With that
+certificate requested again, a second `deploy.sh` finished: 11 applications
+Synced and Healthy, 10 of 10 certificates ready, every pod running, all 18
+Secret keys matching the test secrets file, and `rancher.` on the test
+domain answering through the test tunnel. Production was not touched.
+
+The test also showed that the test secrets file needs production's mail
+login and website deploy key, as the procedure says: with stand-ins,
+Authelia does not start, git-sync cannot fetch the site, and the Vaultwarden
+invitation fails.
+
 ## 2026-10-11: Argo CD UI reachable through the Cloudflare tunnel
 
 On 2026-10-11, `argocd.${BASE_DOMAIN}` was added as a public hostname on the

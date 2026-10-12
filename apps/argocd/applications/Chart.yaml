@@ -1,0 +1,8 @@
+# The Applications Argo CD manages, as a chart so that one cluster can deploy
+# them from a different branch or with a different set of settings than
+# another. The root Application (../root.yaml) renders it.
+apiVersion: v2
+name: applications
+description: The Argo CD Applications of this cluster
+type: application
+version: 1.0.0

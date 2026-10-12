@@ -299,11 +299,31 @@ separate clone with its own settings and secrets:
    `METALLB_IP_RANGE=10.90.0.100-10.90.0.120`,
    `CLOUDFLARE_ORIGIN_IP=10.90.0.100`, `BACKUP_NAS_IP=10.90.0.8`, and an
    `UNRAID_IP` that nothing answers on. Set `BASE_DOMAIN` to a separate test
-   domain and `CLOUDFLARE_TUNNEL_ID` to a separate test tunnel.
+   domain and `CLOUDFLARE_TUNNEL_ID` to a separate test tunnel. Add the three
+   lines that keep Argo CD away from production's settings:
+
+   ```text
+   ARGOCD_APPS_REVISION=main
+   ARGOCD_APPS_CONFIG_PATH=envs/test/
+   ARGOCD_APPS_DISABLED=fb-search
+   ```
+
+   Without `ARGOCD_APPS_CONFIG_PATH`, Argo CD on the test cluster would
+   deploy production's Secrets, including the production tunnel token, and
+   the test cluster would start serving the real sites. To test a branch,
+   put its name in `ARGOCD_APPS_REVISION`.
 3. Give it its own `.secrets.enc` with a new `K3S_TOKEN`, the test tunnel's
    token, a Cloudflare API token scoped to the test zone only, and
    `LONGHORN_CIFS_USERNAME` and `LONGHORN_CIFS_PASSWORD` both set to
-   `dummy`, the stand-in NAS login. The mail login and the website deploy
+   `dummy`, the stand-in NAS login. The file `.secrets.test.enc` beside
+   `.secrets.enc` in the normal checkout holds these. Add
+   `ARGOCD_CONFIG_REPO_KEY_B64` from production's file and an
+   `ARGOCD_SOPS_AGE_KEY` generated for the test cluster only, whose public
+   key is the second recipient of the `envs/test/` rule in the configuration
+   repository's `.sops.yaml`. Then, from the clone, run
+   `CONFIG_REPO=<path to k3s-homelab-config> scripts/render-argocd-secrets.sh`
+   and push the configuration repository, so `envs/test/` holds Secrets built
+   from the test values. The mail login and the website deploy
    key must be real: Authelia will not start, and the Vaultwarden invitation
    fails, when the mail server rejects the login.
 4. In the clone only, set `flannel_iface` and `cilium_iface` to `enp1s0` in
@@ -319,6 +339,17 @@ separate clone with its own settings and secrets:
    outside `~/.kube`, and `SKIP_SYNC_CHECK=true`.
 6. Run `./deploy.sh --preflight-only --bootstrap`, then
    `./deploy.sh --bootstrap`, from the clone.
+
+Two things that cost time on 2026-10-12:
+
+- Keep the SOCKS proxy in a terminal of its own (without `-f`). If it stops,
+  `deploy.sh` fails at whatever step next talks to the cluster.
+- Let's Encrypt can fail one certificate order with an error that is not
+  about this cluster. `deploy.sh` stops there; delete that Certificate and
+  run `./deploy.sh` again without `--bootstrap`. Each full run also requests
+  the same ten certificates, and Let's Encrypt allows five identical
+  certificates a week, so do not rebuild the test cluster more than a few
+  times in a week.
 
 To browse the result, start a browser through the same proxy:
 

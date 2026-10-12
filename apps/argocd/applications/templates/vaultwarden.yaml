@@ -1,3 +1,4 @@
+{{- if not (has "vaultwarden" .Values.disabled) }}
 # Vaultwarden, the password manager. After a change to one of its Secrets,
 # restart the Deployment: it reads them only at start-up.
 apiVersion: argoproj.io/v1alpha1
@@ -13,20 +14,20 @@ spec:
   sources:
     # The chart, from this repository...
     - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
-      targetRevision: main
+      targetRevision: {{ .Values.revision }}
       path: charts/vaultwarden
       helm:
         releaseName: vaultwarden
         valueFiles:
-          - $config/vaultwarden/values.yaml
+          - $config/{{ .Values.config.path }}vaultwarden/values.yaml
     # ...and its settings, from the private configuration repository.
     - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
-      targetRevision: main
+      targetRevision: {{ .Values.config.revision }}
       ref: config
     # Its Secrets, which KSOPS decrypts from the same repository.
     - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
-      targetRevision: main
-      path: vaultwarden
+      targetRevision: {{ .Values.config.revision }}
+      path: {{ .Values.config.path }}vaultwarden
   syncPolicy:
     # Apply changes from git by itself, but do not undo manual edits
     # (selfHeal is off). This application holds data: recovery/restore.sh
@@ -43,3 +44,4 @@ spec:
         maxDuration: 5m
     syncOptions:
       - CreateNamespace=true
+{{- end }}
