@@ -255,7 +255,8 @@ monitoring is installed.
 | 7 | The admin UIs' routes (`routes`); alert rules, scrape targets, the Loki data source and dashboards (`monitoring-extras`) | Done 2026-10-12 |
 | 8 | Loki and Alloy | Done 2026-10-12 |
 | 9 | kube-prometheus-stack and its Secrets | Done 2026-10-12 |
-| 10 | Velero, Rancher | Not started |
+| 10 | Velero, with the snapshot controller and Longhorn's backup settings | Done 2026-10-12 |
+| 10 | Rancher | Not started |
 | 11 | Traefik | Not started |
 | 12 | Argo CD's own chart; `deploy.sh` reduced to a bootstrap | Not started |
 

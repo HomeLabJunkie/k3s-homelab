@@ -1,0 +1,37 @@
+{{- if not (has "backup-config" .Values.disabled) }}
+# What backups need from Longhorn: the snapshot class and the temporary
+# storage class Velero uses, and Longhorn's recurring snapshot and backup
+# jobs. It needs the CRDs of Longhorn and of the snapshot-controller
+# application; the retry below covers a new cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backup-config
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+  source:
+    repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+    targetRevision: {{ .Values.revision }}
+    path: manifests/backup
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

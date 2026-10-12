@@ -86,6 +86,7 @@ there.
 | `cert-manager/cloudflare-api-token.enc.yaml` | The Cloudflare API token cert-manager proves domain ownership with, encrypted |
 | `monitoring/values.yaml` | Added to `apps/monitoring/values.yaml` for the `monitoring` application: where Grafana finds Authelia |
 | `monitoring/*.enc.yaml` | The four monitoring Secrets, encrypted |
+| `velero/values.yaml`, `velero/*.enc.yaml` | The `velero` application: the backup store's address, and its two Secrets, encrypted. Production only |
 | `routes/values.yaml` (`domain`) | The `routes` application (`charts/routes`) |
 | `monitoring-extras/values.yaml` (`cloudflareAccountId`) | The `monitoring-extras` application (`charts/monitoring-extras`) |
 | `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |

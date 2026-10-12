@@ -210,6 +210,29 @@ kubectl create secret generic alertmanager-smtp \
   --from-file=alertmanager.yaml="$WORK/alertmanager.yaml" \
   --dry-run=client -o yaml >"$WORK/alertmanager-smtp.yaml"
 
+# --- Velero: the S3 login and the backup repository password --------------------
+
+# A test cluster has no backup store and leaves the velero application out,
+# so its secrets file has none of these values.
+velero_secrets=false
+if [[ -n "${VELERO_GARAGE_ACCESS_KEY:-}${VELERO_GARAGE_SECRET_KEY:-}${VELERO_REPOSITORY_PASSWORD:-}" ]]; then
+  for var in VELERO_GARAGE_ACCESS_KEY VELERO_GARAGE_SECRET_KEY VELERO_REPOSITORY_PASSWORD; do
+    [[ -n "${!var:-}" ]] || fail "$var is not set"
+  done
+  velero_secrets=true
+  kubectl create secret generic velero-garage-credentials \
+    --namespace velero \
+    --from-file=cloud=<(printf '[default]\naws_access_key_id=%s\naws_secret_access_key=%s' \
+      "$VELERO_GARAGE_ACCESS_KEY" "$VELERO_GARAGE_SECRET_KEY") \
+    --dry-run=client -o yaml >"$WORK/velero-garage-credentials.yaml"
+  kubectl create secret generic velero-repo-credentials \
+    --namespace velero \
+    --from-file=repository-password=<(printf '%s' "$VELERO_REPOSITORY_PASSWORD") \
+    --dry-run=client -o yaml >"$WORK/velero-repo-credentials.yaml"
+else
+  echo "Velero values are not set: skipping the Velero Secrets."
+fi
+
 # --- compare with the cluster, or write ---------------------------------------
 
 # Prints "<key> <sha256>" for each data key of a Secret manifest on stdin.
@@ -285,6 +308,11 @@ if [[ "$CHECK" == true ]]; then
   for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmanager-smtp; do
     check_secret monitoring "$monitoring_secret" "$WORK/$monitoring_secret.yaml" || status=1
   done
+  if [[ "$velero_secrets" == true ]]; then
+    for velero_secret in velero-garage-credentials velero-repo-credentials; do
+      check_secret velero "$velero_secret" "$WORK/$velero_secret.yaml" || status=1
+    done
+  fi
   exit "$status"
 fi
 
@@ -299,4 +327,10 @@ for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmana
   write_secret "$WORK/$monitoring_secret.yaml" \
     "$CONFIG_REPO/${CONFIG_PATH}monitoring/$monitoring_secret.enc.yaml"
 done
+if [[ "$velero_secrets" == true ]]; then
+  for velero_secret in velero-garage-credentials velero-repo-credentials; do
+    write_secret "$WORK/$velero_secret.yaml" \
+      "$CONFIG_REPO/${CONFIG_PATH}velero/$velero_secret.enc.yaml"
+  done
+fi
 echo "Commit and push $CONFIG_REPO for Argo CD to apply any change."
