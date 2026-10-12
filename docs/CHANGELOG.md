@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD UI reachable through the Cloudflare tunnel
+
+On 2026-10-11, `argocd.${BASE_DOMAIN}` was added as a public hostname on the
+Cloudflare tunnel, in the Cloudflare dashboard. The UI had been LAN-only by
+decision; it is now reachable from anywhere, behind Authelia (two-factor,
+`admins` group) and then Argo CD's own login, like Longhorn and Grafana.
+Nothing changed in the cluster: the route and the Authelia rule were already
+in place. The `admin` password was changed from the generated one and is
+kept in the password manager.
+
 ## 2026-10-11: Argo CD deploys Trilium and Vaultwarden
 
 On 2026-10-11, Trilium and Vaultwarden moved to Argo CD, the last stage of

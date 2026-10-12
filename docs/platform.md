@@ -335,14 +335,20 @@ change in git before then if it should last.
 ### The UI
 
 The UI is at `https://argocd.${BASE_DOMAIN}`, behind Authelia (two-factor,
-`admins` group) and then Argo CD's own login. The hostname is not on the
-Cloudflare tunnel. From the home network, point the name at Traefik
-(`192.168.0.200`) in `/etc/hosts`, or skip the ingress:
+`admins` group) and then Argo CD's own login. Since 2026-10-11 the hostname
+is a public hostname on the Cloudflare tunnel, set up like the other
+Authelia-protected UIs (see [Authelia](authelia.md)), so it is reachable from
+anywhere. The tunnel route is configured in the Cloudflare dashboard, not in
+this repository.
+
+If the tunnel or Authelia is down, skip both from a machine with `kubectl`:
 
 ```bash
 kubectl -n argocd port-forward svc/argocd-server 8080:80   # http://localhost:8080
 ```
 
-The first login is user `admin` with the generated password in the
-`argocd-initial-admin-secret` Secret. Read it in your own terminal, change it
-in the UI, then delete that Secret.
+The login is user `admin`. Its password was changed from the generated one on
+2026-10-11 and is kept in the password manager, not in `.secrets.enc`. On a
+rebuilt cluster the first login uses the generated password in the
+`argocd-initial-admin-secret` Secret: read it in your own terminal, change it
+in the UI (User Info, Update Password), then delete that Secret.
