@@ -346,10 +346,12 @@ Two things that cost time on 2026-10-12:
   `deploy.sh` fails at whatever step next talks to the cluster.
 - Let's Encrypt can fail one certificate order with an error that is not
   about this cluster. `deploy.sh` stops there; delete that Certificate and
-  run `./deploy.sh` again without `--bootstrap`. Each full run also requests
-  the same ten certificates, and Let's Encrypt allows five identical
-  certificates a week, so do not rebuild the test cluster more than a few
-  times in a week.
+  run `./deploy.sh` again without `--bootstrap`. The test environment uses
+  Let's Encrypt's staging service (`acmeServer` in
+  `envs/test/cert-manager/values.yaml`), so a rebuild does not count against
+  the five identical certificates a week that the real service allows. Its
+  certificates are not trusted; the checks in `deploy.sh` do not verify them,
+  and the browser will warn.
 
 To browse the result, start a browser through the same proxy:
 

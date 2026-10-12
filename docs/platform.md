@@ -175,6 +175,16 @@ Chart upgrades and value changes are recorded in the [changelog](CHANGELOG.md).
 ## cert-manager
 
 cert-manager issues and renews certificates using the configured Let's Encrypt `ClusterIssuer`.
+Argo CD deploys both: the chart as the `cert-manager` application
+(`apps/cert-manager/values.yaml`), and the issuer with its Cloudflare API
+token as `cert-manager-config` (`charts/cert-manager-config`).
+
+The issuer is called `letsencrypt-prod` on every cluster, because every
+Certificate names it. Which Let's Encrypt service it uses is the chart's
+`acmeServer` value. Production uses the real service. The test cluster uses
+the staging service, whose certificates browsers do not trust and which has
+no weekly limit, so rebuilding the test cluster does not use up the five
+identical certificates a week that the real service allows.
 
 Cloudflare API credentials are loaded from the encrypted/local secrets file and are not committed to the repository.
 
@@ -220,9 +230,18 @@ Persistent application data is intentionally stored on Longhorn so it can be pro
 Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) runs in the `argocd` namespace. It
 watches git and makes the cluster match it. `deploy.sh` installs the engine
 from `apps/argocd/values.yaml`; each thing it manages is an `Application`
-resource. Every application in the plan below has been handed over; the
-platform charts (Traefik, cert-manager, monitoring, logging, Rancher) are
-still installed by `deploy.sh`.
+resource. The applications have all been handed over. The platform charts
+are moving one stage at a time; until its stage, `deploy.sh` still installs
+a chart with Helm.
+
+`deploy.sh` installs Argo CD first, straight after the cluster itself,
+because Argo CD deploys cert-manager and nearly everything after it. On a
+new cluster most applications cannot sync at that moment: the CRDs, storage
+or Traefik they need arrive later in the script. Each one retries for about
+two hours, and the script waits for each at the point where it must be
+ready. Argo CD's ServiceMonitors are left out of that first install, since
+the monitoring CRDs do not exist yet; a second pass adds them once
+monitoring is installed.
 
 | Stage | What moves to Argo CD | State |
 | --- | --- | --- |
@@ -232,6 +251,13 @@ still installed by `deploy.sh`.
 | 3 | fb-search (manifests and source moved to the private configuration repository) | Done 2026-10-11 |
 | 4 | cloudflared and Authelia, with their Secrets encrypted in the private repository | Done 2026-10-11 |
 | 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Done 2026-10-11 |
+| 6 | cert-manager and its issuer; Argo CD installed first by `deploy.sh` | Done 2026-10-12 |
+| 7 | The remaining routes, dashboards, alert rules and scrape targets | Not started |
+| 8 | Loki and Alloy | Not started |
+| 9 | kube-prometheus-stack | Not started |
+| 10 | Velero, Rancher | Not started |
+| 11 | Traefik | Not started |
+| 12 | Argo CD's own chart; `deploy.sh` reduced to a bootstrap | Not started |
 
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
 Rancher installs Fleet, another GitOps engine; nothing in this repository

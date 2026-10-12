@@ -82,6 +82,8 @@ there.
 | `website/values.yaml` (`domain`) | The `website` application (`charts/website`) |
 | `fb-search/` (manifests, `requirements.txt`, `src/`) | The `fb-search` application, built with Kustomize |
 
+| `cert-manager/values.yaml` (`adminEmail`, optional `acmeServer`) | The `cert-manager-config` application (`charts/cert-manager-config`) |
+| `cert-manager/cloudflare-api-token.enc.yaml` | The Cloudflare API token cert-manager proves domain ownership with, encrypted |
 | `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |
 | `cloudflared/tunnel-token.enc.yaml` | The tunnel token, encrypted |
 | `authelia/values.yaml` (`domain`, `adminEmail`) | The `authelia` application (`charts/authelia`) |
@@ -118,7 +120,7 @@ laptop.
 
 ## Changing a secret Argo CD deploys
 
-The tunnel token, Authelia's Secret (admin login, session and storage keys,
+The Cloudflare API token for certificates, the tunnel token, Authelia's Secret (admin login, session and storage keys,
 SMTP login, Duo and OIDC credentials) and Vaultwarden's two Secrets (admin
 token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.enc` is still where their values are set:
 
