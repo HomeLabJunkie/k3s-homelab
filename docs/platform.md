@@ -155,7 +155,8 @@ METALLB_IP_RANGE
 
 ## Traefik
 
-Traefik is installed separately with Helm rather than using the K3s bundled Traefik.
+Traefik is deployed by Argo CD (the `traefik` application, values in
+`apps/traefik/values.yaml`) rather than using the K3s bundled Traefik.
 
 It handles application ingress and TLS-enabled service exposure.
 
@@ -257,7 +258,7 @@ monitoring is installed.
 | 9 | kube-prometheus-stack and its Secrets | Done 2026-10-12 |
 | 10 | Velero, with the snapshot controller and Longhorn's backup settings | Done 2026-10-12 |
 | 10 | Rancher (its certificate is in `routes`) | Done 2026-10-12 |
-| 11 | Traefik | Not started |
+| 11 | Traefik | Done 2026-10-12 |
 | 12 | Argo CD's own chart; `deploy.sh` reduced to a bootstrap | Not started |
 
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
