@@ -6,6 +6,21 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys Traefik
+
+On 2026-10-12, Traefik moved to Argo CD as the `traefik` application (chart
+`41.7.1`, values moved to `apps/traefik/values.yaml`). On production the
+comparison showed no difference in the Deployment, the Service or the
+`traefik.io` CRDs that routes use. It did show the unused Traefik Hub CRDs
+(`hub.traefik.io`) behind the chart, because Helm never upgrades CRDs after
+the first install; Argo CD brought them up to the chart's version. No
+Traefik pod restarted, the load-balancer address stayed `192.168.0.200`, and
+176 of 176 requests to the site during the sync returned 200.
+
+With this, every chart except Longhorn and Argo CD itself is deployed by
+Argo CD. `deploy.sh` waits for the application instead of validating and
+installing the chart.
+
 ## 2026-10-12: Argo CD deploys Rancher
 
 On 2026-10-12, Rancher moved to Argo CD as the `rancher` application (chart

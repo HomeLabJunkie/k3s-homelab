@@ -1,7 +1,7 @@
-# Traefik Helm values
+# Argo CD installs the Traefik chart with this file; the chart version is in
+# apps/argocd/applications/templates/traefik.yaml.
 #
-# This file is compatible with the current Traefik Helm chart structure.
-# Logging changed from the old top-level "logs:" key to "log:".
+# Logging uses the chart's "log:" key; older charts called it "logs:".
 
 deployment:
   replicas: 2

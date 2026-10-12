@@ -32,7 +32,6 @@ exclude_paths:
   - cloudflared.yaml
   - clusterissuer-letsencrypt.yaml
   - longhorn-values.yaml
-  - traefik-values.yaml
   - trilium-longhorn-v2.yaml
   - trilium-longhorn.yaml
   - vaultwarden-longhorn-v2.yaml

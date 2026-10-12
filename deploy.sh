@@ -19,7 +19,6 @@ set +a
 KUBECONFIG_SOURCE="${KUBECONFIG_SOURCE:-$K3S_DIR/kubeconfig}"
 KUBECONFIG_TARGET="${KUBECONFIG_TARGET:-$HOME/.kube/config}"
 
-TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.7.1}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 
 # Ingress hostnames default to <app>.$BASE_DOMAIN from cluster.env. Without
@@ -35,7 +34,6 @@ if [[ -n "${RANCHER_ADMIN_USER:-}" && "$RANCHER_ADMIN_USER" != "admin" ]]; then
 fi
 RANCHER_ADMIN_USER="admin"
 
-TRAEFIK_VALUES="${TRAEFIK_VALUES:-$K3S_DIR/traefik-values.yaml}"
 LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-host-prep.yml}"
 LONGHORN_VALUES="${LONGHORN_VALUES:-$K3S_DIR/longhorn-values.yaml}"
 LONGHORN_HOSTNAME="${LONGHORN_HOSTNAME:-longhorn.${HOSTNAME_DOMAIN}}"
@@ -214,7 +212,8 @@ retry_failed_certificates() {
       python3 -c '
 import json, sys
 name = sys.argv[1]
-for item in json.load(sys.stdin).get("items", []):
+text = sys.stdin.read()
+for item in (json.loads(text).get("items", []) if text.strip() else []):
     owned = any(o.get("name") == name for o in item["metadata"].get("ownerReferences", []))
     for cond in item.get("status", {}).get("conditions", []):
         if owned and cond.get("type") == "Ready" and cond.get("reason") == "Failed":
@@ -225,7 +224,10 @@ for item in json.load(sys.stdin).get("items", []):
     kubectl get certificates --all-namespaces -o json 2>/dev/null |
       python3 -c '
 import json, sys
-for item in json.load(sys.stdin).get("items", []):
+text = sys.stdin.read()
+# Empty until cert-manager has installed its CRDs.
+items = json.loads(text).get("items", []) if text.strip() else []
+for item in items:
     status = item.get("status", {})
     ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in status.get("conditions", []))
     if not ready and status.get("lastFailureTime"):
@@ -409,7 +411,6 @@ echo "==> Rendering cluster environment..."
 ENV_FILE="$ENV_FILE" "$K3S_DIR/scripts/prepare-env.sh"
 
 for file in \
-  "$TRAEFIK_VALUES" \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
   "$ARGOCD_VALUES" \
@@ -626,7 +627,6 @@ echo "==> Waiting for all nodes to be Ready..."
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 echo "==> Configuring Helm repositories..."
-helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo add longhorn https://charts.longhorn.io --force-update
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
@@ -717,20 +717,9 @@ wait_for_argocd_app cert-manager 900
 wait_for_argocd_app cert-manager-config 900
 kubectl wait --for=condition=Ready clusterissuer/letsencrypt-prod --timeout=180s
 
-echo "==> Validating Traefik Helm values against chart ${TRAEFIK_CHART_VERSION}..."
-helm template traefik traefik/traefik \
-  --version "$TRAEFIK_CHART_VERSION" \
-  --namespace traefik \
-  --values "$TRAEFIK_VALUES" >/dev/null
-
-echo "==> Installing Traefik ${TRAEFIK_CHART_VERSION}..."
-helm upgrade --install traefik traefik/traefik \
-  --version "$TRAEFIK_CHART_VERSION" \
-  --namespace traefik \
-  --create-namespace \
-  --values "$TRAEFIK_VALUES" \
-  --wait \
-  --timeout=300s
+# Argo CD deploys Traefik (apps/traefik).
+echo "==> Waiting for Argo CD to deploy Traefik..."
+wait_for_argocd_app traefik 900
 
 kubectl -n traefik rollout status deployment/traefik --timeout=180s
 kubectl -n traefik get svc traefik
