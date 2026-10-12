@@ -317,9 +317,10 @@ separate clone with its own settings and secrets:
    `LONGHORN_CIFS_USERNAME` and `LONGHORN_CIFS_PASSWORD` both set to
    `dummy`, the stand-in NAS login. The file `.secrets.test.enc` beside
    `.secrets.enc` in the normal checkout holds these. Add
-   `ARGOCD_CONFIG_REPO_KEY_B64` from production's file and an
-   `ARGOCD_SOPS_AGE_KEY` generated for the test cluster only, whose public
-   key is the second recipient of the `envs/test/` rule in the configuration
+   `ARGOCD_CONFIG_REPO_KEY_B64` from production's file and the test
+   cluster's own `ARGOCD_SOPS_AGE_KEY`. That key is kept encrypted in the
+   configuration repository as `envs/test/argocd-sops-age-key.enc.yaml`; its
+   public key is the second recipient of the `envs/test/` rule in that
    repository's `.sops.yaml`. Then, from the clone, run
    `CONFIG_REPO=<path to k3s-homelab-config> scripts/render-argocd-secrets.sh`
    and push the configuration repository, so `envs/test/` holds Secrets built
