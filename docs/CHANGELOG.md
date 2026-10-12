@@ -6,6 +6,24 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD deploys Trilium and Vaultwarden
+
+On 2026-10-11, Trilium and Vaultwarden moved to Argo CD, the last stage of
+the plan. Each is a chart (`charts/trilium`, `charts/vaultwarden`) that
+renders exactly what its template did, so neither pod was restarted.
+Vaultwarden's two Secrets are now built by
+`scripts/render-argocd-secrets.sh` and decrypted by Argo CD. The admin-token
+hash is salted from the token instead of at random, so it no longer changes
+on every run; the stored hash changed once as a result, and takes effect
+when Vaultwarden next restarts.
+
+Both applications sync from git with self-heal off. `recovery/restore.sh`
+now pauses the Argo CD application that owns a Deployment before
+`--promote-app` scales it down and repoints its volume, and resumes it on
+`--rollback-app`. This also covers Authelia, which has self-heal on. Pausing
+was tested on the website (a manual scale-down held while paused and was
+undone 2 seconds after resuming); a promotion itself was not run.
+
 ## 2026-10-11: Argo CD deploys cloudflared and Authelia; secrets with sops
 
 On 2026-10-11, cloudflared and Authelia moved to Argo CD, each as a small

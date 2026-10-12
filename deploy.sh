@@ -45,9 +45,7 @@ LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-ho
 LONGHORN_VALUES="${LONGHORN_VALUES:-$K3S_DIR/longhorn-values.yaml}"
 LONGHORN_INGRESS_MANIFEST="${LONGHORN_INGRESS_MANIFEST:-$K3S_DIR/longhorn-ingress.yaml}"
 LONGHORN_HOSTNAME="${LONGHORN_HOSTNAME:-longhorn.${HOSTNAME_DOMAIN}}"
-TRILIUM_MANIFEST="${TRILIUM_MANIFEST:-$K3S_DIR/trilium-longhorn-v2.yaml}"
 TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
-VAULTWARDEN_MANIFEST="${VAULTWARDEN_MANIFEST:-$K3S_DIR/vaultwarden-longhorn-v2.yaml}"
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
 AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
 KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-92.2.0}"
@@ -378,8 +376,6 @@ for file in \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
   "$LONGHORN_INGRESS_MANIFEST" \
-  "$TRILIUM_MANIFEST" \
-  "$VAULTWARDEN_MANIFEST" \
   "$MONITORING_VALUES" \
   "$MONITORING_INGRESS" \
   "$MONITORING_LONGHORN" \
@@ -1268,9 +1264,10 @@ fi
 cleanup
 PF_PID=""
 
-echo "==> Deploying Trilium with Longhorn storage..."
-apply_manifest "$TRILIUM_MANIFEST"
-remove_replaced_ingress trilium trilium
+# Argo CD deploys Trilium (charts/trilium); the checks below confirm what it
+# deployed.
+echo "==> Waiting for Argo CD to deploy Trilium..."
+wait_for_argocd_app trilium 900
 
 echo "==> Waiting for Trilium Longhorn PVC to bind..."
 for i in {1..60}; do
@@ -1315,48 +1312,11 @@ for i in {1..60}; do
   sleep 5
 done
 
-echo "==> Creating/updating Vaultwarden admin secret..."
-ensure_namespace vaultwarden
-
-# Store only an Argon2id PHC hash (Vaultwarden's "bitwarden" preset); the
-# /admin login still uses the plaintext VAULTWARDEN_ADMIN_TOKEN.
-VAULTWARDEN_ADMIN_TOKEN_HASH="$(
-  printf '%s' "$VAULTWARDEN_ADMIN_TOKEN" |
-    argon2 "$(openssl rand -base64 32)" -id -t 3 -k 65540 -p 4 -e
-)"
-# shellcheck disable=SC2016 # literal hash prefix
-[[ "$VAULTWARDEN_ADMIN_TOKEN_HASH" == '$argon2id$'* ]] || {
-  echo "ERROR: could not hash VAULTWARDEN_ADMIN_TOKEN with argon2."
-  exit 1
-}
-kubectl create secret generic vaultwarden-admin \
-  --namespace vaultwarden \
-  --from-file=admin-token=<(printf '%s' "$VAULTWARDEN_ADMIN_TOKEN_HASH") \
-  --dry-run=client -o yaml | kubectl apply -f -
-unset VAULTWARDEN_ADMIN_TOKEN_HASH
-
-echo "==> Creating/updating Vaultwarden integration secret..."
-kubectl create secret generic vaultwarden-integrations \
-  --namespace vaultwarden \
-  --from-file=SMTP_USERNAME=<(printf '%s' "$VAULTWARDEN_SMTP_USERNAME") \
-  --from-file=SMTP_PASSWORD=<(printf '%s' "$VAULTWARDEN_SMTP_PASSWORD") \
-  --from-file=YUBICO_SECRET_KEY=<(printf '%s' "$VAULTWARDEN_YUBICO_SECRET_KEY") \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "==> Deploying Vaultwarden with Longhorn storage..."
-apply_manifest "$VAULTWARDEN_MANIFEST"
-
-# Vaultwarden reads its secrets only at startup, so roll the pod when one
-# changes. The stored admin-token hash is salted afresh on every run, so the
-# stamp is taken from the values themselves, not from the Secrets.
-VAULTWARDEN_CONFIG_HASH="$(
-  printf '%s\0' "$VAULTWARDEN_ADMIN_TOKEN" "$VAULTWARDEN_SMTP_USERNAME" \
-    "$VAULTWARDEN_SMTP_PASSWORD" "$VAULTWARDEN_YUBICO_SECRET_KEY" |
-    sha256sum | cut -c1-16
-)"
-kubectl -n vaultwarden patch deployment vaultwarden --type merge \
-  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/config-hash\":\"${VAULTWARDEN_CONFIG_HASH}\"}}}}}"
-unset VAULTWARDEN_CONFIG_HASH
+# Argo CD deploys Vaultwarden (charts/vaultwarden) and its two Secrets, which
+# scripts/render-argocd-secrets.sh writes to the private configuration
+# repository. The checks below confirm what it deployed.
+echo "==> Waiting for Argo CD to deploy Vaultwarden..."
+wait_for_argocd_app vaultwarden 900
 
 echo "==> Waiting for Vaultwarden Longhorn PVC to bind..."
 for i in {1..60}; do

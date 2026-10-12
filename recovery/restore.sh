@@ -692,6 +692,36 @@ cleanup_test() {
 }
 
 
+# Argo CD puts a tracking annotation, "<application>:<group>/<kind>:<ns>/<name>",
+# on everything it deploys. Prints the application that owns a Deployment, or
+# nothing if Argo CD does not manage it.
+argocd_app_for_deployment() {
+  local ns="$1" deploy="$2" tracking
+  tracking="$(kubectl -n "$ns" get deployment "$deploy" \
+    -o jsonpath='{.metadata.annotations.argocd\.argoproj\.io/tracking-id}' 2>/dev/null || true)"
+  [[ -n "$tracking" ]] && printf '%s\n' "${tracking%%:*}"
+  return 0
+}
+
+# Stop Argo CD reconciling one application, so it neither scales the workload
+# back up nor points it at the original volume again. The annotation survives
+# the root application's self-heal, which only restores what is in git.
+argocd_pause() {
+  local argo_app="$1"
+  [[ -n "$argo_app" ]] || return 0
+  echo "==> Pausing Argo CD application $argo_app..."
+  kubectl -n argocd annotate applications.argoproj.io "$argo_app" \
+    argocd.argoproj.io/skip-reconcile=true --overwrite
+}
+
+argocd_resume() {
+  local argo_app="$1"
+  [[ -n "$argo_app" ]] || return 0
+  echo "==> Resuming Argo CD application $argo_app..."
+  kubectl -n argocd annotate applications.argoproj.io "$argo_app" \
+    argocd.argoproj.io/skip-reconcile- || true
+}
+
 deployment_claim_patch() {
   local ns="$1" deploy="$2" old_pvc="$3" new_pvc="$4"
   local patch
@@ -840,6 +870,9 @@ promote_deployment_app() {
   state_dir="${STATE_ROOT}/${app}/${stamp}"
   mkdir -p "$state_dir"
 
+  local argo_app
+  argo_app="$(argocd_app_for_deployment "$ns" "$workload")"
+
   kubectl -n "$ns" get deployment "$workload" -o yaml > "$state_dir/deployment-before.yaml"
   kubectl -n "$ns" get pvc "$pvc" -o yaml > "$state_dir/live-pvc-before.yaml"
   kubectl -n "$ns" get pvc "$restore_vol" -o yaml > "$state_dir/restored-pvc-before.yaml"
@@ -854,6 +887,7 @@ ORIGINAL_VOLUME=${old_volume}
 RESTORED_PVC=${restore_vol}
 RESTORED_VOLUME=${restore_vol}
 ORIGINAL_REPLICAS=${replicas}
+ARGOCD_APP=${argo_app}
 PROMOTED_AT=$(date -Iseconds)
 STATUS=preparing
 EOF
@@ -865,6 +899,8 @@ EOF
   echo "==> Removing inspection pod..."
   kubectl -n "$ns" delete pod "$pod" --wait=true
   wait_longhorn_detached "$restore_vol"
+
+  argocd_pause "$argo_app"
 
   echo "==> Scaling deployment/$workload to zero..."
   kubectl -n "$ns" scale deployment "$workload" --replicas=0
@@ -896,6 +932,12 @@ EOF
   echo "Rollback state: $state_dir"
   health_check_app "$app" || echo "WARNING: promotion completed but health verification reported a warning."
   echo "Rollback: $0 --rollback-app $app --confirm"
+  if [[ -n "$argo_app" ]]; then
+    echo
+    echo "Argo CD application $argo_app stays paused: the Deployment now uses"
+    echo "$restore_vol, which is not what git describes. A rollback resumes it."
+    echo "See docs/platform.md, \"Argo CD and restores\"."
+  fi
 }
 
 # shellcheck disable=SC2153 # upper-case state vars come from state.env
@@ -923,6 +965,12 @@ rollback_deployment_app() {
   }
 
   echo "==> Rolling back $APP..."
+  # Paused already if the promotion paused it; this covers state written
+  # before the workload moved to Argo CD.
+  local argo_app="${ARGOCD_APP:-}"
+  [[ -n "$argo_app" ]] || argo_app="$(argocd_app_for_deployment "$NAMESPACE" "$WORKLOAD")"
+  argocd_pause "$argo_app"
+
   kubectl -n "$NAMESPACE" scale deployment "$WORKLOAD" --replicas=0
   wait_deployment_scaled_zero "$NAMESPACE" "$WORKLOAD"
 
@@ -930,6 +978,9 @@ rollback_deployment_app() {
 
   kubectl -n "$NAMESPACE" scale deployment "$WORKLOAD" --replicas="$ORIGINAL_REPLICAS"
   kubectl -n "$NAMESPACE" rollout status deployment/"$WORKLOAD" --timeout=300s
+
+  # The Deployment matches git again.
+  argocd_resume "$argo_app"
 
   sed -i 's/^STATUS=.*/STATUS=rolled_back/' "$dir/state.env"
   echo "ROLLED_BACK_AT=$(date -Iseconds)" >> "$dir/state.env"

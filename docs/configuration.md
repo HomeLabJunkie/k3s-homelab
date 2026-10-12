@@ -64,10 +64,10 @@ Expected sensitive values include:
   uses to decrypt Secrets in the private configuration repository. It is a
   separate key from the laptop's and decrypts nothing else
 
-The tracked Vaultwarden values template references Kubernetes Secrets and must
-not contain credential values directly. `deploy.sh` creates or updates
+The Vaultwarden chart references Kubernetes Secrets and must not contain
+credential values directly. `scripts/render-argocd-secrets.sh` builds
 `vaultwarden-admin` and `vaultwarden-integrations` from the corresponding
-values in `.secrets.enc`.
+values in `.secrets.enc`, and Argo CD deploys them.
 
 ## The private configuration repository
 
@@ -86,6 +86,9 @@ there.
 | `cloudflared/tunnel-token.enc.yaml` | The tunnel token, encrypted |
 | `authelia/values.yaml` (`domain`, `adminEmail`) | The `authelia` application (`charts/authelia`) |
 | `authelia/authelia-secrets.enc.yaml` | Authelia's Secret, encrypted |
+| `trilium/values.yaml` (`domain`) | The `trilium` application (`charts/trilium`) |
+| `vaultwarden/values.yaml` (`domain`, `adminEmail`) | The `vaultwarden` application (`charts/vaultwarden`) |
+| `vaultwarden/vaultwarden-admin.enc.yaml`, `vaultwarden-integrations.enc.yaml` | Vaultwarden's Secrets, encrypted |
 
 fb-search is there whole because its source is deliberately not published.
 To change it, edit the files in the private repository and push to `main`.
@@ -115,9 +118,9 @@ laptop.
 
 ## Changing a secret Argo CD deploys
 
-The tunnel token and Authelia's Secret (admin login, session and storage
-keys, SMTP login, Duo and OIDC credentials) reach the cluster through Argo
-CD. `.secrets.enc` is still where their values are set:
+The tunnel token, Authelia's Secret (admin login, session and storage keys,
+SMTP login, Duo and OIDC credentials) and Vaultwarden's two Secrets (admin
+token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.enc` is still where their values are set:
 
 1. Change the value in `.secrets.enc`.
 2. Run `scripts/render-argocd-secrets.sh`. It rebuilds the Secrets, including
@@ -125,8 +128,9 @@ CD. `.secrets.enc` is still where their values are set:
    whose content changed.
 3. Commit and push the private configuration repository. Argo CD applies the
    Secret within about three minutes.
-4. Restart what reads it: `kubectl -n authelia rollout restart deployment/authelia`
-   or `kubectl -n cloudflared rollout restart deployment/cloudflared`.
+4. Restart what reads it, for example
+   `kubectl -n authelia rollout restart deployment/authelia`. The same works
+   for `cloudflared` and `vaultwarden`, each in the namespace of its name.
 
 `scripts/render-argocd-secrets.sh --check` compares what it would write with
 the Secrets in the cluster, key by key, and prints only `same` or
