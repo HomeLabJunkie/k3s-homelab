@@ -6,6 +6,20 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys Rancher
+
+On 2026-10-12, Rancher moved to Argo CD as the `rancher` application (chart
+`2.15.2`, values in `apps/rancher/values.yaml`, hostname from the
+configuration repository). Its certificate joined the others in
+`charts/routes`. The chart only accepts the first-login password as a plain
+value, so that value is no longer set: Argo CD deploys the
+`bootstrap-secret` Secret, built by `scripts/render-argocd-secrets.sh`, and
+`extraEnv` gives Rancher the same `CATTLE_BOOTSTRAP_PASSWORD` variable from
+it. `deploy.sh` waits for the application, then sets the admin password and
+server URL through Rancher's API as before. The components Rancher installs
+by itself (its webhook, Fleet, the system upgrade controller) are not part
+of the application.
+
 ## 2026-10-12: Argo CD deploys Velero and the backup settings
 
 On 2026-10-12, `scripts/install-velero-backup.sh` was replaced by three Argo
