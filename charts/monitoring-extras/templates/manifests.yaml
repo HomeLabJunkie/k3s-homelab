@@ -1,0 +1,9 @@
+{{- /*
+The files in manifests/ are emitted exactly as written. They are not Helm
+templates: alert rules and dashboards contain {{ ... }} of their own, which
+Prometheus and Grafana expand, and Helm must leave alone.
+*/ -}}
+{{- range $path, $_ := .Files.Glob "manifests/*.yaml" }}
+---
+{{ $.Files.Get $path }}
+{{- end }}

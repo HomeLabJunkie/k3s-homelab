@@ -49,7 +49,7 @@ for every protected route at startup.
 - **Protecting another app:** add its hostname to `access_control` in
   `charts/authelia/templates/configmap.yaml` and route it with an
   `IngressRoute` that lists the `admin-ui-auth` middleware (namespace
-  `traefik`), as in `templates/generated/longhorn-ingress.yaml.template`. Do
+  `traefik`), as in `charts/routes/templates/longhorn.yaml`. Do
   not use an `Ingress` with the `router.middlewares` annotation: it works, but
   logs a missing-middleware error each time Traefik starts. Clients that call an app's API directly cannot follow the
   login redirect: keep Vaultwarden out of Authelia.

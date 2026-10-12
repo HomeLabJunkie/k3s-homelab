@@ -1,0 +1,4 @@
+# The cluster's bare domain, for example example.com. Each UI is served at
+# <name>.<domain>. The real value comes from routes/values.yaml in the
+# private configuration repository; rendering fails without one.
+domain: ""

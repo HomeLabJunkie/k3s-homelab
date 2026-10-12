@@ -1,0 +1,5 @@
+# The Cloudflare account the website dashboard reads Web Analytics from. It
+# replaces ${CLOUDFLARE_ACCOUNT_ID} in dashboards/jeffriffle-website.json. The
+# real value comes from monitoring-extras/values.yaml in the private
+# configuration repository; rendering fails without one.
+cloudflareAccountId: ""

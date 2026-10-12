@@ -91,7 +91,7 @@ Deployment carries a checksum of it, so merging a change to the config rolls
 the pods. nginx writes one JSON line per request, including Cloudflare's
 visitor IP and country, to Loki.
 
-The **jeffriffle.com - Website** Grafana dashboard (`dashboards/jeffriffle-website.json`)
+The **jeffriffle.com - Website** Grafana dashboard (`charts/monitoring-extras/dashboards/jeffriffle-website.json`)
 combines three sources:
 
 - Cloudflare Web Analytics, measured in visitors' browsers: page views, visits,

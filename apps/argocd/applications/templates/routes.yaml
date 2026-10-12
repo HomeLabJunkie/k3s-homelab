@@ -1,0 +1,46 @@
+{{- if not (has "routes" .Values.disabled) }}
+# HTTPS routes and certificates for the platform's admin UIs: the Traefik
+# dashboard, Longhorn, Grafana, Prometheus and Argo CD. Each object names its
+# own namespace. On a new cluster it cannot sync until Traefik and
+# cert-manager have installed their CRDs; the retry below covers that.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: routes
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      path: charts/routes
+      helm:
+        releaseName: routes
+        valueFiles:
+          - $config/{{ .Values.config.path }}routes/values.yaml
+    # ...and its settings, from the private configuration repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

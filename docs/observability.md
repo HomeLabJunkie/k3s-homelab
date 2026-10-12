@@ -15,11 +15,11 @@ Components include:
 - node-exporter
 - Prometheus Operator
 - Longhorn ServiceMonitor
-- scrape targets for other cluster components (`monitoring-scrape-targets.yaml`)
+- scrape targets for other cluster components (`charts/monitoring-extras/manifests/monitoring-scrape-targets.yaml`)
 - homelab baseline alert rules
 - custom Grafana dashboards
 
-`monitoring-scrape-targets.yaml` holds PodMonitors for components that expose
+`monitoring-scrape-targets.yaml` in that directory holds PodMonitors for components that expose
 metrics without creating their own monitor: Traefik, cert-manager, MetalLB, the
 Cilium operator and Envoy proxies, kube-vip, Loki, loki-canary, Alloy and
 cloudflared. These feed the Traefik (per-app requests, 5xx rate, p95 latency)
@@ -33,7 +33,7 @@ rather than matching the word "error" in the line text, so INFO lines that
 mention error fields no longer appear.
 
 Certificate alerts (`homelab.certificate.rules` in
-`monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
+`charts/monitoring-extras/manifests/monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
 days left, a critical under 7 days, a warning when one stays not Ready for an
 hour, and a warning if cert-manager metrics disappear so the others would go
 silent. Let's Encrypt renews at 30 days, so expiry alerts mean renewal has been
@@ -51,7 +51,7 @@ the configuration without sending mail. An optional `config/email.env` can
 override the shared account.
 
 The Prometheus UI is at `prometheus.${BASE_DOMAIN}`, defined with Grafana's
-IngressRoute in `monitoring-ingress.yaml`. Prometheus has no login of its own, so the
+IngressRoute in `charts/routes/templates/monitoring.yaml`. Prometheus has no login of its own, so the
 route uses the same `admin-ui-auth` Authelia middleware as the Traefik
 dashboard and Longhorn (see [Authelia](authelia.md)). The Cloudflare
 tunnel's hostnames are managed in the Zero Trust dashboard, so a new hostname
@@ -118,11 +118,11 @@ disk and downloads it again if the pod moves.
 Prometheus scrapes the totals through the chart's ServiceMonitor, for example
 `trivy_image_vulnerabilities` (per workload and severity) and
 `trivy_resource_configaudits`. The "Homelab - Security Scanning" Grafana
-dashboard (`dashboards/trivy-operator.json`) shows them: totals with each
+dashboard (`charts/monitoring-extras/dashboards/trivy-operator.json`) shows them: totals with each
 image counted once, the trend, the worst images, workloads failing manifest
 checks, benchmark results and risky roles.
 
-Two alerts in `monitoring-longhorn-v2.yaml` cover the scanner:
+Two alerts in `monitoring-longhorn-v2.yaml` (same directory) cover the scanner:
 `TrivyOperatorDown` (no metrics for 30 minutes) and
 `TrivyExposedSecretInImage` (a credential found inside an image). Vulnerability
 counts do not alert, because most findings wait on the image's publisher.

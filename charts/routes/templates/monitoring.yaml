@@ -10,7 +10,7 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
   dnsNames:
-    - grafana.${BASE_DOMAIN}
+    - grafana.{{ .Values.domain }}
 ---
 # An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
 # together, so the route never starts up before its middleware exists.
@@ -23,7 +23,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`grafana.${BASE_DOMAIN}`)
+    - match: Host(`grafana.{{ .Values.domain }}`)
       kind: Rule
       middlewares:
         # Grafana keeps its own login behind Authelia; see charts/authelia.
@@ -47,7 +47,7 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
   dnsNames:
-    - prometheus.${BASE_DOMAIN}
+    - prometheus.{{ .Values.domain }}
 ---
 # An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
 # together, so the route never starts up before its middleware exists.
@@ -60,7 +60,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`prometheus.${BASE_DOMAIN}`)
+    - match: Host(`prometheus.{{ .Values.domain }}`)
       kind: Rule
       middlewares:
         # Prometheus has no login of its own; see charts/authelia.

@@ -37,29 +37,21 @@ fi
 RANCHER_ADMIN_USER="admin"
 
 TRAEFIK_VALUES="${TRAEFIK_VALUES:-$K3S_DIR/traefik-values.yaml}"
-TRAEFIK_DASHBOARD_MANIFEST="${TRAEFIK_DASHBOARD_MANIFEST:-$K3S_DIR/traefik-dashboard.yaml}"
-TRAEFIK_DASHBOARD_CERT_MANIFEST="${TRAEFIK_DASHBOARD_CERT_MANIFEST:-$K3S_DIR/traefik-dashboard-cert.yaml}"
 LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-host-prep.yml}"
 LONGHORN_VALUES="${LONGHORN_VALUES:-$K3S_DIR/longhorn-values.yaml}"
-LONGHORN_INGRESS_MANIFEST="${LONGHORN_INGRESS_MANIFEST:-$K3S_DIR/longhorn-ingress.yaml}"
 LONGHORN_HOSTNAME="${LONGHORN_HOSTNAME:-longhorn.${HOSTNAME_DOMAIN}}"
 TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
 AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
 KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-92.2.0}"
 MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
-MONITORING_INGRESS="${MONITORING_INGRESS:-$K3S_DIR/monitoring-ingress.yaml}"
-MONITORING_LONGHORN="${MONITORING_LONGHORN:-$K3S_DIR/monitoring-longhorn-v2.yaml}"
-MONITORING_DASHBOARDS="${MONITORING_DASHBOARDS:-$K3S_DIR/monitoring-dashboards.yaml}"
 GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.${HOSTNAME_DOMAIN}}"
 LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-18.14.0}"
 ALLOY_CHART_VERSION="${ALLOY_CHART_VERSION:-1.13.0}"
 LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
 ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
-TRIVY_OPERATOR_DASHBOARD="${TRIVY_OPERATOR_DASHBOARD:-$K3S_DIR/dashboards/trivy-operator.json}"
 ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.10.2}"
 ARGOCD_VALUES="${ARGOCD_VALUES:-$K3S_DIR/apps/argocd/values.yaml}"
-ARGOCD_INGRESS_MANIFEST="${ARGOCD_INGRESS_MANIFEST:-$K3S_DIR/argocd-ingress.yaml}"
 ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
 ARGOCD_PROJECT="${ARGOCD_PROJECT:-$K3S_DIR/apps/argocd/project.yaml}"
 ARGOCD_ROOT_APP="${ARGOCD_ROOT_APP:-$K3S_DIR/apps/argocd/root.yaml}"
@@ -73,10 +65,6 @@ ARGOCD_APPS_CONFIG_PATH="${ARGOCD_APPS_CONFIG_PATH:-}"
 ARGOCD_APPS_DISABLED="${ARGOCD_APPS_DISABLED:-}"
 # The private repository holding this cluster's own settings (its domain).
 ARGOCD_CONFIG_REPO_URL="${ARGOCD_CONFIG_REPO_URL:-git@github.com:HomeLabJunkie/k3s-homelab-config.git}"
-LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
-MONITORING_DASHBOARDS_V2="${MONITORING_DASHBOARDS_V2:-$K3S_DIR/monitoring-dashboards-v3.yaml}"
-WEBSITE_DASHBOARD="${WEBSITE_DASHBOARD:-$K3S_DIR/dashboards/jeffriffle-website.json}"
-MONITORING_SCRAPE_TARGETS="${MONITORING_SCRAPE_TARGETS:-$K3S_DIR/monitoring-scrape-targets.yaml}"
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
 # Refuse to push a placeholder hostname into the cluster.
@@ -190,33 +178,6 @@ ensure_namespace() {
 remove_replaced_ingress() {
   local ns="$1" name="$2"
   kubectl -n "$ns" delete ingress "$name" --ignore-not-found
-}
-
-apply_manifest() {
-  local file="$1"
-  local output ns
-  require_file "$file"
-
-  for _ in {1..10}; do
-    if output="$(kubectl apply -f "$file" 2>&1)"; then
-      printf '%s\n' "$output"
-      return 0
-    fi
-
-    printf '%s\n' "$output"
-
-    if [[ "$output" =~ namespaces\ \"([^\"]+)\"\ not\ found ]]; then
-      ns="${BASH_REMATCH[1]}"
-      echo "==> Creating missing namespace: $ns"
-      ensure_namespace "$ns"
-      continue
-    fi
-
-    return 1
-  done
-
-  echo "ERROR: could not apply $file after creating missing namespaces."
-  return 1
 }
 
 # Wait for a rollout to finish. A deployment that was stuck before this run
@@ -456,24 +417,12 @@ ENV_FILE="$ENV_FILE" "$K3S_DIR/scripts/prepare-env.sh"
 
 for file in \
   "$TRAEFIK_VALUES" \
-  "$TRAEFIK_DASHBOARD_MANIFEST" \
-  "$TRAEFIK_DASHBOARD_CERT_MANIFEST" \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
-  "$LONGHORN_INGRESS_MANIFEST" \
   "$MONITORING_VALUES" \
-  "$MONITORING_INGRESS" \
-  "$MONITORING_LONGHORN" \
-  "$MONITORING_DASHBOARDS" \
   "$LOKI_VALUES" \
   "$ALLOY_VALUES" \
-  "$LOKI_DATASOURCE" \
-  "$MONITORING_DASHBOARDS_V2" \
-  "$MONITORING_SCRAPE_TARGETS" \
-  "$WEBSITE_DASHBOARD" \
-  "$TRIVY_OPERATOR_DASHBOARD" \
   "$ARGOCD_VALUES" \
-  "$ARGOCD_INGRESS_MANIFEST" \
   "$ARGOCD_PROJECT" \
   "$ARGOCD_ROOT_APP"
 do
@@ -740,6 +689,13 @@ kubectl create secret generic jeffriffle-git \
   --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# Two applications place objects in namespaces that the Helm installs further
+# down would otherwise create. Argo CD checks a whole application before
+# applying any of it, so a missing namespace would hold back the rest.
+for platform_namespace in traefik longhorn-system monitoring logging; do
+  ensure_namespace "$platform_namespace"
+done
+
 echo "==> Handing the Argo CD applications to Argo CD..."
 kubectl apply -f "$ARGOCD_PROJECT"
 echo "    revision: ${ARGOCD_APPS_REVISION}, settings: ${ARGOCD_APPS_CONFIG_PATH:-(top level)}, left out: ${ARGOCD_APPS_DISABLED:-(none)}"
@@ -793,12 +749,11 @@ helm upgrade --install traefik traefik/traefik \
 kubectl -n traefik rollout status deployment/traefik --timeout=180s
 kubectl -n traefik get svc traefik
 
-echo "==> Deploying Traefik dashboard and certificate..."
-apply_manifest "$TRAEFIK_DASHBOARD_MANIFEST"
-apply_manifest "$TRAEFIK_DASHBOARD_CERT_MANIFEST"
-if kubectl -n traefik get certificate tls-traefik-dashboard >/dev/null 2>&1; then
-  wait_for_certificate traefik tls-traefik-dashboard 300
-fi
+# The routes and certificates of the admin UIs come from Argo CD (the routes
+# application, charts/routes). It can sync now that Traefik's CRDs exist.
+echo "==> Waiting for Argo CD to deploy the admin UI routes..."
+wait_for_argocd_app routes 900
+wait_for_certificate traefik tls-traefik-dashboard 300
 
 # ------------------------------------------------------------------------------
 # Longhorn
@@ -901,8 +856,7 @@ kubectl -n longhorn-system patch backuptarget default \
   --patch "$LONGHORN_BACKUP_PATCH"
 wait_longhorn_backup_target_available default "CIFS"
 
-echo "==> Deploying Longhorn HTTPS ingress..."
-apply_manifest "$LONGHORN_INGRESS_MANIFEST"
+echo "==> Waiting for the Longhorn HTTPS certificate..."
 remove_replaced_ingress longhorn-system longhorn-frontend
 wait_for_certificate longhorn-system tls-longhorn-ingress 300
 
@@ -999,10 +953,6 @@ helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --wait \
   --timeout=900s
 
-echo "==> Applying Longhorn monitoring, dashboards, alerts, and Grafana HTTPS..."
-apply_manifest "$MONITORING_LONGHORN"
-apply_manifest "$MONITORING_DASHBOARDS"
-apply_manifest "$MONITORING_INGRESS"
 remove_replaced_ingress monitoring grafana
 remove_replaced_ingress monitoring prometheus
 
@@ -1060,8 +1010,20 @@ if [[ -n "$NON_LONGHORN_PVCS" ]]; then
 fi
 
 echo "==> Verifying Longhorn ServiceMonitor and baseline alert rules..."
-kubectl -n monitoring get servicemonitor longhorn-prometheus-servicemonitor
-kubectl -n monitoring get prometheusrule homelab-baseline-alerts
+# Both come from the monitoring-extras application, which on a new cluster
+# syncs on its next retry after the monitoring CRDs appear.
+for monitoring_object in servicemonitor/longhorn-prometheus-servicemonitor prometheusrule/homelab-baseline-alerts; do
+  for i in {1..180}; do
+    kubectl -n monitoring get "$monitoring_object" >/dev/null 2>&1 && break
+    if [[ "$i" -eq 180 ]]; then
+      echo "ERROR: $monitoring_object did not appear in the monitoring namespace."
+      kubectl -n argocd get applications.argoproj.io monitoring-extras || true
+      exit 1
+    fi
+    sleep 5
+  done
+  kubectl -n monitoring get "$monitoring_object"
+done
 kubectl -n monitoring get secret alertmanager-smtp >/dev/null
 
 echo "==> Monitoring stack is ready."
@@ -1089,20 +1051,6 @@ helm upgrade --install alloy grafana/alloy \
   --values "$ALLOY_VALUES" \
   --wait --timeout=600s
 
-echo "==> Adding Loki datasource and expanded dashboards..."
-apply_manifest "$LOKI_DATASOURCE"
-apply_manifest "$MONITORING_DASHBOARDS_V2"
-
-# The website dashboard fills in only the account ID; Grafana's own $variables stay as-is.
-echo "==> Applying jeffriffle.com website dashboard..."
-# shellcheck disable=SC2016 # envsubst takes the variable name literally
-kubectl create configmap grafana-jeffriffle-website \
-  --namespace monitoring \
-  --from-file=jeffriffle-website.json=<(envsubst '${CLOUDFLARE_ACCOUNT_ID}' < "$WEBSITE_DASHBOARD") \
-  --dry-run=client -o yaml \
-  | kubectl label --local -f - grafana_dashboard=1 -o yaml \
-  | kubectl apply -f -
-
 echo "==> Verifying Loki storage..."
 kubectl -n logging get pvc -o wide
 if ! kubectl -n logging get pvc -o jsonpath='{range .items[*]}{.status.phase}{"="}{.spec.storageClassName}{"\n"}{end}' | grep -q '^Bound=longhorn$'; then
@@ -1125,8 +1073,7 @@ echo "==> Logging stack is ready."
 echo "==> Applying Argo CD's full settings..."
 install_argocd
 
-echo "==> Deploying Argo CD HTTPS ingress..."
-apply_manifest "$ARGOCD_INGRESS_MANIFEST"
+echo "==> Waiting for the Argo CD HTTPS certificate..."
 wait_for_certificate argocd tls-argocd-ingress 300
 
 
@@ -1166,14 +1113,6 @@ for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
   done
   echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
 done
-
-echo "==> Applying security scanning dashboard..."
-kubectl create configmap grafana-trivy-operator \
-  --namespace monitoring \
-  --from-file=trivy-operator.json="$TRIVY_OPERATOR_DASHBOARD" \
-  --dry-run=client -o yaml \
-  | kubectl label --local -f - grafana_dashboard=1 -o yaml \
-  | kubectl apply -f -
 
 echo "==> Preparing Rancher namespace..."
 ensure_namespace cattle-system
@@ -1219,10 +1158,11 @@ kubectl -n cattle-system get ingress rancher \
 echo "==> Waiting for Argo CD to deploy the Cloudflare tunnel..."
 wait_for_argocd_app cloudflared 600
 
-# Applied after cloudflared, the last component it scrapes, so every target
-# namespace exists.
-echo "==> Applying Prometheus scrape targets..."
-apply_manifest "$MONITORING_SCRAPE_TARGETS"
+# Alert rules, scrape targets, the Loki data source and the dashboards come
+# from Argo CD (the monitoring-extras application). It needs the monitoring
+# CRDs and every namespace it scrapes, all of which exist by now.
+echo "==> Waiting for Argo CD to deploy the monitoring extras..."
+wait_for_argocd_app monitoring-extras 900
 # The MetalLB monitor moved to the monitoring namespace with MetalLB 0.16.
 kubectl -n metallb-system delete podmonitor metallb --ignore-not-found
 

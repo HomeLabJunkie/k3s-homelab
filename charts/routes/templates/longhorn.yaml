@@ -10,7 +10,7 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
   dnsNames:
-    - longhorn.${BASE_DOMAIN}
+    - longhorn.{{ .Values.domain }}
 ---
 # An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
 # together, so the route never starts up before its middleware exists.
@@ -23,7 +23,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`longhorn.${BASE_DOMAIN}`)
+    - match: Host(`longhorn.{{ .Values.domain }}`)
       kind: Rule
       middlewares:
         # Longhorn has no login of its own; see charts/authelia.

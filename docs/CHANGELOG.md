@@ -6,6 +6,24 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys the admin routes and the monitoring extras
+
+On 2026-10-12, the manifests `deploy.sh` still applied by hand moved to two
+Argo CD applications. `routes` (`charts/routes`) holds the HTTPS routes and
+certificates of the Traefik dashboard, Longhorn, Grafana, Prometheus and
+Argo CD. `monitoring-extras` (`charts/monitoring-extras`) holds the alert
+rules, scrape targets, the Loki data source and the Grafana dashboards,
+including the two that were built from JSON files with `kubectl create
+configmap`. The files in its `manifests/` directory are emitted unchanged,
+because alert rules and dashboards contain `{{ }}` of their own.
+
+`kubectl diff` of both charts against production showed no difference before
+the handover. `templates/generated` now holds one unused file kept for the
+secret scan; `scripts/prepare-env.sh` only renders the Ansible inventory.
+Legacy templates nothing used (`trilium-cert`, `trilium-ingress`,
+`vaultwarden-cert`, `cloudflared-config`) and `apps/trilium/helm_install.txt`
+were removed, as was `apply_manifest` from `deploy.sh`.
+
 ## 2026-10-12: Argo CD deploys cert-manager; installed first by deploy.sh
 
 On 2026-10-12, cert-manager moved to Argo CD, the first of the platform

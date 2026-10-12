@@ -10,7 +10,7 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
   dnsNames:
-    - argocd.${BASE_DOMAIN}
+    - argocd.{{ required "domain is required" .Values.domain }}
 ---
 # An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
 # together, so the route never starts up before its middleware exists.
@@ -23,7 +23,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`argocd.${BASE_DOMAIN}`)
+    - match: Host(`argocd.{{ .Values.domain }}`)
       kind: Rule
       middlewares:
         # Argo CD keeps its own login behind Authelia; see charts/authelia.

@@ -8,7 +8,7 @@
 
 configs:
   params:
-    # Traefik terminates TLS (argocd-ingress.yaml), so the server speaks
+    # Traefik terminates TLS (charts/routes), so the server speaks
     # plain HTTP inside the cluster.
     server.insecure: true
   cm:

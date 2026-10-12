@@ -1,0 +1,7 @@
+# A local chart, not published anywhere. Argo CD renders it (the `routes`
+# application) with the domain from the private configuration repository.
+apiVersion: v2
+name: routes
+description: HTTPS routes and certificates for the admin UIs of the platform (Traefik dashboard, Longhorn, Grafana, Prometheus, Argo CD)
+type: application
+version: 1.0.0
