@@ -6,6 +6,37 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys cert-manager; installed first by deploy.sh
+
+On 2026-10-12, cert-manager moved to Argo CD, the first of the platform
+charts. Two applications took over: `cert-manager` (the chart, with
+`apps/cert-manager/values.yaml`) and `cert-manager-config` (the
+`letsencrypt-prod` ClusterIssuer from `charts/cert-manager-config`, and the
+Cloudflare API token as a sops-encrypted Secret). On production the
+comparison showed only Argo CD's tracking annotation; no pod restarted and
+all ten certificates stayed ready.
+
+Because cert-manager comes before almost everything, `deploy.sh` now
+installs Argo CD first, straight after the cluster. Applications that
+cannot sync yet keep retrying, and the script waits for each where it is
+needed. Argo CD's ServiceMonitors are added by a second pass after
+monitoring is installed.
+
+Two changes came out of testing on the throwaway cluster. The issuer's ACME
+server is now a setting, and the test environment uses Let's Encrypt's
+staging service, so rebuilding the test cluster no longer counts against the
+weekly limit on identical certificates. And `deploy.sh` now retries a
+certificate that fails at the issuer: in two rebuilds out of two, Let's
+Encrypt failed one order of ten at its last step ("Certificate not found",
+then "orderNotReady"), after which cert-manager waits an hour. The script
+clears that wait up to three times per certificate.
+
+A rebuild from bare VMs with these changes completed in one run: 13
+applications Synced and Healthy, 10 of 10 certificates, every pod running.
+One certificate needed the retry, which was done by hand in that run; the
+automatic version was then run against the same cluster without error, but
+has not yet had a real failure to handle.
+
 ## 2026-10-12: Test environment for Argo CD; full rebuild tested
 
 On 2026-10-12, `deploy.sh --bootstrap` was run against the throwaway test
