@@ -1,0 +1,13 @@
+# The real values come from cert-manager/values.yaml in the private
+# configuration repository; rendering fails without an address.
+
+# The address Let's Encrypt registers the account with and warns about
+# expiring certificates.
+adminEmail: ""
+
+# The ACME server. The default is Let's Encrypt's production service, which
+# limits how many certificates a domain may have each week. A test cluster
+# uses the staging service instead:
+#   https://acme-staging-v02.api.letsencrypt.org/directory
+# Its certificates are not trusted by browsers and it has no such limits.
+acmeServer: https://acme-v02.api.letsencrypt.org/directory

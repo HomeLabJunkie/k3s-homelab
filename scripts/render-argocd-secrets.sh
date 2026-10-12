@@ -66,6 +66,14 @@ for var in ADMIN_EMAIL CLOUDFLARE_TUNNEL_TOKEN ADMIN_UI_USERNAME ADMIN_UI_PASSWO
   [[ -n "${!var:-}" ]] || fail "$var is not set"
 done
 
+# --- cert-manager: the Cloudflare API token for DNS-01 ------------------------
+
+[[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || fail "CLOUDFLARE_API_TOKEN is not set"
+kubectl create secret generic cloudflare-api-token \
+  --namespace cert-manager \
+  --from-file=api-token=<(printf '%s' "$CLOUDFLARE_API_TOKEN") \
+  --dry-run=client -o yaml >"$WORK/cloudflare-api-token.yaml"
+
 # --- cloudflared: the tunnel token -------------------------------------------
 
 kubectl create secret generic tunnel-token \
@@ -229,6 +237,7 @@ write_secret() {
 
 if [[ "$CHECK" == true ]]; then
   status=0
+  check_secret cert-manager cloudflare-api-token "$WORK/cloudflare-api-token.yaml" || status=1
   check_secret cloudflared tunnel-token "$WORK/tunnel-token.yaml" || status=1
   check_secret authelia authelia-secrets "$WORK/authelia-secrets.yaml" || status=1
   check_secret vaultwarden vaultwarden-admin "$WORK/vaultwarden-admin.yaml" || status=1
@@ -236,6 +245,8 @@ if [[ "$CHECK" == true ]]; then
   exit "$status"
 fi
 
+write_secret "$WORK/cloudflare-api-token.yaml" \
+  "$CONFIG_REPO/${CONFIG_PATH}cert-manager/cloudflare-api-token.enc.yaml"
 write_secret "$WORK/tunnel-token.yaml" "$CONFIG_REPO/${CONFIG_PATH}cloudflared/tunnel-token.enc.yaml"
 write_secret "$WORK/authelia-secrets.yaml" "$CONFIG_REPO/${CONFIG_PATH}authelia/authelia-secrets.enc.yaml"
 write_secret "$WORK/vaultwarden-admin.yaml" "$CONFIG_REPO/${CONFIG_PATH}vaultwarden/vaultwarden-admin.enc.yaml"

@@ -1,0 +1,20 @@
+# The issuer keeps the name letsencrypt-prod on every cluster, because every
+# Certificate refers to it by that name; which Let's Encrypt service it uses
+# is the acmeServer value. The cloudflare-api-token Secret is not in this
+# chart: Argo CD decrypts it from the private configuration repository.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: {{ required "adminEmail is required" .Values.adminEmail }}
+    server: {{ .Values.acmeServer }}
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token

@@ -14,6 +14,7 @@ spec:
     - git@github.com:HomeLabJunkie/k3s-homelab-config.git
     - https://aquasecurity.github.io/helm-charts
     - https://kyverno.github.io/kyverno/
+    - https://charts.jetstack.io
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
