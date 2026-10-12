@@ -241,10 +241,67 @@ wait_for_rollout() {
 }
 
 # Wait until Argo CD reports an Application both in sync with git and healthy.
+# Let's Encrypt now and then fails one certificate order at its last step
+# with an error that is not about this cluster ("Certificate not found",
+# "orderNotReady"). cert-manager then waits an hour before trying again,
+# which is longer than this script waits. Clearing the recorded failure makes
+# it try again at once. Each certificate gets three such retries, so a real
+# problem still stops the deploy.
+declare -A CERTIFICATE_RETRIES=()
+retry_failed_certificates() {
+  local namespace name key
+  while read -r namespace name; do
+    [[ -n "$name" ]] || continue
+    key="$namespace/$name"
+    (( ${CERTIFICATE_RETRIES[$key]:-0} < 3 )) || continue
+    CERTIFICATE_RETRIES[$key]=$(( ${CERTIFICATE_RETRIES[$key]:-0} + 1 ))
+    echo "    certificate $key failed at the issuer; retrying now (retry ${CERTIFICATE_RETRIES[$key]} of 3)"
+    kubectl -n "$namespace" get certificaterequest -o json 2>/dev/null |
+      python3 -c '
+import json, sys
+name = sys.argv[1]
+for item in json.load(sys.stdin).get("items", []):
+    owned = any(o.get("name") == name for o in item["metadata"].get("ownerReferences", []))
+    for cond in item.get("status", {}).get("conditions", []):
+        if owned and cond.get("type") == "Ready" and cond.get("reason") == "Failed":
+            print("      " + cond.get("message", "")[:300])' "$name" || true
+    kubectl -n "$namespace" patch certificate "$name" --subresource=status --type=json \
+      -p '[{"op":"remove","path":"/status/lastFailureTime"}]' >/dev/null || true
+  done < <(
+    kubectl get certificates --all-namespaces -o json 2>/dev/null |
+      python3 -c '
+import json, sys
+for item in json.load(sys.stdin).get("items", []):
+    status = item.get("status", {})
+    ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in status.get("conditions", []))
+    if not ready and status.get("lastFailureTime"):
+        print(item["metadata"]["namespace"], item["metadata"]["name"])' || true
+  )
+}
+
+wait_for_certificate() {
+  local namespace="$1" name="$2" timeout="$3"
+  local deadline=$((SECONDS + timeout)) ready=""
+  while (( SECONDS < deadline )); do
+    ready="$(kubectl -n "$namespace" get certificate "$name" \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+    if [[ "$ready" == "True" ]]; then
+      echo "certificate $namespace/$name is ready."
+      return 0
+    fi
+    retry_failed_certificates
+    sleep 5
+  done
+  echo "ERROR: certificate $namespace/$name is not ready after ${timeout}s."
+  kubectl -n "$namespace" describe certificate "$name" | tail -n 20 || true
+  return 1
+}
+
 wait_for_argocd_app() {
   local app="$1" timeout="$2"
   local deadline=$((SECONDS + timeout)) sync="" health=""
   while (( SECONDS < deadline )); do
+    retry_failed_certificates
     sync="$(kubectl -n argocd get application "$app" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
     health="$(kubectl -n argocd get application "$app" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
     if [[ "$sync" == "Synced" && "$health" == "Healthy" ]]; then
@@ -740,7 +797,7 @@ echo "==> Deploying Traefik dashboard and certificate..."
 apply_manifest "$TRAEFIK_DASHBOARD_MANIFEST"
 apply_manifest "$TRAEFIK_DASHBOARD_CERT_MANIFEST"
 if kubectl -n traefik get certificate tls-traefik-dashboard >/dev/null 2>&1; then
-  kubectl -n traefik wait --for=condition=Ready certificate/tls-traefik-dashboard --timeout=300s
+  wait_for_certificate traefik tls-traefik-dashboard 300
 fi
 
 # ------------------------------------------------------------------------------
@@ -847,7 +904,7 @@ wait_longhorn_backup_target_available default "CIFS"
 echo "==> Deploying Longhorn HTTPS ingress..."
 apply_manifest "$LONGHORN_INGRESS_MANIFEST"
 remove_replaced_ingress longhorn-system longhorn-frontend
-kubectl -n longhorn-system wait --for=condition=Ready certificate/tls-longhorn-ingress --timeout=300s
+wait_for_certificate longhorn-system tls-longhorn-ingress 300
 
 echo "==> Verifying all Longhorn nodes have the dedicated storage disk..."
 EXPECTED_LONGHORN_NODES="$(kubectl get nodes --no-headers | wc -l | tr -d ' ')"
@@ -950,10 +1007,7 @@ remove_replaced_ingress monitoring grafana
 remove_replaced_ingress monitoring prometheus
 
 echo "==> Waiting for Grafana TLS certificate..."
-kubectl -n monitoring wait \
-  --for=condition=Ready \
-  certificate/tls-grafana-ingress \
-  --timeout=300s
+wait_for_certificate monitoring tls-grafana-ingress 300
 
 echo "==> Waiting for monitoring deployments..."
 kubectl -n monitoring rollout status deployment/monitoring-grafana --timeout=600s
@@ -1073,10 +1127,7 @@ install_argocd
 
 echo "==> Deploying Argo CD HTTPS ingress..."
 apply_manifest "$ARGOCD_INGRESS_MANIFEST"
-kubectl -n argocd wait \
-  --for=condition=Ready \
-  certificate/tls-argocd-ingress \
-  --timeout=300s
+wait_for_certificate argocd tls-argocd-ingress 300
 
 
 # network-policies is not in this list: it names namespaces that are created
@@ -1144,7 +1195,7 @@ spec:
     - ${RANCHER_HOSTNAME}
 EOF_RANCHER_CERT
 
-kubectl -n cattle-system wait --for=condition=Ready certificate/tls-rancher-ingress --timeout=300s
+wait_for_certificate cattle-system tls-rancher-ingress 300
 
 echo "==> Installing Rancher ${RANCHER_CHART_VERSION}..."
 helm upgrade --install rancher rancher-stable/rancher \
@@ -1332,10 +1383,7 @@ echo "==> Waiting for Trilium deployment..."
 kubectl -n trilium rollout status deployment/trilium --timeout=600s
 
 echo "==> Waiting for Trilium TLS certificate..."
-kubectl -n trilium wait \
-  --for=condition=Ready \
-  certificate/tls-trilium-ingress \
-  --timeout=300s
+wait_for_certificate trilium tls-trilium-ingress 300
 
 echo "==> Verifying Trilium service endpoints..."
 for i in {1..60}; do
@@ -1381,10 +1429,7 @@ echo "==> Waiting for Vaultwarden deployment..."
 wait_for_rollout vaultwarden vaultwarden 600
 
 echo "==> Waiting for Vaultwarden TLS certificate..."
-kubectl -n vaultwarden wait \
-  --for=condition=Ready \
-  certificate/tls-vaultwarden-ingress \
-  --timeout=300s
+wait_for_certificate vaultwarden tls-vaultwarden-ingress 300
 
 echo "==> Verifying Vaultwarden service endpoints..."
 for i in {1..60}; do
@@ -1565,11 +1610,11 @@ echo
 echo "===== CLOUDFLARED ====="
 kubectl -n cloudflared get pods
 
-kubectl -n cattle-system wait --for=condition=Ready certificate/tls-rancher-ingress --timeout=30s
-kubectl -n traefik wait --for=condition=Ready certificate/tls-traefik-dashboard --timeout=30s
+wait_for_certificate cattle-system tls-rancher-ingress 30
+wait_for_certificate traefik tls-traefik-dashboard 30
 
 echo
-kubectl -n longhorn-system wait --for=condition=Ready certificate/tls-longhorn-ingress --timeout=30s
+wait_for_certificate longhorn-system tls-longhorn-ingress 30
 
 echo "============================================================================"
 echo " Deployment complete"
