@@ -240,9 +240,8 @@ application keeps the installation matching `apps/argocd/values.yaml`.
    version from `apps/argocd/applications/templates/argocd.yaml`, so there is
    one place to change it. The ServiceMonitors are left out of that install,
    since the monitoring CRDs do not exist yet; Argo CD adds them itself later.
-3. The three Secrets Argo CD cannot deploy for itself: the key it decrypts
-   with (`sops-age`), its login to the private configuration repository, and
-   the website's deploy key.
+3. The two Secrets Argo CD cannot deploy for itself: the key it decrypts
+   with (`sops-age`) and its login to the private configuration repository.
 4. The `homelab` project and the `root` Application.
 5. Longhorn, with Helm, and its backup target.
 

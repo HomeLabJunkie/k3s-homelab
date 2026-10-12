@@ -79,7 +79,7 @@ there.
 
 | File in the private repository | Used by |
 | --- | --- |
-| `website/values.yaml` (`domain`) | The `website` application (`charts/website`) |
+| `website/values.yaml` (`domain`), `website/jeffriffle-git.enc.yaml` | The `website` application (`charts/website`): its domain, and git-sync's deploy key, encrypted |
 | `fb-search/` (manifests, `requirements.txt`, `src/`) | The `fb-search` application, built with Kustomize |
 
 | `cert-manager/values.yaml` (`adminEmail`, optional `acmeServer`) | The `cert-manager-config` application (`charts/cert-manager-config`) |
@@ -142,7 +142,8 @@ token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.e
    `kubectl -n authelia rollout restart deployment/authelia`. The same works
    for `cloudflared` and `vaultwarden`, each in the namespace of its name.
    For the monitoring Secrets, restart `deployment/monitoring-grafana` in
-   `monitoring`; Alertmanager reloads its configuration by itself.
+   `monitoring`; Alertmanager reloads its configuration by itself. For the
+   website's deploy key, restart `deployment/jeffriffle` in `website`.
 
 `scripts/render-argocd-secrets.sh --check` compares what it would write with
 the Secrets in the cluster, key by key, and prints only `same` or

@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys the website's deploy key
+
+The `jeffriffle-git` Secret, which git-sync clones the site with, moved to
+the private configuration repository like the other Secrets
+(`scripts/render-argocd-secrets.sh` writes it; `--check` compares it).
+`deploy.sh` no longer creates it, and no longer restarts the website when
+the key changes: after changing `WEBSITE_DEPLOY_KEY_B64`, run the script,
+push the configuration repository, then
+`kubectl -n website rollout restart deployment/jeffriffle`. On production
+the Secret Argo CD renders was compared with the live one first and matched.
+
 ## 2026-10-12: Renovate proposes chart upgrades
 
 `renovate.json` was added so that Renovate opens a pull request when a

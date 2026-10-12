@@ -81,8 +81,11 @@ pod sets `runAsNonRoot`, so no container in it can start as root. nginx waits
 10 seconds before it stops (`preStop`), which gives Traefik time to stop
 sending to the pod, so a rollout does not fail requests.
 
-`deploy.sh` creates the `jeffriffle-git` Secret from `WEBSITE_DEPLOY_KEY_B64`
-(the base64-encoded private deploy key); the Secret is not in the chart. Cloudflare Access, configured in the
+The `jeffriffle-git` Secret (the private deploy key, `WEBSITE_DEPLOY_KEY_B64`
+in `.secrets.enc`) is not in the chart: Argo CD deploys it from the private
+configuration repository, where `scripts/render-argocd-secrets.sh` writes it
+encrypted. After changing the key, run
+`kubectl -n website rollout restart deployment/jeffriffle`. Cloudflare Access, configured in the
 Cloudflare dashboard rather than in this repo, puts a login in front of
 `/admin/`.
 

@@ -1,8 +1,9 @@
 # The private HomeLabJunkie/jeffriffle.com repo builds the site onto its
 # `deploy` branch. git-sync keeps a checkout of that branch current (checking
 # every 60s) and nginx serves it. Edits made at /admin go live without a rollout.
-# deploy.sh creates the jeffriffle-git Secret (read-only deploy key) from
-# WEBSITE_DEPLOY_KEY_B64; it is not part of this chart.
+# The jeffriffle-git Secret (read-only deploy key) is not part of this chart:
+# the website application deploys it from the private configuration
+# repository. After changing the key, restart this Deployment.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
