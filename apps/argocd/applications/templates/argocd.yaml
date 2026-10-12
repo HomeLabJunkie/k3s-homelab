@@ -1,0 +1,51 @@
+{{- if not (has "argocd" .Values.disabled) }}
+# Argo CD itself. deploy.sh installs this same chart, at this version and
+# with these values, on a cluster that has no Argo CD yet; from then on Argo
+# CD keeps its own installation matching git, so upgrading it is a change to
+# targetRevision below. deploy.sh reads the version from this file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  sources:
+    # The chart, at a pinned version...
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.10.2
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/apps/argocd/values.yaml
+    # ...and its values, from this repository.
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet. On a new cluster that is the ServiceMonitor CRD, which the
+    # monitoring application installs.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      # Server-side apply: these charts carry CRDs too large for the
+      # annotation that client-side apply writes.
+      - ServerSideApply=true
+      # Apply the rest even while the ServiceMonitor CRD is missing.
+      - SkipDryRunOnMissingResource=true
+{{- end }}
