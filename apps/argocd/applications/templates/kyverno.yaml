@@ -22,6 +22,14 @@ spec:
     - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
       targetRevision: {{ .Values.revision }}
       ref: values
+  # The chart gives its CRDs an empty "labels: {}", which the API server
+  # drops. Without this, a freshly installed cluster shows them as out of
+  # sync for ever.
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /metadata/labels
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
     # manages. It never deletes: removing something from git leaves it in the
