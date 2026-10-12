@@ -4,7 +4,7 @@
 
 ## Rancher
 
-Rancher is installed by Helm in `cattle-system`.
+Rancher runs in `cattle-system`, deployed by Argo CD (the `rancher` application; see [Argo CD](platform.md#argo-cd)). `deploy.sh` sets the admin password and server URL through its API after the first install.
 
 The deployment includes:
 
