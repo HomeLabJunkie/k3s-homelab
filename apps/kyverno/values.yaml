@@ -33,3 +33,5 @@ reportsController:
 kyverno-api:
   labels:
     app.kubernetes.io/part-of: kyverno
+  annotations:
+    homelab/crds-from: kyverno-api
