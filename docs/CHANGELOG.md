@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Charts are rendered in CI
+
+The `repo-safety` workflow now renders every chart in `charts/` and the
+Argo CD applications chart with `helm template`, so a chart that does not
+render cannot merge and then fail in Argo CD. Two scripts nothing referred to
+were removed: `scripts/git-audit.sh` (superseded by `scripts/scan-secrets.sh`
+and Gitleaks) and `scripts/hashicorp-troubleshoot.sh` (the cluster has no
+Vault).
+
 ## 2026-10-12: Argo CD manages itself; deploy.sh is a bootstrap
 
 On 2026-10-12, Argo CD's own chart became the `argocd` application (chart
