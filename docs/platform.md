@@ -226,7 +226,7 @@ resource. Until an application is handed over, `deploy.sh` still deploys it.
 | 1 | The engine itself, UI behind Authelia | Done 2026-10-11 |
 | 2 | Trivy Operator, Kyverno and its policies, network policies | Done 2026-10-11 |
 | 3 | Website (with the private configuration repository) | Done 2026-10-11 |
-| 3 | fb-search | Not started: its source is deliberately not in this repository, so Argo CD cannot build it from here. Still deployed with `kubectl apply -k apps/fb-search` |
+| 3 | fb-search (manifests and source moved to the private configuration repository) | Done 2026-10-11 |
 | 4 | cloudflared and Authelia (needs secrets in git, encrypted with sops) | Not started |
 | 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Not started |
 
@@ -241,7 +241,8 @@ Argo CD create every Application in `apps/argocd/applications/`. Each of
 those names a chart version and a values file, or a directory of manifests,
 on the `main` branch of this repository on GitHub. The `website` application
 also reads its domain from the
-[private configuration repository](configuration.md#the-private-configuration-repository).
+[private configuration repository](configuration.md#the-private-configuration-repository),
+and `fb-search` is built entirely from it.
 
 - To upgrade a chart, change `targetRevision` in its Application file. To
   change a setting, edit its values file or manifest. Open a pull request;
