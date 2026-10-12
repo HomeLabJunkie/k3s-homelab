@@ -11,6 +11,11 @@ configs:
     # Traefik terminates TLS (argocd-ingress.yaml), so the server speaks
     # plain HTTP inside the cluster.
     server.insecure: true
+  cm:
+    # Let Kustomize run the KSOPS plugin (see repoServer below), which
+    # decrypts sops-encrypted Secrets from the private configuration
+    # repository while Argo CD renders an application.
+    kustomize.buildOptions: --enable-alpha-plugins --enable-exec
 
 # Single sign-on comes later through Authelia's OpenID Connect provider, not
 # the bundled Dex.
@@ -32,6 +37,41 @@ server:
     serviceMonitor:
       enabled: true
 repoServer:
+  # KSOPS: an init container copies the plugin into the repo server. The age
+  # key it decrypts with is mounted from the sops-age Secret, which deploy.sh
+  # creates from ARGOCD_SOPS_AGE_KEY. That key is used for nothing else.
+  initContainers:
+    - name: install-ksops
+      image: quay.io/viaductoss/ksops:v4.5.1
+      command: ["/usr/local/bin/ksops", "install", "/custom-tools"]
+      volumeMounts:
+        - name: custom-tools
+          mountPath: /custom-tools
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+        seccompProfile:
+          type: RuntimeDefault
+  volumes:
+    - name: custom-tools
+      emptyDir: {}
+    - name: sops-age
+      secret:
+        secretName: sops-age
+  volumeMounts:
+    - name: custom-tools
+      mountPath: /usr/local/bin/ksops
+      subPath: ksops
+    - name: sops-age
+      mountPath: /sops-age
+      readOnly: true
+  env:
+    - name: SOPS_AGE_KEY_FILE
+      value: /sops-age/keys.txt
   metrics:
     enabled: true
     serviceMonitor:

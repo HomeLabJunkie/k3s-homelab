@@ -1,0 +1,8 @@
+# The real values come from authelia/values.yaml in the private configuration
+# repository; rendering fails without them.
+
+# The cluster's bare domain, for example example.com. Authelia is served at
+# auth.<domain> and protects hosts under it.
+domain: ""
+# The address Authelia sends mail from.
+adminEmail: ""

@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authelia-config
+  namespace: authelia
+data:
+  configuration.yml: |
+    theme: auto
+    server:
+      address: tcp://:9091/
+      # Otherwise Authelia writes /app/.healthcheck.env for Docker's
+      # HEALTHCHECK, which fails on the read-only root filesystem and aborts
+      # startup with no reason logged. The probes call /api/health directly.
+      disable_healthcheck: true
+    log:
+      level: info
+    totp:
+      issuer: {{ .Values.domain }}
+    webauthn:
+      display_name: {{ .Values.domain }}
+    # Duo Push: the same Duo Auth API application deployrr's Authelia uses.
+    # Duo matches the Authelia username to a Duo user, who needs an enrolled
+    # device. The hostname and keys come from authelia-secrets.
+    duo_api:
+      disable: false
+      enable_self_enrollment: false
+    # The users file comes from a read-only Secret, so passwords are changed in
+    # .secrets.enc (ADMIN_UI_PASSWORD) and redeployed, not from the portal.
+    authentication_backend:
+      password_reset:
+        disable: true
+      password_change:
+        disable: true
+      file:
+        path: /secrets/users_database.yml
+        watch: false
+    access_control:
+      default_policy: deny
+      rules:
+        # Trilium desktop sync and ETAPI clients cannot follow a login redirect.
+        # These paths skip Authelia because Trilium guards each one itself:
+        # /api/login/sync (HMAC of the document secret, rate limited),
+        # /api/sync/* (the session that login creates), /etapi (API token, or
+        # the Trilium password at /etapi/auth/login). /api/sync/stats has no
+        # auth of its own, so it is deliberately not listed.
+        - domain: trilium.{{ .Values.domain }}
+          resources:
+            - '^/etapi([/?].*)?$'
+            - '^/api/login/sync([?].*)?$'
+            - '^/api/sync/(check|changed|update|finished|check-entity-changes|queue-sector/[^/?]+/[^/?]+)([?].*)?$'
+          policy: bypass
+        # Connecting a new desktop: GET needs the Trilium password and is rate
+        # limited. POST only works on an uninitialized server, so it stays behind
+        # Authelia.
+        - domain: trilium.{{ .Values.domain }}
+          resources:
+            - '^/api/setup/sync-seed([?].*)?$'
+          methods:
+            - GET
+          policy: bypass
+        - domain:
+            - traefik.{{ .Values.domain }}
+            - longhorn.{{ .Values.domain }}
+            - prometheus.{{ .Values.domain }}
+            - grafana.{{ .Values.domain }}
+            - trilium.{{ .Values.domain }}
+            - argocd.{{ .Values.domain }}
+          subject: group:admins
+          policy: two_factor
+    # Sessions are kept in memory (one replica): an Authelia restart logs
+    # everyone out, but 2FA registrations persist in the database.
+    session:
+      cookies:
+        - domain: {{ .Values.domain }}
+          authelia_url: https://auth.{{ .Values.domain }}
+    regulation:
+      max_retries: 5
+      find_time: 10m
+      ban_time: 30m
+    storage:
+      local:
+        path: /data/db.sqlite3
+    # OpenID Connect provider for single sign-on. The signing key and the
+    # client secret digest are read from authelia-secrets by the template
+    # filter (X_AUTHELIA_CONFIG_FILTERS below); deploy.sh writes both.
+    identity_providers:
+      oidc:
+        jwks:
+          - key_id: authelia
+            algorithm: RS256
+            use: sig
+            key: {{`{{ secret "/secrets/oidc-jwks-key.pem" | mindent 10 "|" | msquote }}`}}
+        clients:
+          # Grafana is also behind admin-ui-auth, so the Authelia session
+          # already has two factors when Grafana redirects here; consent is
+          # implicit, so the sign-in completes without another prompt.
+          - client_id: grafana
+            client_name: Grafana
+            client_secret: {{`{{ secret "/secrets/oidc-grafana-client-secret" | msquote }}`}}
+            public: false
+            authorization_policy: two_factor
+            consent_mode: implicit
+            require_pkce: true
+            pkce_challenge_method: S256
+            redirect_uris:
+              - https://grafana.{{ .Values.domain }}/login/generic_oauth
+            scopes:
+              - openid
+              - profile
+              - email
+              - groups
+            response_types:
+              - code
+            grant_types:
+              - authorization_code
+            access_token_signed_response_alg: none
+            userinfo_signed_response_alg: none
+            token_endpoint_auth_method: client_secret_basic
+    notifier:
+      smtp:
+        sender: Authelia <{{ .Values.adminEmail }}>
