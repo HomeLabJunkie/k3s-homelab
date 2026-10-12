@@ -1,0 +1,49 @@
+{{- if not (has "cert-manager-config" .Values.disabled) }}
+# The ClusterIssuer and the Cloudflare API token it proves domain ownership
+# with. It cannot sync until the cert-manager application has installed the
+# CRDs; the retry below covers that on a new cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-config
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      path: charts/cert-manager-config
+      helm:
+        releaseName: cert-manager-config
+        valueFiles:
+          - $config/{{ .Values.config.path }}cert-manager/values.yaml
+    # ...its settings, from the private configuration repository...
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
+    # ...and its Secret, which KSOPS decrypts from the same repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      path: {{ .Values.config.path }}cert-manager
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

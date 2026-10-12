@@ -1,0 +1,8 @@
+# cert-manager issues and renews the cluster's certificates. Argo CD installs
+# the chart with this file; the chart version is in
+# apps/argocd/applications/templates/cert-manager.yaml.
+
+# Install the CRDs with the chart. The chart keeps them if it is ever
+# removed, so the certificates are not deleted with it.
+crds:
+  enabled: true
