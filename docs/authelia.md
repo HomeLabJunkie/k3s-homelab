@@ -5,7 +5,7 @@
 Authelia (the `charts/authelia` chart, namespace `authelia`, deployed by
 [Argo CD](platform.md#argo-cd)) is the login portal at
 `auth.${BASE_DOMAIN}` in front of the admin UIs: the Traefik dashboard,
-Longhorn, Prometheus, Grafana and Trilium. Their routes use the
+Longhorn, Prometheus, Grafana, Trilium and Argo CD. Their routes use the
 shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
 from other namespaces), which asks Authelia about each request. Anyone not
 logged in is redirected to the portal; access needs a password and a second
@@ -65,7 +65,9 @@ for every protected route at startup.
   `/api/login/sync`, `/api/setup/sync-seed` and `/etapi`.
 - **Cloudflare:** `auth.${BASE_DOMAIN}` needs a public hostname in the tunnel
   pointing at `https://${CLOUDFLARE_ORIGIN_IP}` with No TLS Verify, or logins
-  only work on the LAN. The Authelia-protected hostnames are not in a
+  only work on the LAN. Each protected UI needs its own public hostname there
+too, set up the same way; a hostname without one is reachable only from the
+LAN. The Authelia-protected hostnames are not in a
   Cloudflare Access application and do not enforce Access JWT validation on
   their tunnel routes; either one would put a second login in front of
   Authelia, or return 403. Rancher and `${BASE_DOMAIN}/admin` still use
