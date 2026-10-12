@@ -1,0 +1,40 @@
+# Trilium Notes, behind Authelia.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trilium
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trilium
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: main
+      path: charts/trilium
+      helm:
+        releaseName: trilium
+        valueFiles:
+          - $config/trilium/values.yaml
+    # ...and its settings, from the private configuration repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: main
+      ref: config
+  syncPolicy:
+    # Apply changes from git by itself, but do not undo manual edits
+    # (selfHeal is off). This application holds data: recovery/restore.sh
+    # scales it down and points it at a restored volume, and that must not
+    # be reverted underneath it. It never deletes either.
+    automated:
+      selfHeal: false
+      prune: false
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true

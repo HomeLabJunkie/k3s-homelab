@@ -57,7 +57,7 @@ spec:
             - name: ROCKET_PORT
               value: "8080"
             - name: DOMAIN
-              value: "https://vaultwarden.${BASE_DOMAIN}"
+              value: "https://vaultwarden.{{ required "domain is required" .Values.domain }}"
             - name: SIGNUPS_ALLOWED
               value: "false"
             - name: INVITATIONS_ALLOWED
@@ -78,7 +78,7 @@ spec:
             - name: SMTP_SECURITY
               value: "starttls"
             - name: SMTP_FROM
-              value: "${ADMIN_EMAIL}"
+              value: "{{ required "adminEmail is required" .Values.adminEmail }}"
             - name: SMTP_FROM_NAME
               value: "Vaultwarden"
             - name: SMTP_USERNAME
@@ -160,7 +160,7 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
   dnsNames:
-    - vaultwarden.${BASE_DOMAIN}
+    - vaultwarden.{{ .Values.domain }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -173,10 +173,10 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - vaultwarden.${BASE_DOMAIN}
+        - vaultwarden.{{ .Values.domain }}
       secretName: tls-vaultwarden-ingress
   rules:
-    - host: vaultwarden.${BASE_DOMAIN}
+    - host: vaultwarden.{{ .Values.domain }}
       http:
         paths:
           - path: /

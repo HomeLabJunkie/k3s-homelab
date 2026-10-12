@@ -1,0 +1,7 @@
+# A local chart, not published anywhere. Argo CD renders it (the `vaultwarden`
+# application) with settings from the private configuration repository.
+apiVersion: v2
+name: vaultwarden
+description: Vaultwarden, the password manager
+type: application
+version: 1.0.0

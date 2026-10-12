@@ -1,0 +1,8 @@
+# The real values come from vaultwarden/values.yaml in the private configuration
+# repository; rendering fails without them.
+
+# The cluster's bare domain, for example example.com. The application is
+# served at vaultwarden.<domain>.
+domain: ""
+# The address Vaultwarden sends mail from.
+adminEmail: ""

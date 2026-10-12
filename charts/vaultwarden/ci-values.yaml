@@ -1,0 +1,4 @@
+# Placeholder settings, used only by scripts/validate-manifests.sh to render
+# the chart for checking.
+domain: example.com
+adminEmail: admin@example.com
