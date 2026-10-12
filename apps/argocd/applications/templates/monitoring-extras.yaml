@@ -1,0 +1,45 @@
+{{- if not (has "monitoring-extras" .Values.disabled) }}
+# Alert rules, scrape targets, the Loki data source and Grafana dashboards.
+# It spans several namespaces and needs the monitoring CRDs, so on a new
+# cluster it is one of the last applications to finish syncing.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-extras
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      path: charts/monitoring-extras
+      helm:
+        releaseName: monitoring-extras
+        valueFiles:
+          - $config/{{ .Values.config.path }}monitoring-extras/values.yaml
+    # ...and its settings, from the private configuration repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

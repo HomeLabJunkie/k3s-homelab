@@ -1,0 +1,7 @@
+# A local chart, not published anywhere. Argo CD renders it (the
+# `monitoring-extras` application).
+apiVersion: v2
+name: monitoring-extras
+description: What this cluster adds to kube-prometheus-stack and Loki - alert rules, scrape targets, the Loki data source and Grafana dashboards
+type: application
+version: 1.0.0

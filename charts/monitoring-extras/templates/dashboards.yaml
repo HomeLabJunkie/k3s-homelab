@@ -1,0 +1,25 @@
+{{- /*
+Grafana's sidecar loads every ConfigMap labelled grafana_dashboard. The JSON
+files in dashboards/ are passed through unchanged, except that the website
+dashboard gets the Cloudflare account ID filled in; Grafana's own $variables
+stay as they are.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-trivy-operator
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  trivy-operator.json: {{ .Files.Get "dashboards/trivy-operator.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-jeffriffle-website
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  jeffriffle-website.json: {{ .Files.Get "dashboards/jeffriffle-website.json" | replace "${CLOUDFLARE_ACCOUNT_ID}" (required "cloudflareAccountId is required" .Values.cloudflareAccountId) | toJson }}

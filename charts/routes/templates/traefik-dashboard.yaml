@@ -10,7 +10,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`traefik.${BASE_DOMAIN}`)
+    - match: Host(`traefik.{{ .Values.domain }}`)
       kind: Rule
       middlewares:
         - name: admin-ui-auth

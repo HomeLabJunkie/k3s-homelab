@@ -34,7 +34,6 @@ command -v envsubst >/dev/null || {
 }
 
 envsubst < "$ROOT/inventory/k3s-ansible/hosts.ini.template" > "$ROOT/inventory/k3s-ansible/hosts.ini"
-envsubst < "$ROOT/templates/cloudflared/cloudflared-config.yaml.template" > "$ROOT/cloudflared-config.yaml"
 
 TEMPLATE_ROOT="$ROOT/templates/generated"
 if [[ -d "$TEMPLATE_ROOT" ]]; then

@@ -252,7 +252,7 @@ monitoring is installed.
 | 4 | cloudflared and Authelia, with their Secrets encrypted in the private repository | Done 2026-10-11 |
 | 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Done 2026-10-11 |
 | 6 | cert-manager and its issuer; Argo CD installed first by `deploy.sh` | Done 2026-10-12 |
-| 7 | The remaining routes, dashboards, alert rules and scrape targets | Not started |
+| 7 | The admin UIs' routes (`routes`); alert rules, scrape targets, the Loki data source and dashboards (`monitoring-extras`) | Done 2026-10-12 |
 | 8 | Loki and Alloy | Not started |
 | 9 | kube-prometheus-stack | Not started |
 | 10 | Velero, Rancher | Not started |

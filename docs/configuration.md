@@ -84,6 +84,8 @@ there.
 
 | `cert-manager/values.yaml` (`adminEmail`, optional `acmeServer`) | The `cert-manager-config` application (`charts/cert-manager-config`) |
 | `cert-manager/cloudflare-api-token.enc.yaml` | The Cloudflare API token cert-manager proves domain ownership with, encrypted |
+| `routes/values.yaml` (`domain`) | The `routes` application (`charts/routes`) |
+| `monitoring-extras/values.yaml` (`cloudflareAccountId`) | The `monitoring-extras` application (`charts/monitoring-extras`) |
 | `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |
 | `cloudflared/tunnel-token.enc.yaml` | The tunnel token, encrypted |
 | `authelia/values.yaml` (`domain`, `adminEmail`) | The `authelia` application (`charts/authelia`) |
