@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Renovate proposes chart upgrades
+
+`renovate.json` was added so that Renovate opens a pull request when a
+chart in an Argo CD Application file has a newer version (eleven charts and
+the snapshot controller). Nothing merges by itself. See
+[Chart updates](platform.md#chart-updates).
+
+The Helm release records of the ten releases Argo CD now owns were deleted
+from production the same day (82 records), so `helm list` shows only what
+Helm still installs. The test cluster's Argo CD age key is kept, encrypted,
+in the configuration repository as `envs/test/argocd-sops-age-key.enc.yaml`.
+
 ## 2026-10-12: Charts are rendered in CI
 
 The `repo-safety` workflow now renders every chart in `charts/` and the

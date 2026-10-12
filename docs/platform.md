@@ -312,11 +312,28 @@ kubectl -n argocd get applications
 kubectl -n argocd exec argocd-application-controller-0 -- argocd app diff <name> --core
 ```
 
-The Helm release records from before the handovers still appear in
-`helm list` on a cluster that was installed with Helm first. Nothing uses
-them; do not run `helm upgrade` on those releases. The two that are still
-real are `longhorn`, which `deploy.sh` upgrades, and `argocd`, which
-`deploy.sh` installs on a new cluster and `ARGOCD_FORCE_INSTALL=true` reuses.
+`helm list` shows only what Helm still installs: `longhorn`, which
+`deploy.sh` upgrades; `argocd`, which `deploy.sh` installs on a new cluster
+and `ARGOCD_FORCE_INSTALL=true` reuses; `cilium`, from Ansible; and the
+releases Rancher installs for itself. The records of the releases handed to
+Argo CD were deleted on 2026-10-12.
+
+### Chart updates
+
+`renovate.json` makes [Renovate](https://docs.renovatebot.com/) open a pull
+request when a chart named in an Application file has a newer version, and
+when the snapshot controller has a newer tag. It reads only
+`apps/argocd/applications/templates/`; Dependabot still covers pip, GitHub
+Actions and Docker. It checks on Monday mornings, opens at most five pull
+requests at a time, keeps Kyverno and its policies chart in one pull request,
+labels major versions `major`, and never merges by itself. Merging one is
+the upgrade: Argo CD applies it within about three minutes, so read the
+chart's release notes first. Longhorn is not covered; its version is in
+`deploy.sh` and held on purpose.
+
+It works only while the Renovate GitHub app is installed on the repository
+(github.com/apps/renovate). Its "Dependency Dashboard" issue lists what it
+found and what is waiting.
 
 ### Environments
 
