@@ -1,3 +1,6 @@
+# Argo CD installs the chart with this file; the chart version is in
+# apps/argocd/applications/templates/alloy.yaml.
+
 controller:
   type: deployment
   replicas: 1

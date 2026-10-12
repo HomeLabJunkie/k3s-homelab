@@ -46,10 +46,6 @@ AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
 KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-92.2.0}"
 MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
 GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.${HOSTNAME_DOMAIN}}"
-LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-18.14.0}"
-ALLOY_CHART_VERSION="${ALLOY_CHART_VERSION:-1.13.0}"
-LOKI_VALUES="${LOKI_VALUES:-$K3S_DIR/loki-values.yaml}"
-ALLOY_VALUES="${ALLOY_VALUES:-$K3S_DIR/alloy-values.yaml}"
 ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.10.2}"
 ARGOCD_VALUES="${ARGOCD_VALUES:-$K3S_DIR/apps/argocd/values.yaml}"
 ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
@@ -420,8 +416,6 @@ for file in \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
   "$MONITORING_VALUES" \
-  "$LOKI_VALUES" \
-  "$ALLOY_VALUES" \
   "$ARGOCD_VALUES" \
   "$ARGOCD_PROJECT" \
   "$ARGOCD_ROOT_APP"
@@ -640,8 +634,6 @@ helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo add rancher-stable https://releases.rancher.com/server-charts/stable --force-update
 helm repo add longhorn https://charts.longhorn.io --force-update
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
-helm repo add grafana-community https://grafana-community.github.io/helm-charts --force-update
-helm repo add grafana https://grafana.github.io/helm-charts --force-update
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
 
@@ -1032,24 +1024,11 @@ echo "==> Monitoring stack is ready."
 # Logging - Loki + Alloy
 # ------------------------------------------------------------------------------
 
-echo "==> Preparing logging namespace..."
-ensure_namespace logging
-
-echo "==> Installing Loki ${LOKI_CHART_VERSION}..."
-helm upgrade --install loki grafana-community/loki \
-  --version "$LOKI_CHART_VERSION" \
-  --namespace logging \
-  --create-namespace \
-  --values "$LOKI_VALUES" \
-  --wait --timeout=900s
-
-echo "==> Installing Grafana Alloy ${ALLOY_CHART_VERSION}..."
-helm upgrade --install alloy grafana/alloy \
-  --version "$ALLOY_CHART_VERSION" \
-  --namespace logging \
-  --create-namespace \
-  --values "$ALLOY_VALUES" \
-  --wait --timeout=600s
+# Argo CD deploys Loki and Alloy (apps/loki, apps/alloy). Loki needs Longhorn
+# for its volume, which exists by now.
+echo "==> Waiting for Argo CD to deploy Loki and Alloy..."
+wait_for_argocd_app loki 900
+wait_for_argocd_app alloy 900
 
 echo "==> Verifying Loki storage..."
 kubectl -n logging get pvc -o wide

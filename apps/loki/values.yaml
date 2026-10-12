@@ -1,3 +1,6 @@
+# Argo CD installs the chart with this file; the chart version is in
+# apps/argocd/applications/templates/loki.yaml.
+
 deploymentMode: Monolithic
 
 loki:
