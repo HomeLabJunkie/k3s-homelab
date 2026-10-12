@@ -182,7 +182,8 @@ Cloudflare API credentials are loaded from the encrypted/local secrets file and 
 
 A Cloudflare Tunnel provides external connectivity without exposing the Kubernetes nodes directly.
 
-The tunnel token is injected into a Kubernetes Secret during deployment.
+Argo CD deploys it from the `charts/cloudflared` chart. The tunnel token is
+a Secret that Argo CD decrypts from the private configuration repository.
 
 The pods run with a restricted security context: the image's non-root user
 (65532), a read-only root filesystem, no Linux capabilities, no privilege
@@ -227,7 +228,7 @@ resource. Until an application is handed over, `deploy.sh` still deploys it.
 | 2 | Trivy Operator, Kyverno and its policies, network policies | Done 2026-10-11 |
 | 3 | Website (with the private configuration repository) | Done 2026-10-11 |
 | 3 | fb-search (manifests and source moved to the private configuration repository) | Done 2026-10-11 |
-| 4 | cloudflared and Authelia (needs secrets in git, encrypted with sops) | Not started |
+| 4 | cloudflared and Authelia, with their Secrets encrypted in the private repository | Done 2026-10-11 |
 | 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Not started |
 
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
@@ -242,7 +243,8 @@ those names a chart version and a values file, or a directory of manifests,
 on the `main` branch of this repository on GitHub. The `website` application
 also reads its domain from the
 [private configuration repository](configuration.md#the-private-configuration-repository),
-and `fb-search` is built entirely from it.
+and `fb-search` is built entirely from it. `cloudflared` and `authelia` take
+their settings and their Secrets from it.
 
 - To upgrade a chart, change `targetRevision` in its Application file. To
   change a setting, edit its values file or manifest. Open a pull request;
@@ -266,6 +268,26 @@ kubectl -n argocd exec argocd-application-controller-0 -- argocd app diff <name>
 The Helm release records for `trivy-operator`, `kyverno` and
 `kyverno-policies` from before the handover still appear in `helm list`.
 Nothing uses them; do not run `helm upgrade` on those releases.
+
+### Secrets
+
+Argo CD can only deploy what is in git, so the Secrets of the applications it
+manages are in the private configuration repository, encrypted with sops.
+Only the values are encrypted. The KSOPS plugin, installed in Argo CD's repo
+server by `apps/argocd/values.yaml`, decrypts them while an application is
+rendered.
+
+The files are encrypted to two age keys. One is the laptop key that protects
+`.secrets.enc`. The other exists only for Argo CD: it is the `sops-age`
+Secret in the `argocd` namespace, which `deploy.sh` creates from
+`ARGOCD_SOPS_AGE_KEY`. Someone who takes that key from the cluster can read
+the Secrets Argo CD deploys, which are in the cluster anyway, and nothing
+else in `.secrets.enc`.
+
+Argo CD's own two credentials (`sops-age` and the configuration repository's
+deploy key) and the Secrets of applications it does not manage yet are still
+created by `deploy.sh`. To change a Secret Argo CD deploys, see
+[Changing a secret Argo CD deploys](configuration.md#changing-a-secret-argo-cd-deploys).
 
 ### Stopping Argo CD in an emergency
 

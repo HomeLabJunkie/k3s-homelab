@@ -1,3 +1,5 @@
+# The Cloudflare tunnel. Its token is the tunnel-token Secret, which Argo CD
+# decrypts from the private configuration repository.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,7 +35,7 @@ spec:
         - --token
         - $(TUNNEL_TOKEN)
         - --url
-        - http://${CLOUDFLARE_ORIGIN_IP}
+        - http://{{ required "originIP is required" .Values.originIP }}
         env:
         - name: TUNNEL_TOKEN
           valueFrom:

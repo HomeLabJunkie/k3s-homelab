@@ -1,0 +1,7 @@
+# A local chart, not published anywhere. Argo CD renders it (the `authelia`
+# application) with settings from the private configuration repository.
+apiVersion: v2
+name: authelia
+description: Authelia, the login portal in front of the admin UIs, and the Traefik middleware that sends visitors to it
+type: application
+version: 1.0.0

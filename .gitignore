@@ -49,26 +49,28 @@ recovery/state/
 
 # Generated environment-specific cluster files
 inventory/k3s-ansible/hosts.ini
-cloudflared-config.yaml
-cloudflared.yaml
+/cloudflared-config.yaml
+/cloudflared.yaml
 
 # Generated environment-specific manifests
+# Anchored to the repository root: unanchored, a name here also matches a
+# source file of the same name deeper in the tree.
 apps/vaultwarden/values.yaml
-trilium-longhorn-v2.yaml
-trilium-ingress.yaml
-monitoring-ingress.yaml
-vaultwarden-cert.yaml
-vaultwarden-longhorn-v2.yaml
-traefik-dashboard.yaml
-vaultwarden-longhorn.yaml
-longhorn-ingress.yaml
-argocd-ingress.yaml
-trilium-cert.yaml
+/trilium-longhorn-v2.yaml
+/trilium-ingress.yaml
+/monitoring-ingress.yaml
+/vaultwarden-cert.yaml
+/vaultwarden-longhorn-v2.yaml
+/traefik-dashboard.yaml
+/vaultwarden-longhorn.yaml
+/longhorn-ingress.yaml
+/argocd-ingress.yaml
+/trilium-cert.yaml
 /website.yaml
-clusterissuer-letsencrypt.yaml
-traefik-dashboard-cert.yaml
-trilium-longhorn.yaml
-authelia.yaml
+/clusterissuer-letsencrypt.yaml
+/traefik-dashboard-cert.yaml
+/trilium-longhorn.yaml
+/authelia.yaml
 
 .ansible/
 
@@ -92,7 +94,3 @@ recovery/generated-*.yaml
 # session (a cloned Chrome profile), which Meta's terms do not permit. This
 # rule stays so a copy put back here is never committed.
 apps/fb-search/
-
-# The rendered-file names above also match files of the same name deeper in
-# the tree. These are source files, not rendered output.
-!apps/network-policies/*.yaml

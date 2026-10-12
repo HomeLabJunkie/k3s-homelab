@@ -1,0 +1,4 @@
+# The address the tunnel forwards to: Traefik's load-balancer address. The
+# real value comes from cloudflared/values.yaml in the private configuration
+# repository; rendering fails without one.
+originIP: ""

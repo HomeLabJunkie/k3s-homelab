@@ -1,5 +1,5 @@
 # The admin-ui-auth middleware (Authelia login with 2FA) is defined in
-# authelia.yaml.template. Until Authelia is deployed the dashboard route fails
+# charts/authelia. Until Authelia is deployed the dashboard route fails
 # closed.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute

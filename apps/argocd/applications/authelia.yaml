@@ -1,0 +1,47 @@
+# Authelia, the login portal in front of the admin UIs, and the admin-ui-auth
+# Traefik middleware. After a change to its Secret, restart the Deployment:
+# Authelia reads secrets only at start-up.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: authelia
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: authelia
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: main
+      path: charts/authelia
+      helm:
+        releaseName: authelia
+        valueFiles:
+          - $config/authelia/values.yaml
+    # ...its settings, from the private configuration repository...
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: main
+      ref: config
+    # ...and its Secret, which KSOPS decrypts from the same repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: main
+      path: authelia
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
