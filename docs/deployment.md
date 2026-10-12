@@ -91,17 +91,28 @@ Existing cluster?
         +---- --bootstrap -------> explicit initial provisioning
         |
         v
-Prepare/verify Longhorn
-        |
-        v
 Update/verify kubeconfig through kube-vip
         |
         v
-Converge Helm/Kubernetes applications
+Install Argo CD if the cluster has none; create its
+Secrets, the project and the root Application
         |
         v
-Final health and storage verification
+Install/verify Longhorn and its backup target
+        |
+        v
+Wait for every Argo CD application and certificate
+        |
+        v
+Rancher admin password, Vaultwarden invitation
 ```
+
+After the cluster and Longhorn, `deploy.sh` installs nothing itself: Argo CD
+deploys every other chart and manifest from the `main` branch on GitHub, its
+own chart included (see [Argo CD](platform.md#argo-cd)). A change to a chart
+version or a setting therefore needs a merged pull request, not a
+`deploy.sh` run. Run `deploy.sh` to build a cluster, to change the nodes or
+Longhorn, or after changing a Secret it creates itself.
 
 ### Preflight protections
 

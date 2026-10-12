@@ -6,6 +6,33 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD manages itself; deploy.sh is a bootstrap
+
+On 2026-10-12, Argo CD's own chart became the `argocd` application (chart
+`10.10.2`, the same `apps/argocd/values.yaml`). On production the comparison
+showed nothing but ownership annotations; no Argo CD pod restarted and the
+`admin` password was not touched. Upgrading Argo CD is now a change to
+`targetRevision` in `apps/argocd/applications/templates/argocd.yaml`.
+
+`deploy.sh` went from 1,514 lines to about 1,220:
+
+- It installs Argo CD with Helm only on a cluster that has none, at the
+  version in that Application file. `ARGOCD_FORCE_INSTALL=true` installs it
+  again, for an Argo CD too broken to repair itself from git.
+- It waits for all applications together, then for all certificates,
+  instead of one wait and several checks per chart.
+- It checks that every volume in the cluster is on Longhorn, not only the
+  monitoring and logging ones.
+- Gone: the per-chart rollout, endpoint and object checks that an
+  application's health already covers, the second Argo CD install pass, the
+  clean-up of objects replaced in earlier releases (old Ingresses, the
+  basic-auth Secret, the old MetalLB monitor), and the long status listing
+  at the end.
+
+It still builds the cluster with Ansible, installs Longhorn, creates the
+three Secrets Argo CD cannot deploy for itself, sets Rancher's admin
+password through its API and creates the first Vaultwarden invitation.
+
 ## 2026-10-12: Argo CD deploys Traefik
 
 On 2026-10-12, Traefik moved to Argo CD as the `traefik` application (chart

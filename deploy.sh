@@ -41,7 +41,11 @@ TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
 AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
 GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.${HOSTNAME_DOMAIN}}"
-ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.10.2}"
+# deploy.sh installs Argo CD only on a cluster that has none. The version it
+# installs is the one in the argocd Application, which is where Argo CD is
+# upgraded from then on.
+ARGOCD_APP_FILE="${ARGOCD_APP_FILE:-$K3S_DIR/apps/argocd/applications/templates/argocd.yaml}"
+ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-$(awk '/chart: argo-cd$/ {found=1} found && /targetRevision:/ {print $2; exit}' "$ARGOCD_APP_FILE" 2>/dev/null || true)}"
 ARGOCD_VALUES="${ARGOCD_VALUES:-$K3S_DIR/apps/argocd/values.yaml}"
 ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
 ARGOCD_PROJECT="${ARGOCD_PROJECT:-$K3S_DIR/apps/argocd/project.yaml}"
@@ -163,14 +167,6 @@ ensure_namespace() {
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 }
 
-# Routes that use a Traefik middleware are IngressRoutes of the same name. Remove
-# the Ingress they replaced once the IngressRoute is applied, so the hostname
-# is never left without a route.
-remove_replaced_ingress() {
-  local ns="$1" name="$2"
-  kubectl -n "$ns" delete ingress "$name" --ignore-not-found
-}
-
 # Wait for a rollout to finish. A deployment that was stuck before this run
 # still carries its old "progress deadline exceeded" status for a moment after
 # it is fixed, and kubectl gives up at once on seeing it; keep waiting until
@@ -192,7 +188,6 @@ wait_for_rollout() {
   done
 }
 
-# Wait until Argo CD reports an Application both in sync with git and healthy.
 # Let's Encrypt now and then fails one certificate order at its last step
 # with an error that is not about this cluster ("Certificate not found",
 # "orderNotReady"). cert-manager then waits an hour before trying again,
@@ -235,24 +230,27 @@ for item in items:
   )
 }
 
-wait_for_certificate() {
-  local namespace="$1" name="$2" timeout="$3"
-  local deadline=$((SECONDS + timeout)) ready=""
+# Wait until every certificate in the cluster is issued.
+wait_for_all_certificates() {
+  local timeout="$1"
+  local deadline=$((SECONDS + timeout)) pending=""
   while (( SECONDS < deadline )); do
-    ready="$(kubectl -n "$namespace" get certificate "$name" \
-      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
-    if [[ "$ready" == "True" ]]; then
-      echo "certificate $namespace/$name is ready."
+    pending="$(kubectl get certificates --all-namespaces \
+      -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null |
+      awk '$2 != "True" {printf "%s%s", sep, $1; sep=" "}' || echo "(the cluster did not answer)")"
+    if [[ -z "$pending" ]]; then
+      echo "Every certificate is ready."
       return 0
     fi
     retry_failed_certificates
     sleep 5
   done
-  echo "ERROR: certificate $namespace/$name is not ready after ${timeout}s."
-  kubectl -n "$namespace" describe certificate "$name" | tail -n 20 || true
+  echo "ERROR: these certificates are not ready after ${timeout}s: $pending"
+  kubectl get certificates,certificaterequests --all-namespaces || true
   return 1
 }
 
+# Wait until Argo CD reports one Application both in sync with git and healthy.
 wait_for_argocd_app() {
   local app="$1" timeout="$2"
   local deadline=$((SECONDS + timeout)) sync="" health=""
@@ -272,9 +270,40 @@ wait_for_argocd_app() {
   return 1
 }
 
-# Installs or upgrades the Argo CD release. Its values ask for ServiceMonitors,
-# which need the monitoring CRDs; on a new cluster those arrive later, so the
-# first call leaves the ServiceMonitors out and a second call adds them.
+# Wait until Argo CD reports every Application in sync with git and healthy.
+# On a new cluster they come up in whatever order their needs are met (CRDs,
+# storage, Traefik), each retrying until then, so they are waited for together.
+wait_for_all_argocd_apps() {
+  local timeout="$1"
+  local deadline=$((SECONDS + timeout)) pending="" previous="" app
+  while (( SECONDS < deadline )); do
+    retry_failed_certificates
+    pending="$(kubectl -n argocd get applications.argoproj.io \
+      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.sync.status}{" "}{.status.health.status}{"\n"}{end}' 2>/dev/null |
+      awk '!($2 == "Synced" && $3 == "Healthy") {printf "%s%s", sep, $1; sep=" "}' || echo "(the cluster did not answer)")"
+    if [[ -z "$pending" ]]; then
+      echo "Every Argo CD application is Synced and Healthy."
+      return 0
+    fi
+    if [[ "$pending" != "$previous" ]]; then
+      echo "    waiting for: $pending"
+      previous="$pending"
+    fi
+    sleep 10
+  done
+  echo "ERROR: these Argo CD applications are not Synced and Healthy after ${timeout}s: $pending"
+  kubectl -n argocd get applications.argoproj.io || true
+  for app in $pending; do
+    kubectl -n argocd get applications.argoproj.io "$app" \
+      -o jsonpath='{.metadata.name}{": "}{.status.operationState.message}{"\n"}{range .status.conditions[*]}{"  "}{.type}: {.message}{"\n"}{end}' 2>/dev/null || true
+  done
+  return 1
+}
+
+# Installs the Argo CD release on a cluster that has none. Its values ask for
+# ServiceMonitors, which need the monitoring CRDs; a new cluster does not have
+# those yet, so they are left out here and Argo CD adds them itself once the
+# monitoring application has installed the CRDs.
 install_argocd() {
   local without_monitors=()
   if ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
@@ -413,12 +442,18 @@ ENV_FILE="$ENV_FILE" "$K3S_DIR/scripts/prepare-env.sh"
 for file in \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
+  "$ARGOCD_APP_FILE" \
   "$ARGOCD_VALUES" \
   "$ARGOCD_PROJECT" \
   "$ARGOCD_ROOT_APP"
 do
   require_file "$file"
 done
+
+if [[ -z "$ARGOCD_CHART_VERSION" ]]; then
+  echo "ERROR: could not read the Argo CD chart version from $ARGOCD_APP_FILE"
+  exit 1
+fi
 
 echo "==> Loading secrets..."
 set -a
@@ -635,13 +670,13 @@ helm repo update >/dev/null
 # GitOps - Argo CD
 # ------------------------------------------------------------------------------
 
-# Argo CD is installed first, because it deploys nearly everything else,
-# cert-manager included. deploy.sh installs the engine; Argo CD then deploys
-# what the Application manifests in apps/argocd/applications describe, from
-# GitHub, not from this working copy. On a new cluster most applications
-# cannot sync yet, because what they need (CRDs, storage, Traefik) is
-# installed further down; each keeps retrying, and this script waits for
-# each one at the point where it must be ready.
+# Argo CD is installed first, because it deploys everything else except
+# Longhorn, itself included. deploy.sh installs it only on a cluster that has
+# none; Argo CD then deploys what the Application manifests in
+# apps/argocd/applications describe, from GitHub, not from this working copy.
+# On a new cluster most applications cannot sync at first, because what they
+# need (CRDs, storage, Traefik) is not there yet; each keeps retrying, and this
+# script waits for all of them once Longhorn is installed.
 # The repo server mounts this key to decrypt the Secrets in the private
 # configuration repository (KSOPS), so it must exist before the install.
 echo "==> Creating/updating the Argo CD sops key..."
@@ -651,8 +686,13 @@ kubectl create secret generic sops-age \
   --from-file=keys.txt=<(printf '%s\n' "$ARGOCD_SOPS_AGE_KEY") \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
-install_argocd
+if [[ "${ARGOCD_FORCE_INSTALL:-false}" != true ]] &&
+    kubectl -n argocd get deployment argocd-server >/dev/null 2>&1; then
+  echo "==> Argo CD is installed and keeps itself up to date (the argocd application)."
+else
+  echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
+  install_argocd
+fi
 
 # Argo CD reads the private configuration repository with a read-only deploy
 # key. The URL must match the one in the Application manifests.
@@ -675,8 +715,8 @@ kubectl create secret generic jeffriffle-git \
   --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# Two applications place objects in namespaces that the Helm installs further
-# down would otherwise create. Argo CD checks a whole application before
+# Some applications place objects in namespaces that Longhorn's install and
+# other applications create. Argo CD checks a whole application before
 # applying any of it, so a missing namespace would hold back the rest.
 for platform_namespace in traefik longhorn-system monitoring logging cattle-system; do
   ensure_namespace "$platform_namespace"
@@ -710,25 +750,7 @@ if values:
 print(yaml.safe_dump(root, sort_keys=False))
 PYTHON
 
-# cert-manager, its ClusterIssuer and the Cloudflare API token the issuer
-# uses come from Argo CD (apps/cert-manager, charts/cert-manager-config).
-echo "==> Waiting for Argo CD to deploy cert-manager..."
-wait_for_argocd_app cert-manager 900
-wait_for_argocd_app cert-manager-config 900
-kubectl wait --for=condition=Ready clusterissuer/letsencrypt-prod --timeout=180s
-
-# Argo CD deploys Traefik (apps/traefik).
-echo "==> Waiting for Argo CD to deploy Traefik..."
-wait_for_argocd_app traefik 900
-
-kubectl -n traefik rollout status deployment/traefik --timeout=180s
-kubectl -n traefik get svc traefik
-
-# The routes and certificates of the admin UIs come from Argo CD (the routes
-# application, charts/routes). It can sync now that Traefik's CRDs exist.
-echo "==> Waiting for Argo CD to deploy the admin UI routes..."
-wait_for_argocd_app routes 900
-wait_for_certificate traefik tls-traefik-dashboard 300
+wait_for_argocd_app root 600
 
 # ------------------------------------------------------------------------------
 # Longhorn
@@ -831,9 +853,6 @@ kubectl -n longhorn-system patch backuptarget default \
   --patch "$LONGHORN_BACKUP_PATCH"
 wait_longhorn_backup_target_available default "CIFS"
 
-echo "==> Waiting for the Longhorn HTTPS certificate..."
-remove_replaced_ingress longhorn-system longhorn-frontend
-wait_for_certificate longhorn-system tls-longhorn-ingress 300
 
 echo "==> Verifying all Longhorn nodes have the dedicated storage disk..."
 EXPECTED_LONGHORN_NODES="$(kubectl get nodes --no-headers | wc -l | tr -d ' ')"
@@ -869,145 +888,28 @@ if kubectl get storageclass local-path >/dev/null 2>&1; then
     -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 fi
 
-# Authelia, which the admin-ui-auth middleware on the routes below asks about
-# every request, is deployed by Argo CD further down. Until then those routes
-# fail closed.
-
 # ------------------------------------------------------------------------------
-# Monitoring - kube-prometheus-stack
+# Everything Argo CD deploys
 # ------------------------------------------------------------------------------
 
-# Argo CD deploys kube-prometheus-stack (apps/monitoring) and the Secrets it
-# reads, which scripts/render-argocd-secrets.sh writes to the private
-# configuration repository. Its volumes need Longhorn, which exists by now.
-echo "==> Waiting for Argo CD to deploy kube-prometheus-stack..."
-wait_for_argocd_app monitoring 1800
+echo "==> Waiting for Argo CD to deploy every application..."
+wait_for_all_argocd_apps 2700
 
-remove_replaced_ingress monitoring grafana
-remove_replaced_ingress monitoring prometheus
+echo "==> Waiting for the HTTPS certificates..."
+wait_for_all_certificates 900
 
-echo "==> Waiting for Grafana TLS certificate..."
-wait_for_certificate monitoring tls-grafana-ingress 300
-
-echo "==> Waiting for monitoring deployments..."
-kubectl -n monitoring rollout status deployment/monitoring-grafana --timeout=600s
-kubectl -n monitoring rollout status deployment/monitoring-kube-prometheus-operator --timeout=600s
-kubectl -n monitoring rollout status deployment/monitoring-kube-state-metrics --timeout=600s
-
-echo "==> Waiting for Prometheus and Alertmanager..."
-for i in {1..120}; do
-  PROM_READY="$(
-    kubectl -n monitoring get pods \
-      -l app.kubernetes.io/name=prometheus \
-      -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' \
-      2>/dev/null | grep -c '^true$' || true
-  )"
-
-  AM_READY="$(
-    kubectl -n monitoring get pods \
-      -l app.kubernetes.io/name=alertmanager \
-      -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' \
-      2>/dev/null | grep -c '^true$' || true
-  )"
-
-  if [[ "$PROM_READY" -ge 1 && "$AM_READY" -ge 1 ]]; then
-    break
-  fi
-
-  if [[ "$i" -eq 120 ]]; then
-    echo "ERROR: Prometheus or Alertmanager did not become Ready."
-    kubectl -n monitoring get pods -o wide || true
-    exit 1
-  fi
-
-  echo "  waiting for monitoring stateful workloads..."
-  sleep 5
-done
-
-echo "==> Verifying monitoring PVCs are Longhorn-backed..."
-kubectl -n monitoring get pvc -o wide
-
+echo "==> Verifying storage is Longhorn-backed..."
+kubectl get pvc --all-namespaces -o wide
 NON_LONGHORN_PVCS="$(
-  kubectl -n monitoring get pvc \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"="}{.spec.storageClassName}{"\n"}{end}' \
+  kubectl get pvc --all-namespaces \
+    -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"="}{.spec.storageClassName}{"\n"}{end}' \
   | grep -v '=longhorn$' || true
 )"
-
 if [[ -n "$NON_LONGHORN_PVCS" ]]; then
-  echo "ERROR: One or more monitoring PVCs are not using Longhorn:"
+  echo "ERROR: these volumes are not on Longhorn:"
   printf '%s\n' "$NON_LONGHORN_PVCS"
   exit 1
 fi
-
-echo "==> Verifying Longhorn ServiceMonitor and baseline alert rules..."
-# Both come from the monitoring-extras application, which on a new cluster
-# syncs on its next retry after the monitoring CRDs appear.
-for monitoring_object in servicemonitor/longhorn-prometheus-servicemonitor prometheusrule/homelab-baseline-alerts; do
-  for i in {1..180}; do
-    kubectl -n monitoring get "$monitoring_object" >/dev/null 2>&1 && break
-    if [[ "$i" -eq 180 ]]; then
-      echo "ERROR: $monitoring_object did not appear in the monitoring namespace."
-      kubectl -n argocd get applications.argoproj.io monitoring-extras || true
-      exit 1
-    fi
-    sleep 5
-  done
-  kubectl -n monitoring get "$monitoring_object"
-done
-kubectl -n monitoring get secret alertmanager-smtp >/dev/null
-
-echo "==> Monitoring stack is ready."
-
-# ------------------------------------------------------------------------------
-# Logging - Loki + Alloy
-# ------------------------------------------------------------------------------
-
-# Argo CD deploys Loki and Alloy (apps/loki, apps/alloy). Loki needs Longhorn
-# for its volume, which exists by now.
-echo "==> Waiting for Argo CD to deploy Loki and Alloy..."
-wait_for_argocd_app loki 900
-wait_for_argocd_app alloy 900
-
-echo "==> Verifying Loki storage..."
-kubectl -n logging get pvc -o wide
-if ! kubectl -n logging get pvc -o jsonpath='{range .items[*]}{.status.phase}{"="}{.spec.storageClassName}{"\n"}{end}' | grep -q '^Bound=longhorn$'; then
-  echo "ERROR: Loki PVC is not Bound on Longhorn."
-  exit 1
-fi
-
-echo "==> Waiting for Loki and Alloy..."
-kubectl -n logging rollout status statefulset/loki --timeout=600s
-kubectl -n logging rollout status deployment/alloy --timeout=600s
-
-echo "==> Logging stack is ready."
-
-# ------------------------------------------------------------------------------
-# GitOps - Argo CD: full settings and HTTPS route
-# ------------------------------------------------------------------------------
-
-# The first install, above, left out Argo CD's ServiceMonitors if the
-# monitoring CRDs did not exist yet. They do now.
-echo "==> Applying Argo CD's full settings..."
-install_argocd
-
-echo "==> Waiting for the Argo CD HTTPS certificate..."
-wait_for_certificate argocd tls-argocd-ingress 300
-
-
-# network-policies is not in this list: it names namespaces that are created
-# further down, and is checked at the end.
-echo "==> Waiting for Argo CD to deploy Trivy Operator and Kyverno..."
-for argocd_app in trivy-operator kyverno kyverno-policies kyverno-custom-policies; do
-  wait_for_argocd_app "$argocd_app" 900
-done
-
-# Authelia's Secret comes from the private configuration repository, already
-# encrypted; scripts/render-argocd-secrets.sh writes it from .secrets.enc.
-echo "==> Waiting for Argo CD to deploy Authelia..."
-wait_for_argocd_app authelia 900
-
-# admin-ui-auth now asks Authelia; the old basic-auth users are unused.
-kubectl -n traefik delete secret admin-ui-basic-auth --ignore-not-found
 
 echo "==> Verifying the admin UIs redirect anonymous visitors to Authelia..."
 for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
@@ -1030,32 +932,6 @@ for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
   done
   echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
 done
-
-# Argo CD deploys Rancher (apps/rancher), its certificate (charts/routes) and
-# its first-login password, which scripts/render-argocd-secrets.sh writes to
-# the private configuration repository.
-echo "==> Waiting for the Rancher HTTPS certificate..."
-wait_for_certificate cattle-system tls-rancher-ingress 900
-
-echo "==> Waiting for Argo CD to deploy Rancher..."
-wait_for_argocd_app rancher 1200
-
-kubectl -n cattle-system rollout status deployment/rancher --timeout=600s
-
-kubectl -n cattle-system get ingress rancher \
-  -o jsonpath='{.spec.ingressClassName}{" "}{.spec.tls[0].secretName}{"\n"}' \
-  | grep -qx 'traefik tls-rancher-ingress'
-
-echo "==> Waiting for Argo CD to deploy the Cloudflare tunnel..."
-wait_for_argocd_app cloudflared 600
-
-# Alert rules, scrape targets, the Loki data source and the dashboards come
-# from Argo CD (the monitoring-extras application). It needs the monitoring
-# CRDs and every namespace it scrapes, all of which exist by now.
-echo "==> Waiting for Argo CD to deploy the monitoring extras..."
-wait_for_argocd_app monitoring-extras 900
-# The MetalLB monitor moved to the monitoring namespace with MetalLB 0.16.
-kubectl -n metallb-system delete podmonitor metallb --ignore-not-found
 
 echo "==> Configuring Rancher admin credentials..."
 kubectl port-forward -n cattle-system svc/rancher 8443:443 >/dev/null 2>&1 &
@@ -1190,97 +1066,6 @@ fi
 cleanup
 PF_PID=""
 
-# Argo CD deploys Trilium (charts/trilium); the checks below confirm what it
-# deployed.
-echo "==> Waiting for Argo CD to deploy Trilium..."
-wait_for_argocd_app trilium 900
-
-echo "==> Waiting for Trilium Longhorn PVC to bind..."
-for i in {1..60}; do
-  phase="$(kubectl -n trilium get pvc trilium-data -o jsonpath='{.status.phase}' 2>/dev/null || true)"
-  if [[ "$phase" == "Bound" ]]; then
-    break
-  fi
-  if [[ "$i" -eq 60 ]]; then
-    echo "ERROR: Trilium PVC did not become Bound."
-    kubectl -n trilium describe pvc trilium-data || true
-    exit 1
-  fi
-  echo "  waiting for Trilium PVC... ${phase:-Pending}"
-  sleep 5
-done
-
-echo "==> Waiting for Trilium deployment..."
-kubectl -n trilium rollout status deployment/trilium --timeout=600s
-
-echo "==> Waiting for Trilium TLS certificate..."
-wait_for_certificate trilium tls-trilium-ingress 300
-
-echo "==> Verifying Trilium service endpoints..."
-for i in {1..60}; do
-  endpoints="$(
-    kubectl -n trilium get endpointslice \
-      -l kubernetes.io/service-name=trilium \
-      -o go-template='{{range .items}}{{range .endpoints}}{{range .addresses}}{{.}}{{"\n"}}{{end}}{{end}}{{end}}' \
-      2>/dev/null || true
-  )"
-  if [[ -n "$endpoints" ]]; then
-    break
-  fi
-  if [[ "$i" -eq 60 ]]; then
-    echo "ERROR: Trilium service has no ready endpoints."
-    kubectl -n trilium get pods,svc,endpointslice -o wide || true
-    exit 1
-  fi
-  sleep 5
-done
-
-# Argo CD deploys Vaultwarden (charts/vaultwarden) and its two Secrets, which
-# scripts/render-argocd-secrets.sh writes to the private configuration
-# repository. The checks below confirm what it deployed.
-echo "==> Waiting for Argo CD to deploy Vaultwarden..."
-wait_for_argocd_app vaultwarden 900
-
-echo "==> Waiting for Vaultwarden Longhorn PVC to bind..."
-for i in {1..60}; do
-  phase="$(kubectl -n vaultwarden get pvc vaultwarden-data -o jsonpath='{.status.phase}' 2>/dev/null || true)"
-  if [[ "$phase" == "Bound" ]]; then
-    break
-  fi
-  if [[ "$i" -eq 60 ]]; then
-    echo "ERROR: Vaultwarden PVC did not become Bound."
-    kubectl -n vaultwarden describe pvc vaultwarden-data || true
-    exit 1
-  fi
-  echo "  waiting for Vaultwarden PVC... ${phase:-Pending}"
-  sleep 5
-done
-
-echo "==> Waiting for Vaultwarden deployment..."
-wait_for_rollout vaultwarden vaultwarden 600
-
-echo "==> Waiting for Vaultwarden TLS certificate..."
-wait_for_certificate vaultwarden tls-vaultwarden-ingress 300
-
-echo "==> Verifying Vaultwarden service endpoints..."
-for i in {1..60}; do
-  endpoints="$(
-    kubectl -n vaultwarden get endpointslice \
-      -l kubernetes.io/service-name=vaultwarden \
-      -o go-template='{{range .items}}{{range .endpoints}}{{range .addresses}}{{.}}{{"\n"}}{{end}}{{end}}{{end}}' \
-      2>/dev/null || true
-  )"
-  if [[ -n "$endpoints" ]]; then
-    break
-  fi
-  if [[ "$i" -eq 60 ]]; then
-    echo "ERROR: Vaultwarden service has no ready endpoints."
-    kubectl -n vaultwarden get pods,svc,endpointslice -o wide || true
-    exit 1
-  fi
-  sleep 5
-done
-
 echo "==> Seeding Vaultwarden initial invitation for ${VAULTWARDEN_INITIAL_EMAIL}..."
 
 kubectl port-forward -n vaultwarden svc/vaultwarden 8081:80 >/dev/null 2>&1 &
@@ -1349,31 +1134,13 @@ esac
 cleanup
 PF_PID=""
 
-# Argo CD deploys the website (charts/website) and waits for its pods and
-# certificate. The chart rolls the pods when the nginx config changes; the
-# deploy key is not in the chart, so roll them here when it changes. Argo CD
-# leaves an annotation it did not set alone.
-echo "==> Waiting for Argo CD to deploy jeffriffle.com..."
-wait_for_argocd_app website 900
-
+# The website's deploy key is not in its chart, so roll its pods here when the
+# key changes. Argo CD leaves an annotation it did not set alone.
 WEBSITE_KEY_HASH="$(kubectl -n website get secret jeffriffle-git -o jsonpath='{.data}' | sha256sum | cut -c1-16)"
 kubectl -n website patch deployment jeffriffle --type merge \
   -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/deploy-key-hash\":\"${WEBSITE_KEY_HASH}\"}}}}}"
 unset WEBSITE_KEY_HASH
 wait_for_rollout website jeffriffle 300
-
-# Backups: the CSI snapshot API, Longhorn's snapshot class and recurring jobs,
-# and Velero. A test cluster leaves Velero out, having no store to back up to.
-echo "==> Waiting for Argo CD to deploy the backup components..."
-wait_for_argocd_app snapshot-controller 900
-wait_for_argocd_app backup-config 900
-if [[ ",${ARGOCD_APPS_DISABLED}," != *",velero,"* ]]; then
-  wait_for_argocd_app velero 900
-fi
-
-# Checked last, once every namespace the policies name exists.
-echo "==> Waiting for Argo CD to apply the network policies..."
-wait_for_argocd_app network-policies 900
 
 # The Secrets Argo CD deploys are generated from .secrets.enc. Say so if a
 # value changed there and the generated copy was not refreshed.
@@ -1386,75 +1153,17 @@ echo "===== NODES ====="
 kubectl get nodes -o wide
 
 echo
-echo "===== HELM RELEASES ====="
-helm list -A
+echo "===== ARGO CD APPLICATIONS ====="
+kubectl -n argocd get applications.argoproj.io
 
 echo
 echo "===== CERTIFICATES ====="
-kubectl get certificates -A
+kubectl get certificates --all-namespaces
 
 echo
-echo "===== CLUSTER ISSUERS ====="
-kubectl get clusterissuer
-
-echo
-echo "===== TRAEFIK ====="
-kubectl -n traefik get pods,svc
-
-echo
-echo "===== RANCHER ====="
-kubectl -n cattle-system get pods,svc,ingress
-
-echo
-echo "===== AUTHELIA ====="
-kubectl -n authelia get pods,svc,pvc,ingress
-kubectl -n authelia get certificate tls-authelia-ingress
-
-echo
-echo "===== VAULTWARDEN ====="
-kubectl -n vaultwarden get pods,svc,pvc,ingress
-kubectl -n vaultwarden get certificate tls-vaultwarden-ingress
-
-echo
-echo "===== TRILIUM ====="
-kubectl -n trilium get pods,svc,pvc,ingressroute
-kubectl -n trilium get certificate tls-trilium-ingress
-
-echo
-echo "===== LONGHORN ====="
-kubectl -n longhorn-system get pods
+echo "===== STORAGE ====="
 kubectl -n longhorn-system get nodes.longhorn.io
-kubectl -n longhorn-system get ingressroute
-kubectl -n longhorn-system get certificate tls-longhorn-ingress
-kubectl get storageclass longhorn
-echo
-echo "===== MONITORING ====="
-kubectl -n monitoring get pods
-kubectl -n monitoring get pvc -o wide
-kubectl -n monitoring get ingressroute
-kubectl -n monitoring get certificate tls-grafana-ingress
-kubectl -n monitoring get servicemonitor longhorn-prometheus-servicemonitor
-kubectl -n monitoring get prometheusrule homelab-baseline-alerts
-
-echo
-echo "===== LOGGING ====="
-kubectl -n logging get pods,svc,pvc
-helm -n logging list
-
-echo
-echo "===== GRAFANA LOGGING ====="
-kubectl -n monitoring get configmap grafana-loki-datasource
-kubectl -n monitoring get configmap -l grafana_dashboard=1
-
-echo
-echo "===== CLOUDFLARED ====="
-kubectl -n cloudflared get pods
-
-wait_for_certificate cattle-system tls-rancher-ingress 30
-wait_for_certificate traefik tls-traefik-dashboard 30
-
-echo
-wait_for_certificate longhorn-system tls-longhorn-ingress 30
+kubectl get storageclass
 
 echo "============================================================================"
 echo " Deployment complete"
