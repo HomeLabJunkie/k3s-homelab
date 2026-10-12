@@ -177,11 +177,13 @@ if (( ${#FILES[@]} == 0 )); then
 
   # Local Helm charts are rendered with their ci-values.yaml (placeholder
   # settings) and the output is validated like any other manifest.
-  for chart in charts/*/; do
+  for chart in charts/*/ apps/argocd/applications/; do
     [[ -f "${chart}Chart.yaml" ]] || continue
     command -v helm >/dev/null 2>&1 || fail "helm command is required to validate $chart"
     rendered="$CACHE_DIR/chart-$(basename "$chart").yaml"
-    helm template "$(basename "$chart")" "$chart" --values "${chart}ci-values.yaml" >"$rendered" ||
+    chart_values=()
+    [[ -f "${chart}ci-values.yaml" ]] && chart_values=(--values "${chart}ci-values.yaml")
+    helm template "$(basename "$chart")" "$chart" "${chart_values[@]}" >"$rendered" ||
       fail "helm could not render $chart"
     FILES+=("$rendered")
   done

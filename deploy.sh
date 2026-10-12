@@ -65,6 +65,14 @@ ARGOCD_INGRESS_MANIFEST="${ARGOCD_INGRESS_MANIFEST:-$K3S_DIR/argocd-ingress.yaml
 ARGOCD_HOSTNAME="${ARGOCD_HOSTNAME:-argocd.${HOSTNAME_DOMAIN}}"
 ARGOCD_PROJECT="${ARGOCD_PROJECT:-$K3S_DIR/apps/argocd/project.yaml}"
 ARGOCD_ROOT_APP="${ARGOCD_ROOT_APP:-$K3S_DIR/apps/argocd/root.yaml}"
+# What Argo CD deploys on this cluster. The defaults are production. A test
+# cluster sets these in its own config/cluster.env so that it never deploys
+# production's settings and Secrets: a branch of this repository, a directory
+# of the configuration repository such as "envs/test/" (with the trailing
+# slash), and a comma-separated list of applications to leave out.
+ARGOCD_APPS_REVISION="${ARGOCD_APPS_REVISION:-main}"
+ARGOCD_APPS_CONFIG_PATH="${ARGOCD_APPS_CONFIG_PATH:-}"
+ARGOCD_APPS_DISABLED="${ARGOCD_APPS_DISABLED:-}"
 # The private repository holding this cluster's own settings (its domain).
 ARGOCD_CONFIG_REPO_URL="${ARGOCD_CONFIG_REPO_URL:-git@github.com:HomeLabJunkie/k3s-homelab-config.git}"
 LOKI_DATASOURCE="${LOKI_DATASOURCE:-$K3S_DIR/monitoring-loki-datasource.yaml}"
@@ -1033,7 +1041,31 @@ kubectl create secret generic jeffriffle-git \
 
 echo "==> Handing the Argo CD applications to Argo CD..."
 kubectl apply -f "$ARGOCD_PROJECT"
-kubectl apply -f "$ARGOCD_ROOT_APP"
+echo "    revision: ${ARGOCD_APPS_REVISION}, settings: ${ARGOCD_APPS_CONFIG_PATH:-(top level)}, left out: ${ARGOCD_APPS_DISABLED:-(none)}"
+ARGOCD_APPS_REVISION="$ARGOCD_APPS_REVISION" \
+  ARGOCD_APPS_CONFIG_PATH="$ARGOCD_APPS_CONFIG_PATH" \
+  ARGOCD_APPS_DISABLED="$ARGOCD_APPS_DISABLED" \
+  python3 - "$ARGOCD_ROOT_APP" <<'PYTHON' | kubectl apply -f -
+import os, sys, yaml
+
+root = yaml.safe_load(open(sys.argv[1]))
+revision = os.environ["ARGOCD_APPS_REVISION"]
+config_path = os.environ["ARGOCD_APPS_CONFIG_PATH"]
+disabled = [name for name in os.environ["ARGOCD_APPS_DISABLED"].split(",") if name]
+
+source = root["spec"]["source"]
+source["targetRevision"] = revision
+values = {}
+if revision != "main":
+    values["revision"] = revision
+if config_path:
+    values["config"] = {"path": config_path}
+if disabled:
+    values["disabled"] = disabled
+if values:
+    source["helm"] = {"valuesObject": values}
+print(yaml.safe_dump(root, sort_keys=False))
+PYTHON
 
 # network-policies is not in this list: it names namespaces that are created
 # further down, and is checked at the end.

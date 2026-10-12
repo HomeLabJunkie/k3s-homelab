@@ -1,3 +1,4 @@
+{{- if not (has "kyverno" .Values.disabled) }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -19,7 +20,7 @@ spec:
           - $values/apps/kyverno/values.yaml
     # ...and its values, from this repository.
     - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
-      targetRevision: main
+      targetRevision: {{ .Values.revision }}
       ref: values
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
@@ -41,3 +42,4 @@ spec:
       # Server-side apply: these charts carry CRDs too large for the
       # annotation that client-side apply writes.
       - ServerSideApply=true
+{{- end }}

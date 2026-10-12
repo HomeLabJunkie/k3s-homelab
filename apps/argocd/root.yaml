@@ -1,6 +1,8 @@
-# The one Application deploy.sh applies by hand. It makes Argo CD read
-# apps/argocd/applications on the main branch and create every Application
-# found there, so adding an application is a commit, not a command.
+# The one Application deploy.sh applies by hand. It makes Argo CD render the
+# chart in apps/argocd/applications on the main branch and create every
+# Application in it, so adding an application is a commit, not a command.
+# This file describes production. For a test cluster, deploy.sh changes the
+# branch and passes the chart other values (ARGOCD_APPS_* in cluster.env).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

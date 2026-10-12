@@ -1,31 +1,27 @@
-# The Cloudflare tunnel that carries public traffic to Traefik.
+{{- if not (has "kyverno-policies" .Values.disabled) }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cloudflared
+  name: kyverno-policies
   namespace: argocd
 spec:
   project: homelab
   destination:
     server: https://kubernetes.default.svc
-    namespace: cloudflared
+    namespace: kyverno
   sources:
-    # The chart, from this repository...
-    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
-      targetRevision: main
-      path: charts/cloudflared
+    # The chart, at a pinned version...
+    - repoURL: https://kyverno.github.io/kyverno/
+      chart: kyverno-policies
+      targetRevision: 3.9.1
       helm:
-        releaseName: cloudflared
+        releaseName: kyverno-policies
         valueFiles:
-          - $config/cloudflared/values.yaml
-    # ...its settings, from the private configuration repository...
-    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
-      targetRevision: main
-      ref: config
-    # ...and its Secret, which KSOPS decrypts from the same repository.
-    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
-      targetRevision: main
-      path: cloudflared
+          - $values/apps/kyverno/policies-values.yaml
+    # ...and its values, from this repository.
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
     # manages. It never deletes: removing something from git leaves it in the
@@ -43,3 +39,7 @@ spec:
         maxDuration: 5m
     syncOptions:
       - CreateNamespace=true
+      # Server-side apply: these charts carry CRDs too large for the
+      # annotation that client-side apply writes.
+      - ServerSideApply=true
+{{- end }}

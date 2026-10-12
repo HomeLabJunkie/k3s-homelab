@@ -1,0 +1,18 @@
+# The defaults describe production. A test cluster overrides them through the
+# root Application's Helm parameters; deploy.sh sets those from ARGOCD_APPS_*
+# in config/cluster.env.
+
+# Branch of this repository that the applications deploy.
+revision: main
+
+config:
+  # Branch of the private configuration repository.
+  revision: main
+  # Directory in that repository holding this cluster's settings and Secrets,
+  # with a trailing slash. Empty means the top level, which is production.
+  # A test cluster uses "envs/test/".
+  path: ""
+
+# Applications not to create, by name. A test cluster leaves out fb-search,
+# whose Secret is created by hand.
+disabled: []

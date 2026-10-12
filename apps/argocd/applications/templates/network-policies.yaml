@@ -1,3 +1,4 @@
+{{- if not (has "network-policies" .Values.disabled) }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,7 +10,7 @@ spec:
     server: https://kubernetes.default.svc
   source:
     repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
-    targetRevision: main
+    targetRevision: {{ .Values.revision }}
     path: apps/network-policies
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
@@ -26,3 +27,4 @@ spec:
         duration: 30s
         factor: 2
         maxDuration: 5m
+{{- end }}
