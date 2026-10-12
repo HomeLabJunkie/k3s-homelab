@@ -340,6 +340,17 @@ separate clone with its own settings and secrets:
 6. Run `./deploy.sh --preflight-only --bootstrap`, then
    `./deploy.sh --bootstrap`, from the clone.
 
+Two things that cost time on 2026-10-12:
+
+- Keep the SOCKS proxy in a terminal of its own (without `-f`). If it stops,
+  `deploy.sh` fails at whatever step next talks to the cluster.
+- Let's Encrypt can fail one certificate order with an error that is not
+  about this cluster. `deploy.sh` stops there; delete that Certificate and
+  run `./deploy.sh` again without `--bootstrap`. Each full run also requests
+  the same ten certificates, and Let's Encrypt allows five identical
+  certificates a week, so do not rebuild the test cluster more than a few
+  times in a week.
+
 To browse the result, start a browser through the same proxy:
 
 ```bash
