@@ -21,14 +21,15 @@ by Longhorn 1.12.1.
 Never run AWS plugin v1.14.2: it corrupts metadata on non-AWS S3 backends by
 adding unsupported checksum framing (`velero-io/velero#9951`). v1.14.3 and later
 carry the fix, and the Garage location also explicitly disables optional
-checksum calculation. `velero-values.yaml` holds the versions actually deployed;
-Dependabot bumps them, so after merging a Velero or plugin bump, run the
-installer and then the disposable restore test below before relying on it.
+checksum calculation. `apps/velero/values.yaml` holds the image versions and
+`apps/argocd/applications/templates/velero.yaml` the chart version. Argo CD
+applies a change to either when it merges, so after merging a Velero or
+plugin bump, run the disposable restore test below before relying on it.
 
 ## Storage and credentials
 
-- Endpoint: `http://<UNRAID_IP>:3900` (from `config/cluster.env`; injected by
-  `scripts/install-velero-backup.sh`, override with `GARAGE_S3_URL`)
+- Endpoint: `http://<UNRAID_IP>:3900`, set in `velero/values.yaml` in the
+  private configuration repository
 - Bucket: `k3s-velero`
 - Region: `garage`
 - Addressing: S3 path style
@@ -42,16 +43,24 @@ layout and lifecycle in its own bucket.
 
 ## Install or reconcile
 
-```bash
-cd ~/Work/k3s-homelab
-./scripts/install-velero-backup.sh
-kubectl apply -f manifests/backup/velero-schedules.yaml
-```
+Argo CD deploys all of it; there is no installer to run. Three applications
+are involved (see [Argo CD](docs/platform.md#argo-cd)):
 
-The installer is idempotent. It installs the snapshot API, creates Kubernetes
-secrets from SOPS at runtime, installs Velero, and waits for the Garage backup
-location and every node agent to become ready. It does not enable the schedule;
-that remains an explicit manifest step.
+- `snapshot-controller`: the CSI snapshot API and its controller, from the
+  upstream repository at a pinned tag.
+- `backup-config` (`manifests/backup`): Longhorn's snapshot class, the
+  temporary storage class Velero uses, and Longhorn's recurring jobs.
+- `velero`: the chart, its two Secrets (built from `.secrets.enc` by
+  `scripts/render-argocd-secrets.sh`) and the backup schedule in
+  `apps/velero/manifests/velero-schedules.yaml`.
+
+To change the schedule or a setting, edit the file and merge. Check the
+result with:
+
+```bash
+kubectl -n argocd get applications.argoproj.io snapshot-controller backup-config velero
+kubectl -n velero get backupstoragelocation garage
+```
 
 ## Schedule and retention
 
@@ -67,7 +76,7 @@ than later Kopia backups.
 
 Each temporary volume must finish copying before its upload starts. Node agents
 wait up to 90 minutes for that (`--data-mover-prepare-timeout` in
-`velero-values.yaml`). A DataUpload that still times out fails with `timeout on
+`apps/velero/values.yaml`). A DataUpload that still times out fails with `timeout on
 preparing data upload` and leaves the backup `PartiallyFailed`.
 
 Known issue: Loki's 50Gi volume (`logging/storage-loki-0`) intermittently failed
@@ -81,7 +90,7 @@ Until it is, the `logging` namespace is not in the Velero schedule, so one bad
 clone no longer marks every nightly backup `PartiallyFailed`. Loki's volume is
 still backed up by Longhorn's `backup-nightly` job to the CIFS target, and Loki,
 its gateway, the canary and Alloy are redeployed from this repository. Add
-`logging` back to `manifests/backup/velero-schedules.yaml` once the clone
+`logging` back to `apps/velero/manifests/velero-schedules.yaml` once the clone
 failures are understood.
 
 The existing Longhorn jobs remain unchanged (Longhorn cron times are UTC):

@@ -1401,6 +1401,15 @@ kubectl -n website patch deployment jeffriffle --type merge \
 unset WEBSITE_KEY_HASH
 wait_for_rollout website jeffriffle 300
 
+# Backups: the CSI snapshot API, Longhorn's snapshot class and recurring jobs,
+# and Velero. A test cluster leaves Velero out, having no store to back up to.
+echo "==> Waiting for Argo CD to deploy the backup components..."
+wait_for_argocd_app snapshot-controller 900
+wait_for_argocd_app backup-config 900
+if [[ ",${ARGOCD_APPS_DISABLED}," != *",velero,"* ]]; then
+  wait_for_argocd_app velero 900
+fi
+
 # Checked last, once every namespace the policies name exists.
 echo "==> Waiting for Argo CD to apply the network policies..."
 wait_for_argocd_app network-policies 900

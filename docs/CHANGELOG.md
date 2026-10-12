@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys Velero and the backup settings
+
+On 2026-10-12, `scripts/install-velero-backup.sh` was replaced by three Argo
+CD applications. `snapshot-controller` installs the CSI snapshot API from
+the upstream repository at `v8.6.0`. `backup-config` applies
+`manifests/backup`: Longhorn's snapshot class, the temporary storage class
+and the recurring snapshot and backup jobs. `velero` installs the chart
+(`12.2.0`) with its two Secrets, now built by
+`scripts/render-argocd-secrets.sh`, and the backup schedule, which used to
+be applied by hand. The address of the backup store moved to the
+configuration repository. A test cluster leaves `velero` out, since it has
+no store to back up to.
+
 ## 2026-10-12: Argo CD deploys kube-prometheus-stack
 
 On 2026-10-12, kube-prometheus-stack moved to Argo CD as the `monitoring`

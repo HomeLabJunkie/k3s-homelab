@@ -1,0 +1,69 @@
+{{- if not (has "velero" .Values.disabled) }}
+# Velero backs up Kubernetes objects and volumes to the Garage S3 store. Its
+# two Secrets (the S3 login and the backup repository password) and the
+# address of the store come from the private configuration repository. A
+# test cluster leaves this application out: it has no store to back up to.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  sources:
+    # The chart, at a pinned version, with the values from this repository
+    # and the cluster's own settings from the configuration repository...
+    - repoURL: https://vmware-tanzu.github.io/helm-charts
+      chart: velero
+      targetRevision: 12.2.0
+      helm:
+        releaseName: velero
+        valueFiles:
+          - $values/apps/velero/values.yaml
+          - $config/{{ .Values.config.path }}velero/values.yaml
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
+    # ...its Secrets, which KSOPS decrypts from the same repository...
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      path: {{ .Values.config.path }}velero
+    # ...and the backup schedule.
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      path: apps/velero/manifests
+  # Velero sets skipImmediately back to false once it has acted on it.
+  ignoreDifferences:
+    - group: velero.io
+      kind: Schedule
+      jsonPointers:
+        - /spec/skipImmediately
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      # Leave the ignored field below alone when syncing, too.
+      - RespectIgnoreDifferences=true
+      - CreateNamespace=true
+      # Server-side apply: these charts carry CRDs too large for the
+      # annotation that client-side apply writes.
+      - ServerSideApply=true
+{{- end }}

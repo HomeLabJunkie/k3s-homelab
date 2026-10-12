@@ -1,3 +1,7 @@
+# Argo CD installs the Velero chart with this file and with velero/values.yaml
+# from the private configuration repository. The chart version is in
+# apps/argocd/applications/templates/velero.yaml.
+
 ---
 image:
   repository: docker.io/velero/velero
@@ -29,7 +33,8 @@ configuration:
         checksumAlgorithm: ""
         region: garage
         s3ForcePathStyle: "true"
-        # Placeholder; scripts/install-velero-backup.sh overrides this from UNRAID_IP.
+        # Placeholder. velero/values.yaml in the private configuration
+        # repository repeats this whole list with the store's real address.
         s3Url: http://garage.example.invalid:3900
   volumeSnapshotLocation: []
   features: EnableCSI

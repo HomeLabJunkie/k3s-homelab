@@ -39,7 +39,6 @@
 │   ├── render-config.sh / prepare-env.sh / run-deploy.sh
 │   ├── scan-secrets.sh                     # CI secret/config scan
 │   ├── validate-manifests.sh               # kubeconform against the cluster's CRDs
-│   └── install-velero-backup.sh
 ├── apps/                           # Helm values and manifests per application; argocd/ holds the Argo CD Applications
 ├── charts/                         # Local Helm charts that Argo CD renders (website/)
 ├── templates/                      # envsubst sources rendered to rendered/
