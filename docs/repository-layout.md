@@ -68,7 +68,7 @@
 ```
 
 Additional manifests and Helm values at the repository root (`traefik-*.yaml`,
-`longhorn-*.yaml`, `monitoring-*.yaml`, `loki-values.yaml`, `alloy-values.yaml`,
+`longhorn-*.yaml`, `monitoring-*.yaml`, 
 `trilium-*.yaml`, `vaultwarden-*.yaml`, `cloudflared*.yaml`,
 `clusterissuer-letsencrypt.yaml`, dashboards, and ingress files)
 define Traefik, Longhorn, monitoring, logging, Trilium, Vaultwarden,

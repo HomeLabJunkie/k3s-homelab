@@ -1,0 +1,44 @@
+{{- if not (has "loki" .Values.disabled) }}
+# Loki stores the cluster's logs on a Longhorn volume. On a new cluster it
+# cannot start until Longhorn is installed; the retry below covers that.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+  sources:
+    # The chart, at a pinned version...
+    - repoURL: https://grafana-community.github.io/helm-charts
+      chart: loki
+      targetRevision: 18.14.0
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/apps/loki/values.yaml
+    # ...and its values, from this repository.
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}
