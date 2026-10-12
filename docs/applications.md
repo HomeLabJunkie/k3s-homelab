@@ -16,7 +16,9 @@ The deployment includes:
 
 ## Trilium
 
-Trilium is deployed with persistent Longhorn storage.
+Trilium is deployed by Argo CD from the `charts/trilium` chart, with
+persistent Longhorn storage. Self-heal is off for it; see
+[Argo CD and restores](platform.md#argo-cd-and-restores).
 
 Protected PVC:
 
@@ -33,7 +35,9 @@ group-writable.
 
 ## Vaultwarden
 
-Vaultwarden is deployed with persistent Longhorn storage.
+Vaultwarden is deployed by Argo CD from the `charts/vaultwarden` chart, with
+persistent Longhorn storage. Self-heal is off for it; see
+[Argo CD and restores](platform.md#argo-cd-and-restores).
 
 Protected PVC:
 
@@ -47,7 +51,11 @@ inside the pod (`ROCKET_PORT`); the Service still exposes port 80. The files
 on the data volume were created by root, and `fsGroup: 1000` gives the group
 write access to them.
 
-The admin token and initial invitation address come from local encrypted secrets.
+The admin token, SMTP login and Yubico key reach the cluster as two Secrets
+that Argo CD decrypts from the private configuration repository; to change
+one, see [Changing a secret Argo CD deploys](configuration.md#changing-a-secret-argo-cd-deploys).
+`deploy.sh` still sends the initial invitation, to the address in
+`.secrets.enc`.
 
 General sign-up/invitation behavior is controlled by the deployment manifest rather than documented with real credentials here.
 

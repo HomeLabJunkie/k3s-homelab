@@ -53,6 +53,7 @@ set +a
 for var in ADMIN_EMAIL CLOUDFLARE_TUNNEL_TOKEN ADMIN_UI_USERNAME ADMIN_UI_PASSWORD \
   AUTHELIA_SESSION_SECRET AUTHELIA_STORAGE_ENCRYPTION_KEY AUTHELIA_JWT_SECRET \
   AUTHELIA_OIDC_HMAC_SECRET AUTHELIA_OIDC_JWKS_KEY_B64 GRAFANA_OIDC_CLIENT_SECRET \
+  VAULTWARDEN_ADMIN_TOKEN VAULTWARDEN_YUBICO_SECRET_KEY \
   VAULTWARDEN_SMTP_USERNAME VAULTWARDEN_SMTP_PASSWORD \
   DUO_API_HOSTNAME DUO_INTEGRATION_KEY DUO_SECRET_KEY; do
   [[ -n "${!var:-}" ]] || fail "$var is not set"
@@ -126,6 +127,34 @@ kubectl create secret generic authelia-secrets \
   --dry-run=client -o yaml >"$WORK/authelia-secrets.yaml"
 unset admin_salt admin_hash users_database grafana_client_digest
 
+# --- Vaultwarden ---------------------------------------------------------------
+
+# Only an Argon2id hash of the admin token is stored (Vaultwarden's
+# "bitwarden" preset); the /admin login still uses the token itself. The salt
+# is derived from the token, so the hash is the same on every run.
+vaultwarden_admin_hash="$(
+  printf '%s' "$VAULTWARDEN_ADMIN_TOKEN" |
+    argon2 "$(printf 'vaultwarden-admin' |
+      openssl dgst -sha256 -hmac "$VAULTWARDEN_ADMIN_TOKEN" -r | cut -c1-32)" \
+      -id -t 3 -k 65540 -p 4 -e
+)"
+# shellcheck disable=SC2016 # literal hash prefix
+[[ "$vaultwarden_admin_hash" == '$argon2id$'* ]] ||
+  fail "could not hash VAULTWARDEN_ADMIN_TOKEN with argon2"
+
+kubectl create secret generic vaultwarden-admin \
+  --namespace vaultwarden \
+  --from-file=admin-token=<(printf '%s' "$vaultwarden_admin_hash") \
+  --dry-run=client -o yaml >"$WORK/vaultwarden-admin.yaml"
+unset vaultwarden_admin_hash
+
+kubectl create secret generic vaultwarden-integrations \
+  --namespace vaultwarden \
+  --from-file=SMTP_USERNAME=<(printf '%s' "$VAULTWARDEN_SMTP_USERNAME") \
+  --from-file=SMTP_PASSWORD=<(printf '%s' "$VAULTWARDEN_SMTP_PASSWORD") \
+  --from-file=YUBICO_SECRET_KEY=<(printf '%s' "$VAULTWARDEN_YUBICO_SECRET_KEY") \
+  --dry-run=client -o yaml >"$WORK/vaultwarden-integrations.yaml"
+
 # --- compare with the cluster, or write ---------------------------------------
 
 # Prints "<key> <sha256>" for each data key of a Secret manifest on stdin.
@@ -195,9 +224,14 @@ if [[ "$CHECK" == true ]]; then
   status=0
   check_secret cloudflared tunnel-token "$WORK/tunnel-token.yaml" || status=1
   check_secret authelia authelia-secrets "$WORK/authelia-secrets.yaml" || status=1
+  check_secret vaultwarden vaultwarden-admin "$WORK/vaultwarden-admin.yaml" || status=1
+  check_secret vaultwarden vaultwarden-integrations "$WORK/vaultwarden-integrations.yaml" || status=1
   exit "$status"
 fi
 
 write_secret "$WORK/tunnel-token.yaml" "$CONFIG_REPO/cloudflared/tunnel-token.enc.yaml"
 write_secret "$WORK/authelia-secrets.yaml" "$CONFIG_REPO/authelia/authelia-secrets.enc.yaml"
+write_secret "$WORK/vaultwarden-admin.yaml" "$CONFIG_REPO/vaultwarden/vaultwarden-admin.enc.yaml"
+write_secret "$WORK/vaultwarden-integrations.yaml" \
+  "$CONFIG_REPO/vaultwarden/vaultwarden-integrations.enc.yaml"
 echo "Commit and push $CONFIG_REPO for Argo CD to apply any change."

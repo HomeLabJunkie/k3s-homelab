@@ -1,0 +1,7 @@
+# A local chart, not published anywhere. Argo CD renders it (the `trilium`
+# application) with settings from the private configuration repository.
+apiVersion: v2
+name: trilium
+description: Trilium Notes, behind Authelia
+type: application
+version: 1.0.0

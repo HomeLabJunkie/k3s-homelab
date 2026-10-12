@@ -220,7 +220,9 @@ Persistent application data is intentionally stored on Longhorn so it can be pro
 Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) runs in the `argocd` namespace. It
 watches git and makes the cluster match it. `deploy.sh` installs the engine
 from `apps/argocd/values.yaml`; each thing it manages is an `Application`
-resource. Until an application is handed over, `deploy.sh` still deploys it.
+resource. Every application in the plan below has been handed over; the
+platform charts (Traefik, cert-manager, monitoring, logging, Rancher) are
+still installed by `deploy.sh`.
 
 | Stage | What moves to Argo CD | State |
 | --- | --- | --- |
@@ -229,7 +231,7 @@ resource. Until an application is handed over, `deploy.sh` still deploys it.
 | 3 | Website (with the private configuration repository) | Done 2026-10-11 |
 | 3 | fb-search (manifests and source moved to the private configuration repository) | Done 2026-10-11 |
 | 4 | cloudflared and Authelia, with their Secrets encrypted in the private repository | Done 2026-10-11 |
-| 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Not started |
+| 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Done 2026-10-11 |
 
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
 Rancher installs Fleet, another GitOps engine; nothing in this repository
@@ -288,6 +290,33 @@ Argo CD's own two credentials (`sops-age` and the configuration repository's
 deploy key) and the Secrets of applications it does not manage yet are still
 created by `deploy.sh`. To change a Secret Argo CD deploys, see
 [Changing a secret Argo CD deploys](configuration.md#changing-a-secret-argo-cd-deploys).
+
+### Argo CD and restores
+
+Trilium and Vaultwarden hold data, so their applications sync changes from
+git but do not self-heal: a manual scale-down for maintenance stays as it
+is until git changes.
+
+`recovery/restore.sh --promote-app APP` scales a Deployment to zero and points
+it at a restored volume. If Argo CD manages that Deployment (Trilium,
+Vaultwarden and Authelia today), the script first pauses its application by
+setting the `argocd.argoproj.io/skip-reconcile` annotation, so nothing puts
+the old volume back. `--rollback-app` removes the annotation once the
+Deployment matches git again.
+
+After a promotion that is kept, the application stays paused, because the
+Deployment uses the `APP-restore-test` volume and git names the original. Argo
+CD ignores the application until the annotation is removed, and its status
+there goes stale. To see or clear a pause:
+
+```bash
+kubectl -n argocd get applications.argoproj.io \
+  -o custom-columns='NAME:.metadata.name,PAUSED:.metadata.annotations.argocd\.argoproj\.io/skip-reconcile'
+kubectl -n argocd annotate applications.argoproj.io APP argocd.argoproj.io/skip-reconcile-
+```
+
+Clearing it while the Deployment still uses the restored volume makes Argo
+CD switch it back to the original at the next sync.
 
 ### Stopping Argo CD in an emergency
 

@@ -122,7 +122,7 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
   dnsNames:
-    - trilium.${BASE_DOMAIN}
+    - trilium.{{ required "domain is required" .Values.domain }}
 ---
 # An IngressRoute, not an Ingress: Traefik loads IngressRoutes and Middlewares
 # together, so the route never starts up before its middleware exists.
@@ -135,7 +135,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`trilium.${BASE_DOMAIN}`)
+    - match: Host(`trilium.{{ .Values.domain }}`)
       kind: Rule
       middlewares:
         # Trilium keeps its own login behind Authelia; see charts/authelia.
