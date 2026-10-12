@@ -240,7 +240,7 @@ uses it, and the two must not manage the same resources.
 ### How a change reaches the cluster
 
 `apps/argocd/root.yaml` is the one Application `deploy.sh` applies. It makes
-Argo CD create every Application in `apps/argocd/applications/`. Each of
+Argo CD create every Application in `apps/argocd/applications/templates/`. Each of
 those names a chart version and a values file, or a directory of manifests,
 on the `main` branch of this repository on GitHub. The `website` application
 also reads its domain from the
@@ -270,6 +270,24 @@ kubectl -n argocd exec argocd-application-controller-0 -- argocd app diff <name>
 The Helm release records for `trivy-operator`, `kyverno` and
 `kyverno-policies` from before the handover still appear in `helm list`.
 Nothing uses them; do not run `helm upgrade` on those releases.
+
+### Environments
+
+`apps/argocd/applications` is a small chart, so two clusters can deploy the
+same applications from different places. Its defaults are production: the
+`main` branch of this repository and the top level of the configuration
+repository. `deploy.sh` passes other values when these are set in
+`config/cluster.env`:
+
+| Setting | Meaning |
+| --- | --- |
+| `ARGOCD_APPS_REVISION` | Branch of this repository the applications deploy. Default `main` |
+| `ARGOCD_APPS_CONFIG_PATH` | Directory of the configuration repository with this cluster's settings and Secrets, with a trailing slash. Default empty (production); the test cluster uses `envs/test/` |
+| `ARGOCD_APPS_DISABLED` | Comma-separated applications not to create. The test cluster leaves out `fb-search` |
+
+The test cluster's Argo CD has its own age key, so it cannot decrypt
+production's Secrets, and production's cannot decrypt the test ones. See
+[Testing a full rebuild](backup-and-dr.md#testing-a-full-rebuild).
 
 ### Secrets
 
