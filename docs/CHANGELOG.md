@@ -6,6 +6,24 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys kube-prometheus-stack
+
+On 2026-10-12, kube-prometheus-stack moved to Argo CD as the `monitoring`
+application (chart `92.2.0`, values in `apps/monitoring/values.yaml`). Its
+four Secrets (Grafana's admin login, Cloudflare analytics token and Authelia
+single sign-on settings, and Alertmanager's configuration) are now built by
+`scripts/render-argocd-secrets.sh` and decrypted by Argo CD; all ten keys
+matched the live Secrets before the handover. The one setting that differs
+per cluster, the host alias that sends Grafana's single sign-on calls to
+Traefik, moved to the configuration repository.
+
+On production the comparison showed only Argo CD's tracking annotation on
+103 resources. After the sync no monitoring pod had changed, 90 of 90
+Prometheus targets were up, 152 alerting rules were loaded and only the
+always-on Watchdog alert was firing. `deploy.sh` waits for the application
+instead of creating the Secrets and installing the chart. Grafana is no
+longer restarted automatically when its single sign-on Secret changes.
+
 ## 2026-10-12: Argo CD deploys Loki and Alloy
 
 On 2026-10-12, the logging stack moved to Argo CD as two applications,

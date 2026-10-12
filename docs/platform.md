@@ -254,7 +254,7 @@ monitoring is installed.
 | 6 | cert-manager and its issuer; Argo CD installed first by `deploy.sh` | Done 2026-10-12 |
 | 7 | The admin UIs' routes (`routes`); alert rules, scrape targets, the Loki data source and dashboards (`monitoring-extras`) | Done 2026-10-12 |
 | 8 | Loki and Alloy | Done 2026-10-12 |
-| 9 | kube-prometheus-stack | Not started |
+| 9 | kube-prometheus-stack and its Secrets | Done 2026-10-12 |
 | 10 | Velero, Rancher | Not started |
 | 11 | Traefik | Not started |
 | 12 | Argo CD's own chart; `deploy.sh` reduced to a bootstrap | Not started |
