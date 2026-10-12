@@ -60,6 +60,9 @@ Expected sensitive values include:
 - `ARGOCD_CONFIG_REPO_KEY_B64`: the read-only deploy key Argo CD uses to read
   the private configuration repository (private key, base64-encoded on one
   line). See [The private configuration repository](#the-private-configuration-repository)
+- `ARGOCD_SOPS_AGE_KEY`: the age private key (`AGE-SECRET-KEY-...`) Argo CD
+  uses to decrypt Secrets in the private configuration repository. It is a
+  separate key from the laptop's and decrypts nothing else
 
 The tracked Vaultwarden values template references Kubernetes Secrets and must
 not contain credential values directly. `deploy.sh` creates or updates
@@ -78,6 +81,11 @@ there.
 | --- | --- |
 | `website/values.yaml` (`domain`) | The `website` application (`charts/website`) |
 | `fb-search/` (manifests, `requirements.txt`, `src/`) | The `fb-search` application, built with Kustomize |
+
+| `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |
+| `cloudflared/tunnel-token.enc.yaml` | The tunnel token, encrypted |
+| `authelia/values.yaml` (`domain`, `adminEmail`) | The `authelia` application (`charts/authelia`) |
+| `authelia/authelia-secrets.enc.yaml` | Authelia's Secret, encrypted |
 
 fb-search is there whole because its source is deliberately not published.
 To change it, edit the files in the private repository and push to `main`.
@@ -99,11 +107,37 @@ Put `base64 -w0 < /dev/shm/argocd-config-key` in `.secrets.enc` as
 `ARGOCD_CONFIG_REPO_KEY_B64`, run `deploy.sh`, then delete the key files and
 the old deploy key on GitHub.
 
-The website's domain is therefore set in two places: `BASE_DOMAIN` in
-`config/cluster.env`, for everything `deploy.sh` still deploys, and `domain`
-in the private repository. Keep them the same. A rebuild needs both
+The domain, admin email and Traefik address are therefore set in two places:
+`config/cluster.env`, for everything `deploy.sh` still deploys, and the
+`values.yaml` files in the private repository. Keep them the same. A rebuild needs both
 repositories; the private one is on GitHub and cloned beside this one on each
 laptop.
+
+## Changing a secret Argo CD deploys
+
+The tunnel token and Authelia's Secret (admin login, session and storage
+keys, SMTP login, Duo and OIDC credentials) reach the cluster through Argo
+CD. `.secrets.enc` is still where their values are set:
+
+1. Change the value in `.secrets.enc`.
+2. Run `scripts/render-argocd-secrets.sh`. It rebuilds the Secrets, including
+   the hashed forms Authelia needs, and rewrites only the encrypted files
+   whose content changed.
+3. Commit and push the private configuration repository. Argo CD applies the
+   Secret within about three minutes.
+4. Restart what reads it: `kubectl -n authelia rollout restart deployment/authelia`
+   or `kubectl -n cloudflared rollout restart deployment/cloudflared`.
+
+`scripts/render-argocd-secrets.sh --check` compares what it would write with
+the Secrets in the cluster, key by key, and prints only `same` or
+`DIFFERENT`. `deploy.sh` runs it at the end and warns on a difference.
+
+If the laptop's age key is rotated (`scripts/rotate-sops-age-key.sh`), put
+the new public key in the private repository's `.sops.yaml` and run
+`sops updatekeys` on each `.enc.yaml` file there. To replace Argo CD's own
+key, generate one with `age-keygen`, set `ARGOCD_SOPS_AGE_KEY`, put its
+public key in that `.sops.yaml`, run `sops updatekeys` on the same files,
+and run `deploy.sh`.
 
 ## K3s cluster token
 

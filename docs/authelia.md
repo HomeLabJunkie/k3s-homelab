@@ -2,7 +2,8 @@
 
 [Back to the README](../README.md)
 
-Authelia (`authelia.yaml`, namespace `authelia`) is the login portal at
+Authelia (the `charts/authelia` chart, namespace `authelia`, deployed by
+[Argo CD](platform.md#argo-cd)) is the login portal at
 `auth.${BASE_DOMAIN}` in front of the admin UIs: the Traefik dashboard,
 Longhorn, Prometheus, Grafana and Trilium. Their routes use the
 shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
@@ -17,9 +18,10 @@ Without a limit Traefik logs a `maxResponseBodySize is not configured` warning
 for every protected route at startup.
 
 - **Users:** one admin, `ADMIN_UI_USERNAME` / `ADMIN_UI_PASSWORD` from
-  `.secrets.enc`. `deploy.sh` writes an argon2id-hashed users file into the
+  `.secrets.enc`, stored as an argon2id-hashed users file in the
   `authelia-secrets` Secret. Password reset and change in the portal are
-  disabled; change `ADMIN_UI_PASSWORD` and redeploy instead.
+  disabled; to change the password, see
+  [Changing a secret Argo CD deploys](configuration.md#changing-a-secret-argo-cd-deploys).
 - **Second factor:** on first login, register a TOTP app or security key.
   Authelia confirms by emailing a one-time code to `ADMIN_EMAIL`, using the
   same SMTP account as Alertmanager.
@@ -32,8 +34,8 @@ for every protected route at startup.
 - **Storage:** registered devices live in SQLite on the 1Gi `authelia-data`
   Longhorn PVC, encrypted with `AUTHELIA_STORAGE_ENCRYPTION_KEY`. A restored
   PVC is only readable with that same key. Sessions are in memory, so an
-  Authelia restart logs everyone out; `deploy.sh` restarts it only when its
-  configuration or secrets change.
+  Authelia restart logs everyone out. A change to its configuration restarts
+  it; a change to its Secret does not, so restart it by hand after one.
 - **Grafana single sign-on:** Authelia is also an OpenID Connect provider with
   one client, `grafana`. Grafana (`auth.generic_oauth` in
   `monitoring-values.yaml`) redirects straight to Authelia and signs in as the
@@ -45,7 +47,7 @@ for every protected route at startup.
   login is the break-glass way in: `/login?disableAutoLogin=true` with
   `GRAFANA_ADMIN_PASSWORD`. Signing out of Grafana also signs out of Authelia.
 - **Protecting another app:** add its hostname to `access_control` in
-  `templates/generated/authelia.yaml.template` and route it with an
+  `charts/authelia/templates/configmap.yaml` and route it with an
   `IngressRoute` that lists the `admin-ui-auth` middleware (namespace
   `traefik`), as in `templates/generated/longhorn-ingress.yaml.template`. Do
   not use an `Ingress` with the `router.middlewares` annotation: it works, but

@@ -6,6 +6,34 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-11: Argo CD deploys cloudflared and Authelia; secrets with sops
+
+On 2026-10-11, cloudflared and Authelia moved to Argo CD, each as a small
+chart (`charts/cloudflared`, `charts/authelia`) that renders the same
+resources as the templates it replaces. Their Secrets moved too: they are
+now in the private configuration repository, encrypted with sops, and Argo
+CD decrypts them with the KSOPS plugin (`quay.io/viaductoss/ksops:v4.5.1`)
+added to its repo server. Argo CD has its own age key
+(`ARGOCD_SOPS_AGE_KEY`, a new required value), separate from the laptop's,
+so the key kept in the cluster cannot decrypt `.secrets.enc`.
+
+`scripts/render-argocd-secrets.sh` builds both Secrets from `.secrets.enc`,
+taking over the argon2 hashing `deploy.sh` did for Authelia, and writes the
+encrypted files. Its `--check` mode showed all 14 keys identical to the live
+Secrets before the handover. `deploy.sh` now creates the `sops-age` Secret
+before installing Argo CD, waits for the two applications instead of
+deploying them, and verifies the admin UIs redirect to Authelia after Argo
+CD has deployed it rather than before monitoring is installed.
+
+The handover did not restart cloudflared; 68 of 68 requests through the
+tunnel during it returned 200. Authelia restarted once, for the new
+configuration checksum on its pod, which ended the open sessions. A change
+to Authelia's Secret no longer restarts it automatically.
+
+`.gitignore` rules for rendered files are now anchored to the repository
+root. Unanchored, `authelia.yaml` and `cloudflared.yaml` also matched the
+new chart template and Application files.
+
 ## 2026-10-11: Argo CD deploys fb-search from the private repository
 
 On 2026-10-11, `apps/fb-search` moved, manifests and source together, to

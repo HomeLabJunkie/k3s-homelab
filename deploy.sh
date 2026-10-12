@@ -41,7 +41,6 @@ TRAEFIK_VALUES="${TRAEFIK_VALUES:-$K3S_DIR/traefik-values.yaml}"
 CLUSTERISSUER_MANIFEST="${CLUSTERISSUER_MANIFEST:-$K3S_DIR/clusterissuer-letsencrypt.yaml}"
 TRAEFIK_DASHBOARD_MANIFEST="${TRAEFIK_DASHBOARD_MANIFEST:-$K3S_DIR/traefik-dashboard.yaml}"
 TRAEFIK_DASHBOARD_CERT_MANIFEST="${TRAEFIK_DASHBOARD_CERT_MANIFEST:-$K3S_DIR/traefik-dashboard-cert.yaml}"
-CLOUDFLARED_MANIFEST="${CLOUDFLARED_MANIFEST:-$K3S_DIR/cloudflared.yaml}"
 LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-host-prep.yml}"
 LONGHORN_VALUES="${LONGHORN_VALUES:-$K3S_DIR/longhorn-values.yaml}"
 LONGHORN_INGRESS_MANIFEST="${LONGHORN_INGRESS_MANIFEST:-$K3S_DIR/longhorn-ingress.yaml}"
@@ -50,7 +49,6 @@ TRILIUM_MANIFEST="${TRILIUM_MANIFEST:-$K3S_DIR/trilium-longhorn-v2.yaml}"
 TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
 VAULTWARDEN_MANIFEST="${VAULTWARDEN_MANIFEST:-$K3S_DIR/vaultwarden-longhorn-v2.yaml}"
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
-AUTHELIA_MANIFEST="${AUTHELIA_MANIFEST:-$K3S_DIR/authelia.yaml}"
 AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
 KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-92.2.0}"
 MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
@@ -377,11 +375,9 @@ for file in \
   "$CLUSTERISSUER_MANIFEST" \
   "$TRAEFIK_DASHBOARD_MANIFEST" \
   "$TRAEFIK_DASHBOARD_CERT_MANIFEST" \
-  "$CLOUDFLARED_MANIFEST" \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
   "$LONGHORN_INGRESS_MANIFEST" \
-  "$AUTHELIA_MANIFEST" \
   "$TRILIUM_MANIFEST" \
   "$VAULTWARDEN_MANIFEST" \
   "$MONITORING_VALUES" \
@@ -450,6 +446,7 @@ for var in \
   DUO_SECRET_KEY \
   WEBSITE_DEPLOY_KEY_B64 \
   ARGOCD_CONFIG_REPO_KEY_B64 \
+  ARGOCD_SOPS_AGE_KEY \
   CLOUDFLARE_ANALYTICS_TOKEN
 do
   require_var "$var"
@@ -807,130 +804,9 @@ if kubectl get storageclass local-path >/dev/null 2>&1; then
     -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 fi
 
-# ------------------------------------------------------------------------------
-# Authelia - login portal with 2FA behind the admin-ui-auth middleware
-# ------------------------------------------------------------------------------
-
-echo "==> Creating/updating Authelia secrets..."
-ensure_namespace authelia
-
-# Derive the salt from the credentials so an unchanged password yields an
-# unchanged Secret, and Authelia is not restarted (logging everyone out) on
-# every deploy.
-AUTHELIA_ADMIN_SALT="$(
-  printf '%s:%s' "$ADMIN_UI_USERNAME" "$ADMIN_UI_PASSWORD" |
-    openssl dgst -sha256 -hmac "$AUTHELIA_SESSION_SECRET" -r | cut -c1-32
-)"
-AUTHELIA_ADMIN_HASH="$(
-  printf '%s' "$ADMIN_UI_PASSWORD" |
-    argon2 "$AUTHELIA_ADMIN_SALT" -id -t 3 -k 65536 -p 4 -l 32 -e
-)"
-# shellcheck disable=SC2016 # literal hash prefix
-[[ "$AUTHELIA_ADMIN_HASH" == '$argon2id$'* ]] || {
-  echo "ERROR: could not hash ADMIN_UI_PASSWORD with argon2."
-  exit 1
-}
-# JSON is valid YAML and quotes the username and hash safely.
-AUTHELIA_USERS_DATABASE="$(
-  AUTHELIA_ADMIN_HASH="$AUTHELIA_ADMIN_HASH" python3 -c '
-import json, os
-user = os.environ["ADMIN_UI_USERNAME"]
-print(json.dumps({"users": {user: {
-    "displayname": user,
-    "password": os.environ["AUTHELIA_ADMIN_HASH"],
-    "email": os.environ["ADMIN_EMAIL"],
-    "groups": ["admins"],
-}}}, indent=2))'
-)"
-
-# Grafana's OIDC client secret, stored as a digest like the admin password and
-# with the same stable salt, so an unchanged secret does not restart Authelia.
-AUTHELIA_GRAFANA_CLIENT_DIGEST="$(
-  printf '%s' "$GRAFANA_OIDC_CLIENT_SECRET" |
-    argon2 "$(printf 'grafana:%s' "$GRAFANA_OIDC_CLIENT_SECRET" |
-      openssl dgst -sha256 -hmac "$AUTHELIA_SESSION_SECRET" -r | cut -c1-32)" \
-      -id -t 3 -k 65536 -p 4 -l 32 -e
-)"
-# shellcheck disable=SC2016 # literal hash prefix
-[[ "$AUTHELIA_GRAFANA_CLIENT_DIGEST" == '$argon2id$'* ]] || {
-  echo "ERROR: could not hash GRAFANA_OIDC_CLIENT_SECRET with argon2."
-  exit 1
-}
-
-# Same SMTP account and defaults as scripts/render-alertmanager-config.sh.
-AUTHELIA_SMTP_PORT="${SMTP_PORT:-587}"
-if [[ "$AUTHELIA_SMTP_PORT" == 465 ]]; then
-  AUTHELIA_SMTP_SCHEME=submissions
-else
-  AUTHELIA_SMTP_SCHEME=submission
-fi
-kubectl create secret generic authelia-secrets \
-  --namespace authelia \
-  --from-file=users_database.yml=<(printf '%s\n' "$AUTHELIA_USERS_DATABASE") \
-  --from-file=session-secret=<(printf '%s' "$AUTHELIA_SESSION_SECRET") \
-  --from-file=storage-encryption-key=<(printf '%s' "$AUTHELIA_STORAGE_ENCRYPTION_KEY") \
-  --from-file=jwt-secret=<(printf '%s' "$AUTHELIA_JWT_SECRET") \
-  --from-file=smtp-address=<(printf '%s://%s:%s' "$AUTHELIA_SMTP_SCHEME" "${SMTP_HOST:-smtp.gmail.com}" "$AUTHELIA_SMTP_PORT") \
-  --from-file=smtp-username=<(printf '%s' "${SMTP_USER:-$VAULTWARDEN_SMTP_USERNAME}") \
-  --from-file=smtp-password=<(printf '%s' "${SMTP_PASSWORD:-$VAULTWARDEN_SMTP_PASSWORD}") \
-  --from-file=oidc-hmac-secret=<(printf '%s' "$AUTHELIA_OIDC_HMAC_SECRET") \
-  --from-file=oidc-jwks-key.pem=<(printf '%s' "$AUTHELIA_OIDC_JWKS_KEY_B64" | base64 -d) \
-  --from-file=oidc-grafana-client-secret=<(printf '%s' "$AUTHELIA_GRAFANA_CLIENT_DIGEST") \
-  --from-file=duo-hostname=<(printf '%s' "$DUO_API_HOSTNAME") \
-  --from-file=duo-integration-key=<(printf '%s' "$DUO_INTEGRATION_KEY") \
-  --from-file=duo-secret-key=<(printf '%s' "$DUO_SECRET_KEY") \
-  --dry-run=client -o yaml | kubectl apply -f -
-unset AUTHELIA_ADMIN_SALT AUTHELIA_ADMIN_HASH AUTHELIA_USERS_DATABASE \
-  AUTHELIA_SMTP_PORT AUTHELIA_SMTP_SCHEME AUTHELIA_GRAFANA_CLIENT_DIGEST
-
-echo "==> Deploying Authelia with Longhorn storage..."
-apply_manifest "$AUTHELIA_MANIFEST"
-
-# Authelia reads its configuration and secrets only at startup, so roll the pod
-# when either changes. kubectl apply leaves this annotation alone.
-AUTHELIA_CONFIG_HASH="$(
-  {
-    kubectl -n authelia get configmap authelia-config -o jsonpath='{.data}'
-    kubectl -n authelia get secret authelia-secrets -o jsonpath='{.data}'
-  } | sha256sum | cut -c1-16
-)"
-kubectl -n authelia patch deployment authelia --type merge \
-  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/config-hash\":\"${AUTHELIA_CONFIG_HASH}\"}}}}}"
-unset AUTHELIA_CONFIG_HASH
-
-echo "==> Waiting for Authelia deployment..."
-wait_for_rollout authelia authelia 600
-
-echo "==> Waiting for Authelia TLS certificate..."
-kubectl -n authelia wait \
-  --for=condition=Ready \
-  certificate/tls-authelia-ingress \
-  --timeout=300s
-
-# admin-ui-auth now asks Authelia; the old basic-auth users are unused.
-kubectl -n traefik delete secret admin-ui-basic-auth --ignore-not-found
-
-echo "==> Verifying the admin UIs redirect anonymous visitors to Authelia..."
-for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
-  for i in {1..30}; do
-    auth_response="$(
-      curl -ks -o /dev/null -w '%{http_code} %{redirect_url}' \
-        --resolve "${protected_host}:443:${CLOUDFLARE_ORIGIN_IP}" \
-        "https://${protected_host}/" || true
-    )"
-    if [[ "$auth_response" == "302 https://${AUTHELIA_HOSTNAME}/"* ]]; then
-      break
-    fi
-    if [[ "$i" -eq 30 ]]; then
-      echo "ERROR: https://${protected_host}/ answered '${auth_response}', not a redirect to Authelia."
-      kubectl -n authelia get pods,svc,endpointslice -o wide || true
-      kubectl -n authelia logs deployment/authelia --tail=50 || true
-      exit 1
-    fi
-    sleep 2
-  done
-  echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
-done
+# Authelia, which the admin-ui-auth middleware on the routes below asks about
+# every request, is deployed by Argo CD further down. Until then those routes
+# fail closed.
 
 # ------------------------------------------------------------------------------
 # Monitoring - kube-prometheus-stack
@@ -1114,6 +990,15 @@ echo "==> Logging stack is ready."
 # deploy.sh installs the engine; Argo CD then deploys what the Application
 # manifests in apps/argocd/applications describe, from the main branch on
 # GitHub, not from this working copy.
+# The repo server mounts this key to decrypt the Secrets in the private
+# configuration repository (KSOPS), so it must exist before the install.
+echo "==> Creating/updating the Argo CD sops key..."
+ensure_namespace argocd
+kubectl create secret generic sops-age \
+  --namespace argocd \
+  --from-file=keys.txt=<(printf '%s\n' "$ARGOCD_SOPS_AGE_KEY") \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
 helm upgrade --install argocd argo/argo-cd \
   --version "$ARGOCD_CHART_VERSION" \
@@ -1159,6 +1044,36 @@ kubectl apply -f "$ARGOCD_ROOT_APP"
 echo "==> Waiting for Argo CD to deploy Trivy Operator and Kyverno..."
 for argocd_app in trivy-operator kyverno kyverno-policies kyverno-custom-policies; do
   wait_for_argocd_app "$argocd_app" 900
+done
+
+# Authelia's Secret comes from the private configuration repository, already
+# encrypted; scripts/render-argocd-secrets.sh writes it from .secrets.enc.
+echo "==> Waiting for Argo CD to deploy Authelia..."
+wait_for_argocd_app authelia 900
+
+# admin-ui-auth now asks Authelia; the old basic-auth users are unused.
+kubectl -n traefik delete secret admin-ui-basic-auth --ignore-not-found
+
+echo "==> Verifying the admin UIs redirect anonymous visitors to Authelia..."
+for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
+  for i in {1..30}; do
+    auth_response="$(
+      curl -ks -o /dev/null -w '%{http_code} %{redirect_url}' \
+        --resolve "${protected_host}:443:${CLOUDFLARE_ORIGIN_IP}" \
+        "https://${protected_host}/" || true
+    )"
+    if [[ "$auth_response" == "302 https://${AUTHELIA_HOSTNAME}/"* ]]; then
+      break
+    fi
+    if [[ "$i" -eq 30 ]]; then
+      echo "ERROR: https://${protected_host}/ answered '${auth_response}', not a redirect to Authelia."
+      kubectl -n authelia get pods,svc,endpointslice -o wide || true
+      kubectl -n authelia logs deployment/authelia --tail=50 || true
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
 done
 
 echo "==> Applying security scanning dashboard..."
@@ -1210,14 +1125,8 @@ kubectl -n cattle-system get ingress rancher \
   -o jsonpath='{.spec.ingressClassName}{" "}{.spec.tls[0].secretName}{"\n"}' \
   | grep -qx 'traefik tls-rancher-ingress'
 
-echo "==> Deploying Cloudflare tunnel..."
-ensure_namespace cloudflared
-kubectl create secret generic tunnel-token \
-  --from-file=token=<(printf '%s' "$CLOUDFLARE_TUNNEL_TOKEN") \
-  --namespace cloudflared \
-  --dry-run=client -o yaml | kubectl apply -f -
-apply_manifest "$CLOUDFLARED_MANIFEST"
-kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
+echo "==> Waiting for Argo CD to deploy the Cloudflare tunnel..."
+wait_for_argocd_app cloudflared 600
 
 # Applied after cloudflared, the last component it scrapes, so every target
 # namespace exists.
@@ -1576,6 +1485,12 @@ wait_for_rollout website jeffriffle 300
 # Checked last, once every namespace the policies name exists.
 echo "==> Waiting for Argo CD to apply the network policies..."
 wait_for_argocd_app network-policies 900
+
+# The Secrets Argo CD deploys are generated from .secrets.enc. Say so if a
+# value changed there and the generated copy was not refreshed.
+echo "==> Comparing Argo CD's Secrets with .secrets.enc..."
+"$K3S_DIR/scripts/render-argocd-secrets.sh" --check ||
+  echo "WARNING: a Secret differs. Run scripts/render-argocd-secrets.sh, then commit and push the configuration repository."
 
 echo
 echo "===== NODES ====="
