@@ -26,7 +26,7 @@ spec:
     - match: Host(`argocd.${BASE_DOMAIN}`)
       kind: Rule
       middlewares:
-        # Argo CD keeps its own login behind Authelia; see authelia.yaml.template.
+        # Argo CD keeps its own login behind Authelia; see charts/authelia.
         - name: admin-ui-auth
           namespace: traefik
       services:

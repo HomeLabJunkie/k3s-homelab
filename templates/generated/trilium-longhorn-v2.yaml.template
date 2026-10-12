@@ -138,7 +138,7 @@ spec:
     - match: Host(`trilium.${BASE_DOMAIN}`)
       kind: Rule
       middlewares:
-        # Trilium keeps its own login behind Authelia; see authelia.yaml.template.
+        # Trilium keeps its own login behind Authelia; see charts/authelia.
         - name: admin-ui-auth
           namespace: traefik
       services:

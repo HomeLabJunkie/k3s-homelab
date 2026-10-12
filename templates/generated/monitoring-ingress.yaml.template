@@ -26,7 +26,7 @@ spec:
     - match: Host(`grafana.${BASE_DOMAIN}`)
       kind: Rule
       middlewares:
-        # Grafana keeps its own login behind Authelia; see authelia.yaml.template.
+        # Grafana keeps its own login behind Authelia; see charts/authelia.
         - name: admin-ui-auth
           namespace: traefik
       services:
@@ -63,7 +63,7 @@ spec:
     - match: Host(`prometheus.${BASE_DOMAIN}`)
       kind: Rule
       middlewares:
-        # Prometheus has no login of its own; see authelia.yaml.template.
+        # Prometheus has no login of its own; see charts/authelia.
         - name: admin-ui-auth
           namespace: traefik
       services:

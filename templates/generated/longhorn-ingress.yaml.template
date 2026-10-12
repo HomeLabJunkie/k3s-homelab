@@ -26,7 +26,7 @@ spec:
     - match: Host(`longhorn.${BASE_DOMAIN}`)
       kind: Rule
       middlewares:
-        # Longhorn has no login of its own; see authelia.yaml.template.
+        # Longhorn has no login of its own; see charts/authelia.
         - name: admin-ui-auth
           namespace: traefik
       services:
