@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD deploys Loki and Alloy
+
+On 2026-10-12, the logging stack moved to Argo CD as two applications,
+`loki` and `alloy`. Their values files moved from the repository root to
+`apps/loki/values.yaml` and `apps/alloy/values.yaml`, and the chart versions
+(Loki `18.14.0`, Alloy `1.13.0`) now live in the Application files. On
+production the comparison showed only Argo CD's tracking annotation, no pod
+restarted, and Loki reported ready afterwards. `deploy.sh` waits for the two
+applications instead of installing the charts.
+
 ## 2026-10-12: Argo CD deploys the admin routes and the monitoring extras
 
 On 2026-10-12, the manifests `deploy.sh` still applied by hand moved to two
