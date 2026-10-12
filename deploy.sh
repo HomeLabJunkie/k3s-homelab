@@ -212,7 +212,8 @@ retry_failed_certificates() {
       python3 -c '
 import json, sys
 name = sys.argv[1]
-for item in json.load(sys.stdin).get("items", []):
+text = sys.stdin.read()
+for item in (json.loads(text).get("items", []) if text.strip() else []):
     owned = any(o.get("name") == name for o in item["metadata"].get("ownerReferences", []))
     for cond in item.get("status", {}).get("conditions", []):
         if owned and cond.get("type") == "Ready" and cond.get("reason") == "Failed":
@@ -223,7 +224,10 @@ for item in json.load(sys.stdin).get("items", []):
     kubectl get certificates --all-namespaces -o json 2>/dev/null |
       python3 -c '
 import json, sys
-for item in json.load(sys.stdin).get("items", []):
+text = sys.stdin.read()
+# Empty until cert-manager has installed its CRDs.
+items = json.loads(text).get("items", []) if text.strip() else []
+for item in items:
     status = item.get("status", {})
     ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in status.get("conditions", []))
     if not ready and status.get("lastFailureTime"):
