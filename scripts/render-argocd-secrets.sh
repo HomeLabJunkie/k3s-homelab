@@ -210,6 +210,14 @@ kubectl create secret generic alertmanager-smtp \
   --from-file=alertmanager.yaml="$WORK/alertmanager.yaml" \
   --dry-run=client -o yaml >"$WORK/alertmanager-smtp.yaml"
 
+# --- Rancher: the first-login password -----------------------------------------
+
+[[ -n "${RANCHER_BOOTSTRAP_PASSWORD:-}" ]] || fail "RANCHER_BOOTSTRAP_PASSWORD is not set"
+kubectl create secret generic bootstrap-secret \
+  --namespace cattle-system \
+  --from-file=bootstrapPassword=<(printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD") \
+  --dry-run=client -o yaml >"$WORK/bootstrap-secret.yaml"
+
 # --- Velero: the S3 login and the backup repository password --------------------
 
 # A test cluster has no backup store and leaves the velero application out,
@@ -308,6 +316,7 @@ if [[ "$CHECK" == true ]]; then
   for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmanager-smtp; do
     check_secret monitoring "$monitoring_secret" "$WORK/$monitoring_secret.yaml" || status=1
   done
+  check_secret cattle-system bootstrap-secret "$WORK/bootstrap-secret.yaml" || status=1
   if [[ "$velero_secrets" == true ]]; then
     for velero_secret in velero-garage-credentials velero-repo-credentials; do
       check_secret velero "$velero_secret" "$WORK/$velero_secret.yaml" || status=1
@@ -327,6 +336,8 @@ for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmana
   write_secret "$WORK/$monitoring_secret.yaml" \
     "$CONFIG_REPO/${CONFIG_PATH}monitoring/$monitoring_secret.enc.yaml"
 done
+write_secret "$WORK/bootstrap-secret.yaml" \
+  "$CONFIG_REPO/${CONFIG_PATH}rancher/bootstrap-secret.enc.yaml"
 if [[ "$velero_secrets" == true ]]; then
   for velero_secret in velero-garage-credentials velero-repo-credentials; do
     write_secret "$WORK/$velero_secret.yaml" \

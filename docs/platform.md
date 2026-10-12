@@ -256,7 +256,7 @@ monitoring is installed.
 | 8 | Loki and Alloy | Done 2026-10-12 |
 | 9 | kube-prometheus-stack and its Secrets | Done 2026-10-12 |
 | 10 | Velero, with the snapshot controller and Longhorn's backup settings | Done 2026-10-12 |
-| 10 | Rancher | Not started |
+| 10 | Rancher (its certificate is in `routes`) | Done 2026-10-12 |
 | 11 | Traefik | Not started |
 | 12 | Argo CD's own chart; `deploy.sh` reduced to a bootstrap | Not started |
 

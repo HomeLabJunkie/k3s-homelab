@@ -20,7 +20,6 @@ KUBECONFIG_SOURCE="${KUBECONFIG_SOURCE:-$K3S_DIR/kubeconfig}"
 KUBECONFIG_TARGET="${KUBECONFIG_TARGET:-$HOME/.kube/config}"
 
 TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.7.1}"
-RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.15.2}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 
 # Ingress hostnames default to <app>.$BASE_DOMAIN from cluster.env. Without
@@ -628,7 +627,6 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 echo "==> Configuring Helm repositories..."
 helm repo add traefik https://traefik.github.io/charts --force-update
-helm repo add rancher-stable https://releases.rancher.com/server-charts/stable --force-update
 helm repo add longhorn https://charts.longhorn.io --force-update
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
@@ -680,7 +678,7 @@ kubectl create secret generic jeffriffle-git \
 # Two applications place objects in namespaces that the Helm installs further
 # down would otherwise create. Argo CD checks a whole application before
 # applying any of it, so a missing namespace would hold back the rest.
-for platform_namespace in traefik longhorn-system monitoring logging; do
+for platform_namespace in traefik longhorn-system monitoring logging cattle-system; do
   ensure_namespace "$platform_namespace"
 done
 
@@ -1044,40 +1042,14 @@ for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
   echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
 done
 
-echo "==> Preparing Rancher namespace..."
-ensure_namespace cattle-system
+# Argo CD deploys Rancher (apps/rancher), its certificate (charts/routes) and
+# its first-login password, which scripts/render-argocd-secrets.sh writes to
+# the private configuration repository.
+echo "==> Waiting for the Rancher HTTPS certificate..."
+wait_for_certificate cattle-system tls-rancher-ingress 900
 
-echo "==> Creating Rancher TLS certificate..."
-kubectl apply -f - <<EOF_RANCHER_CERT
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: tls-rancher-ingress
-  namespace: cattle-system
-spec:
-  secretName: tls-rancher-ingress
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
-    group: cert-manager.io
-  dnsNames:
-    - ${RANCHER_HOSTNAME}
-EOF_RANCHER_CERT
-
-wait_for_certificate cattle-system tls-rancher-ingress 300
-
-echo "==> Installing Rancher ${RANCHER_CHART_VERSION}..."
-helm upgrade --install rancher rancher-stable/rancher \
-  --version "$RANCHER_CHART_VERSION" \
-  --namespace cattle-system \
-  --create-namespace \
-  --set-string hostname="$RANCHER_HOSTNAME" \
-  --set ingress.tls.source=secret \
-  --set ingress.ingressClassName=traefik \
-  --set replicas=2 \
-  --set-file bootstrapPassword=<(printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD") \
-  --wait \
-  --timeout=600s
+echo "==> Waiting for Argo CD to deploy Rancher..."
+wait_for_argocd_app rancher 1200
 
 kubectl -n cattle-system rollout status deployment/rancher --timeout=600s
 
