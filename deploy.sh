@@ -19,7 +19,6 @@ set +a
 KUBECONFIG_SOURCE="${KUBECONFIG_SOURCE:-$K3S_DIR/kubeconfig}"
 KUBECONFIG_TARGET="${KUBECONFIG_TARGET:-$HOME/.kube/config}"
 
-CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.21.2}"
 TRAEFIK_CHART_VERSION="${TRAEFIK_CHART_VERSION:-41.7.1}"
 RANCHER_CHART_VERSION="${RANCHER_CHART_VERSION:-2.15.2}"
 LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
@@ -38,7 +37,6 @@ fi
 RANCHER_ADMIN_USER="admin"
 
 TRAEFIK_VALUES="${TRAEFIK_VALUES:-$K3S_DIR/traefik-values.yaml}"
-CLUSTERISSUER_MANIFEST="${CLUSTERISSUER_MANIFEST:-$K3S_DIR/clusterissuer-letsencrypt.yaml}"
 TRAEFIK_DASHBOARD_MANIFEST="${TRAEFIK_DASHBOARD_MANIFEST:-$K3S_DIR/traefik-dashboard.yaml}"
 TRAEFIK_DASHBOARD_CERT_MANIFEST="${TRAEFIK_DASHBOARD_CERT_MANIFEST:-$K3S_DIR/traefik-dashboard-cert.yaml}"
 LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-host-prep.yml}"
@@ -261,6 +259,29 @@ wait_for_argocd_app() {
   return 1
 }
 
+# Installs or upgrades the Argo CD release. Its values ask for ServiceMonitors,
+# which need the monitoring CRDs; on a new cluster those arrive later, so the
+# first call leaves the ServiceMonitors out and a second call adds them.
+install_argocd() {
+  local without_monitors=()
+  if ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    echo "    monitoring CRDs not installed yet: leaving out Argo CD's ServiceMonitors for now"
+    without_monitors=(
+      --set controller.metrics.serviceMonitor.enabled=false
+      --set server.metrics.serviceMonitor.enabled=false
+      --set repoServer.metrics.serviceMonitor.enabled=false
+      --set applicationSet.metrics.serviceMonitor.enabled=false
+    )
+  fi
+  helm upgrade --install argocd argo/argo-cd \
+    --version "$ARGOCD_CHART_VERSION" \
+    --namespace argocd \
+    --create-namespace \
+    --values "$ARGOCD_VALUES" \
+    "${without_monitors[@]}" \
+    --wait --timeout=600s
+}
+
 cd "$K3S_DIR"
 
 PREFLIGHT_ONLY=false
@@ -378,7 +399,6 @@ ENV_FILE="$ENV_FILE" "$K3S_DIR/scripts/prepare-env.sh"
 
 for file in \
   "$TRAEFIK_VALUES" \
-  "$CLUSTERISSUER_MANIFEST" \
   "$TRAEFIK_DASHBOARD_MANIFEST" \
   "$TRAEFIK_DASHBOARD_CERT_MANIFEST" \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
@@ -610,7 +630,6 @@ echo "==> Waiting for all nodes to be Ready..."
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 echo "==> Configuring Helm repositories..."
-helm repo add jetstack https://charts.jetstack.io --force-update
 helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo add rancher-stable https://releases.rancher.com/server-charts/stable --force-update
 helm repo add longhorn https://charts.longhorn.io --force-update
@@ -620,27 +639,83 @@ helm repo add grafana https://grafana.github.io/helm-charts --force-update
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
 
-echo "==> Installing cert-manager ${CERT_MANAGER_CHART_VERSION}..."
-helm upgrade --install cert-manager jetstack/cert-manager \
-  --version "$CERT_MANAGER_CHART_VERSION" \
-  --namespace cert-manager \
-  --create-namespace \
-  --set crds.enabled=true \
-  --wait \
-  --timeout=300s
+# ------------------------------------------------------------------------------
+# GitOps - Argo CD
+# ------------------------------------------------------------------------------
 
-kubectl -n cert-manager rollout status deployment/cert-manager --timeout=180s
-kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s
-kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=180s
-
-echo "==> Creating/updating Cloudflare API token secret..."
-kubectl create secret generic cloudflare-api-token \
-  --from-file=api-token=<(printf '%s' "$CLOUDFLARE_API_TOKEN") \
-  --namespace cert-manager \
+# Argo CD is installed first, because it deploys nearly everything else,
+# cert-manager included. deploy.sh installs the engine; Argo CD then deploys
+# what the Application manifests in apps/argocd/applications describe, from
+# GitHub, not from this working copy. On a new cluster most applications
+# cannot sync yet, because what they need (CRDs, storage, Traefik) is
+# installed further down; each keeps retrying, and this script waits for
+# each one at the point where it must be ready.
+# The repo server mounts this key to decrypt the Secrets in the private
+# configuration repository (KSOPS), so it must exist before the install.
+echo "==> Creating/updating the Argo CD sops key..."
+ensure_namespace argocd
+kubectl create secret generic sops-age \
+  --namespace argocd \
+  --from-file=keys.txt=<(printf '%s\n' "$ARGOCD_SOPS_AGE_KEY") \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "==> Creating ClusterIssuer..."
-apply_manifest "$CLUSTERISSUER_MANIFEST"
+echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
+install_argocd
+
+# Argo CD reads the private configuration repository with a read-only deploy
+# key. The URL must match the one in the Application manifests.
+echo "==> Creating/updating the Argo CD credential for the configuration repository..."
+kubectl create secret generic repo-k3s-homelab-config \
+  --namespace argocd \
+  --from-literal=type=git \
+  --from-literal=url="$ARGOCD_CONFIG_REPO_URL" \
+  --from-file=sshPrivateKey=<(printf '%s' "$ARGOCD_CONFIG_REPO_KEY_B64" | base64 -d) \
+  --dry-run=client -o yaml \
+  | kubectl label --local -f - argocd.argoproj.io/secret-type=repository -o yaml \
+  | kubectl apply -f -
+
+# The website's pods cannot start without this key, so it is in place before
+# Argo CD creates them.
+echo "==> Creating/updating jeffriffle.com git-sync deploy key..."
+ensure_namespace website
+kubectl create secret generic jeffriffle-git \
+  --namespace website \
+  --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==> Handing the Argo CD applications to Argo CD..."
+kubectl apply -f "$ARGOCD_PROJECT"
+echo "    revision: ${ARGOCD_APPS_REVISION}, settings: ${ARGOCD_APPS_CONFIG_PATH:-(top level)}, left out: ${ARGOCD_APPS_DISABLED:-(none)}"
+ARGOCD_APPS_REVISION="$ARGOCD_APPS_REVISION" \
+  ARGOCD_APPS_CONFIG_PATH="$ARGOCD_APPS_CONFIG_PATH" \
+  ARGOCD_APPS_DISABLED="$ARGOCD_APPS_DISABLED" \
+  python3 - "$ARGOCD_ROOT_APP" <<'PYTHON' | kubectl apply -f -
+import os, sys, yaml
+
+root = yaml.safe_load(open(sys.argv[1]))
+revision = os.environ["ARGOCD_APPS_REVISION"]
+config_path = os.environ["ARGOCD_APPS_CONFIG_PATH"]
+disabled = [name for name in os.environ["ARGOCD_APPS_DISABLED"].split(",") if name]
+
+source = root["spec"]["source"]
+source["targetRevision"] = revision
+values = {}
+if revision != "main":
+    values["revision"] = revision
+if config_path:
+    values["config"] = {"path": config_path}
+if disabled:
+    values["disabled"] = disabled
+if values:
+    source["helm"] = {"valuesObject": values}
+print(yaml.safe_dump(root, sort_keys=False))
+PYTHON
+
+# cert-manager, its ClusterIssuer and the Cloudflare API token the issuer
+# uses come from Argo CD (apps/cert-manager, charts/cert-manager-config).
+echo "==> Waiting for Argo CD to deploy cert-manager..."
+wait_for_argocd_app cert-manager 900
+wait_for_argocd_app cert-manager-config 900
 kubectl wait --for=condition=Ready clusterissuer/letsencrypt-prod --timeout=180s
 
 echo "==> Validating Traefik Helm values against chart ${TRAEFIK_CHART_VERSION}..."
@@ -988,28 +1063,13 @@ kubectl -n logging rollout status deployment/alloy --timeout=600s
 echo "==> Logging stack is ready."
 
 # ------------------------------------------------------------------------------
-# GitOps - Argo CD
+# GitOps - Argo CD: full settings and HTTPS route
 # ------------------------------------------------------------------------------
 
-# deploy.sh installs the engine; Argo CD then deploys what the Application
-# manifests in apps/argocd/applications describe, from the main branch on
-# GitHub, not from this working copy.
-# The repo server mounts this key to decrypt the Secrets in the private
-# configuration repository (KSOPS), so it must exist before the install.
-echo "==> Creating/updating the Argo CD sops key..."
-ensure_namespace argocd
-kubectl create secret generic sops-age \
-  --namespace argocd \
-  --from-file=keys.txt=<(printf '%s\n' "$ARGOCD_SOPS_AGE_KEY") \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "==> Installing Argo CD ${ARGOCD_CHART_VERSION}..."
-helm upgrade --install argocd argo/argo-cd \
-  --version "$ARGOCD_CHART_VERSION" \
-  --namespace argocd \
-  --create-namespace \
-  --values "$ARGOCD_VALUES" \
-  --wait --timeout=600s
+# The first install, above, left out Argo CD's ServiceMonitors if the
+# monitoring CRDs did not exist yet. They do now.
+echo "==> Applying Argo CD's full settings..."
+install_argocd
 
 echo "==> Deploying Argo CD HTTPS ingress..."
 apply_manifest "$ARGOCD_INGRESS_MANIFEST"
@@ -1018,54 +1078,6 @@ kubectl -n argocd wait \
   certificate/tls-argocd-ingress \
   --timeout=300s
 
-# Argo CD reads the private configuration repository with a read-only deploy
-# key. The URL must match the one in the Application manifests.
-echo "==> Creating/updating the Argo CD credential for the configuration repository..."
-kubectl create secret generic repo-k3s-homelab-config \
-  --namespace argocd \
-  --from-literal=type=git \
-  --from-literal=url="$ARGOCD_CONFIG_REPO_URL" \
-  --from-file=sshPrivateKey=<(printf '%s' "$ARGOCD_CONFIG_REPO_KEY_B64" | base64 -d) \
-  --dry-run=client -o yaml \
-  | kubectl label --local -f - argocd.argoproj.io/secret-type=repository -o yaml \
-  | kubectl apply -f -
-
-# The website's pods cannot start without this key, so it is in place before
-# Argo CD creates them.
-echo "==> Creating/updating jeffriffle.com git-sync deploy key..."
-ensure_namespace website
-kubectl create secret generic jeffriffle-git \
-  --namespace website \
-  --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "==> Handing the Argo CD applications to Argo CD..."
-kubectl apply -f "$ARGOCD_PROJECT"
-echo "    revision: ${ARGOCD_APPS_REVISION}, settings: ${ARGOCD_APPS_CONFIG_PATH:-(top level)}, left out: ${ARGOCD_APPS_DISABLED:-(none)}"
-ARGOCD_APPS_REVISION="$ARGOCD_APPS_REVISION" \
-  ARGOCD_APPS_CONFIG_PATH="$ARGOCD_APPS_CONFIG_PATH" \
-  ARGOCD_APPS_DISABLED="$ARGOCD_APPS_DISABLED" \
-  python3 - "$ARGOCD_ROOT_APP" <<'PYTHON' | kubectl apply -f -
-import os, sys, yaml
-
-root = yaml.safe_load(open(sys.argv[1]))
-revision = os.environ["ARGOCD_APPS_REVISION"]
-config_path = os.environ["ARGOCD_APPS_CONFIG_PATH"]
-disabled = [name for name in os.environ["ARGOCD_APPS_DISABLED"].split(",") if name]
-
-source = root["spec"]["source"]
-source["targetRevision"] = revision
-values = {}
-if revision != "main":
-    values["revision"] = revision
-if config_path:
-    values["config"] = {"path": config_path}
-if disabled:
-    values["disabled"] = disabled
-if values:
-    source["helm"] = {"valuesObject": values}
-print(yaml.safe_dump(root, sort_keys=False))
-PYTHON
 
 # network-policies is not in this list: it names namespaces that are created
 # further down, and is checked at the end.
