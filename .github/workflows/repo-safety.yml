@@ -28,5 +28,16 @@ jobs:
           ./tests/test-backup-latest-symlink.sh
           ./tests/test-backup-bundle-permissions.sh
           ./tests/test-verify-velero.sh
+      # Argo CD renders these charts from main, so a chart that does not
+      # render must not merge. ci-values.yaml stands in for the settings in
+      # the private configuration repository.
+      - name: Render charts
+        run: |
+          for chart in charts/*/ apps/argocd/applications/; do
+            values=()
+            [[ -f "${chart}ci-values.yaml" ]] && values=(--values "${chart}ci-values.yaml")
+            echo "==> $chart"
+            helm template check "$chart" "${values[@]}" >/dev/null
+          done
       - name: Secret/config scan
         run: ./scripts/scan-secrets.sh
