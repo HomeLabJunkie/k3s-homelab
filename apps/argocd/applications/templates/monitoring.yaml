@@ -1,0 +1,58 @@
+{{- if not (has "monitoring" .Values.disabled) }}
+# kube-prometheus-stack: Prometheus, Alertmanager, Grafana and the operator
+# that runs them. Its four Secrets (Grafana's admin login, its Cloudflare
+# token and Authelia single sign-on settings, and Alertmanager's
+# configuration) come from the private configuration repository. After a
+# change to one of them, restart what reads it; see docs/configuration.md.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  sources:
+    # The chart, at a pinned version, with the values from this repository
+    # and the cluster's own settings from the configuration repository...
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.2.0
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - $values/apps/monitoring/values.yaml
+          - $config/{{ .Values.config.path }}monitoring/values.yaml
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
+    # ...and its Secrets, which KSOPS decrypts from the same repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      path: {{ .Values.config.path }}monitoring
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+      # Server-side apply: these charts carry CRDs too large for the
+      # annotation that client-side apply writes.
+      - ServerSideApply=true
+{{- end }}

@@ -170,6 +170,46 @@ kubectl create secret generic vaultwarden-integrations \
   --from-file=YUBICO_SECRET_KEY=<(printf '%s' "$VAULTWARDEN_YUBICO_SECRET_KEY") \
   --dry-run=client -o yaml >"$WORK/vaultwarden-integrations.yaml"
 
+# --- monitoring: Grafana and Alertmanager --------------------------------------
+
+for var in BASE_DOMAIN GRAFANA_ADMIN_PASSWORD CLOUDFLARE_ANALYTICS_TOKEN; do
+  [[ -n "${!var:-}" ]] || fail "$var is not set"
+done
+grafana_hostname="${GRAFANA_HOSTNAME:-grafana.${BASE_DOMAIN}}"
+authelia_hostname="${AUTHELIA_HOSTNAME:-auth.${BASE_DOMAIN}}"
+
+kubectl create secret generic grafana-admin \
+  --namespace monitoring \
+  --from-literal=admin-user=admin \
+  --from-file=admin-password=<(printf '%s' "$GRAFANA_ADMIN_PASSWORD") \
+  --dry-run=client -o yaml >"$WORK/grafana-admin.yaml"
+
+# Read-only Cloudflare Web Analytics token for Grafana's Infinity data source.
+kubectl create secret generic grafana-cloudflare \
+  --namespace monitoring \
+  --from-file=token=<(printf '%s' "$CLOUDFLARE_ANALYTICS_TOKEN") \
+  --dry-run=client -o yaml >"$WORK/grafana-cloudflare.yaml"
+
+# Single sign-on through Authelia (auth.generic_oauth in
+# apps/monitoring/values.yaml). Grafana reads these as environment variables.
+kubectl create secret generic grafana-oidc \
+  --namespace monitoring \
+  --from-literal=GF_SERVER_ROOT_URL="https://${grafana_hostname}/" \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_AUTH_URL="https://${authelia_hostname}/api/oidc/authorization" \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_TOKEN_URL="https://${authelia_hostname}/api/oidc/token" \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_API_URL="https://${authelia_hostname}/api/oidc/userinfo" \
+  --from-literal=GF_AUTH_SIGNOUT_REDIRECT_URL="https://${authelia_hostname}/logout?rd=https%3A%2F%2F${grafana_hostname}%2F" \
+  --from-file=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=<(printf '%s' "$GRAFANA_OIDC_CLIENT_SECRET") \
+  --dry-run=client -o yaml >"$WORK/grafana-oidc.yaml"
+
+# Alertmanager's whole configuration, which carries the SMTP login.
+"$ROOT_DIR/scripts/render-alertmanager-config.sh" >"$WORK/alertmanager.yaml" ||
+  fail "could not render the Alertmanager configuration"
+kubectl create secret generic alertmanager-smtp \
+  --namespace monitoring \
+  --from-file=alertmanager.yaml="$WORK/alertmanager.yaml" \
+  --dry-run=client -o yaml >"$WORK/alertmanager-smtp.yaml"
+
 # --- compare with the cluster, or write ---------------------------------------
 
 # Prints "<key> <sha256>" for each data key of a Secret manifest on stdin.
@@ -242,6 +282,9 @@ if [[ "$CHECK" == true ]]; then
   check_secret authelia authelia-secrets "$WORK/authelia-secrets.yaml" || status=1
   check_secret vaultwarden vaultwarden-admin "$WORK/vaultwarden-admin.yaml" || status=1
   check_secret vaultwarden vaultwarden-integrations "$WORK/vaultwarden-integrations.yaml" || status=1
+  for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmanager-smtp; do
+    check_secret monitoring "$monitoring_secret" "$WORK/$monitoring_secret.yaml" || status=1
+  done
   exit "$status"
 fi
 
@@ -252,4 +295,8 @@ write_secret "$WORK/authelia-secrets.yaml" "$CONFIG_REPO/${CONFIG_PATH}authelia/
 write_secret "$WORK/vaultwarden-admin.yaml" "$CONFIG_REPO/${CONFIG_PATH}vaultwarden/vaultwarden-admin.enc.yaml"
 write_secret "$WORK/vaultwarden-integrations.yaml" \
   "$CONFIG_REPO/${CONFIG_PATH}vaultwarden/vaultwarden-integrations.enc.yaml"
+for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmanager-smtp; do
+  write_secret "$WORK/$monitoring_secret.yaml" \
+    "$CONFIG_REPO/${CONFIG_PATH}monitoring/$monitoring_secret.enc.yaml"
+done
 echo "Commit and push $CONFIG_REPO for Argo CD to apply any change."
