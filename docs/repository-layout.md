@@ -63,6 +63,7 @@
 │   ├── dr-cleanup.sh
 │   └── dr-rehearsal.sh
 ├── .sops.yaml
+├── renovate.json                   # Chart-update pull requests (Renovate)
 └── .github/                        # workflows/ + dependabot.yml
 ```
 

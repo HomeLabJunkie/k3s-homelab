@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Opens a pull request when a chart that Argo CD deploys has a newer version.",
+    "Only the Argo CD Application files are read: Dependabot already covers pip, GitHub Actions and Docker.",
+    "Nothing merges by itself. Longhorn is not here: deploy.sh installs it and its version is held on purpose."
+  ],
+  "enabledManagers": ["custom.regex"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "America/Chicago",
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+  "dependencyDashboard": true,
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Helm charts: repoURL, chart and targetRevision on consecutive lines",
+      "managerFilePatterns": ["/^apps/argocd/applications/templates/.+\\.yaml$/"],
+      "matchStrings": [
+        "repoURL: (?<registryUrl>https://\\S+)\\n\\s+chart: (?<depName>\\S+)\\n\\s+targetRevision: (?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "The snapshot controller, deployed from a tag of its git repository",
+      "managerFilePatterns": ["/^apps/argocd/applications/templates/snapshot-controller\\.yaml$/"],
+      "matchStrings": [
+        "repoURL: https://github\\.com/(?<depName>kubernetes-csi/external-snapshotter)\\.git\\n\\s+targetRevision: (?<currentValue>v\\S+)"
+      ],
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Kyverno and its policies chart are released together",
+      "matchPackageNames": ["kyverno", "kyverno-policies"],
+      "groupName": "kyverno"
+    },
+    {
+      "description": "Major versions get their own pull request and a label",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major"]
+    }
+  ]
+}
