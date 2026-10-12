@@ -36,7 +36,7 @@ Core platform:
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
 | Security scanning | Trivy Operator |
-| GitOps | Argo CD deploys the applications from git; `deploy.sh` installs the platform under it |
+| GitOps | Argo CD deploys everything from git except the cluster itself and Longhorn, which `deploy.sh` builds |
 | Policy | Kyverno (enforced in the application namespaces, audit elsewhere) |
 | Backup storage | Garage S3 on Unraid plus NFS and SMB on a separate NAS |
 | DR | Dedicated K3s DR host + automated rehearsal tooling |

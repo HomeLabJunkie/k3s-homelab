@@ -168,8 +168,7 @@ a moment before the middlewares, and each one logged
 `middleware "...@kubernetescrd" does not exist` (harmless, since the pod was not
 Ready yet). IngressRoutes and Middlewares load together, so the errors are
 gone. Routes without a middleware (Authelia, Rancher, Vaultwarden, the website)
-are still Ingresses. `deploy.sh` removes the replaced Ingress after applying
-each IngressRoute.
+are still Ingresses.
 
 Chart upgrades and value changes are recorded in the [changelog](CHANGELOG.md).
 
@@ -229,20 +228,36 @@ Persistent application data is intentionally stored on Longhorn so it can be pro
 ## Argo CD
 
 Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) runs in the `argocd` namespace. It
-watches git and makes the cluster match it. `deploy.sh` installs the engine
-from `apps/argocd/values.yaml`; each thing it manages is an `Application`
-resource. The applications have all been handed over. The platform charts
-are moving one stage at a time; until its stage, `deploy.sh` still installs
-a chart with Helm.
+watches git and makes the cluster match it. Each thing it manages is an
+`Application` resource. It deploys every chart and manifest in this
+repository except Longhorn, and that includes its own chart: the `argocd`
+application keeps the installation matching `apps/argocd/values.yaml`.
 
-`deploy.sh` installs Argo CD first, straight after the cluster itself,
-because Argo CD deploys cert-manager and nearly everything after it. On a
-new cluster most applications cannot sync at that moment: the CRDs, storage
-or Traefik they need arrive later in the script. Each one retries for about
-two hours, and the script waits for each at the point where it must be
-ready. Argo CD's ServiceMonitors are left out of that first install, since
-the monitoring CRDs do not exist yet; a second pass adds them once
-monitoring is installed.
+`deploy.sh` builds what has to exist before Argo CD can work, then waits:
+
+1. The cluster itself, with Ansible (K3s, Cilium, kube-vip, MetalLB).
+2. Argo CD, with Helm, only if the cluster has none. It reads the chart
+   version from `apps/argocd/applications/templates/argocd.yaml`, so there is
+   one place to change it. The ServiceMonitors are left out of that install,
+   since the monitoring CRDs do not exist yet; Argo CD adds them itself later.
+3. The three Secrets Argo CD cannot deploy for itself: the key it decrypts
+   with (`sops-age`), its login to the private configuration repository, and
+   the website's deploy key.
+4. The `homelab` project and the `root` Application.
+5. Longhorn, with Helm, and its backup target.
+
+On a new cluster most applications cannot sync at first: the CRDs, storage
+or Traefik they need are not there yet. Each one retries for about two
+hours. `deploy.sh` waits for all of them together, then for every
+certificate, then does the two things that need a running application:
+setting Rancher's admin password and server URL through its API, and
+creating the first Vaultwarden invitation.
+
+On a cluster that already runs Argo CD, `deploy.sh` leaves the installation
+alone. If Argo CD is too broken to repair itself from git (for example after
+a bad change to its own values), fix the values on `main` and run
+`ARGOCD_FORCE_INSTALL=true ./deploy.sh`, which installs the chart with Helm
+again.
 
 | Stage | What moves to Argo CD | State |
 | --- | --- | --- |
@@ -259,7 +274,7 @@ monitoring is installed.
 | 10 | Velero, with the snapshot controller and Longhorn's backup settings | Done 2026-10-12 |
 | 10 | Rancher (its certificate is in `routes`) | Done 2026-10-12 |
 | 11 | Traefik | Done 2026-10-12 |
-| 12 | Argo CD's own chart; `deploy.sh` reduced to a bootstrap | Not started |
+| 12 | Argo CD's own chart (`argocd`); `deploy.sh` reduced to a bootstrap | Done 2026-10-12 |
 
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
 Rancher installs Fleet, another GitOps engine; nothing in this repository
@@ -276,8 +291,10 @@ also reads its domain from the
 and `fb-search` is built entirely from it. `cloudflared` and `authelia` take
 their settings and their Secrets from it.
 
-- To upgrade a chart, change `targetRevision` in its Application file. To
-  change a setting, edit its values file or manifest. Open a pull request;
+- To upgrade a chart, change `targetRevision` in its Application file. That
+  includes Argo CD itself (`argocd.yaml`); its pods restart during that
+  sync and it finishes the job when they are back. To change a setting,
+  edit its values file or manifest. Open a pull request;
   when it merges, Argo CD applies it within about three minutes.
 - Argo CD reads GitHub, not a laptop's working copy. An unmerged edit does
   nothing, and `deploy.sh` no longer installs these components itself.
@@ -295,9 +312,11 @@ kubectl -n argocd get applications
 kubectl -n argocd exec argocd-application-controller-0 -- argocd app diff <name> --core
 ```
 
-The Helm release records for `trivy-operator`, `kyverno` and
-`kyverno-policies` from before the handover still appear in `helm list`.
-Nothing uses them; do not run `helm upgrade` on those releases.
+The Helm release records from before the handovers still appear in
+`helm list` on a cluster that was installed with Helm first. Nothing uses
+them; do not run `helm upgrade` on those releases. The two that are still
+real are `longhorn`, which `deploy.sh` upgrades, and `argocd`, which
+`deploy.sh` installs on a new cluster and `ARGOCD_FORCE_INSTALL=true` reuses.
 
 ### Environments
 

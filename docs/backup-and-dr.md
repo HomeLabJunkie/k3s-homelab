@@ -345,8 +345,8 @@ Two things that cost time on 2026-10-12:
 - Keep the SOCKS proxy in a terminal of its own (without `-f`). If it stops,
   `deploy.sh` fails at whatever step next talks to the cluster.
 - Let's Encrypt can fail one certificate order with an error that is not
-  about this cluster. `deploy.sh` stops there; delete that Certificate and
-  run `./deploy.sh` again without `--bootstrap`. The test environment uses
+  about this cluster. `deploy.sh` retries such a certificate up to three
+  times by itself. The test environment uses
   Let's Encrypt's staging service (`acmeServer` in
   `envs/test/cert-manager/values.yaml`), so a rebuild does not count against
   the five identical certificates a week that the real service allows. Its
