@@ -210,6 +210,16 @@ kubectl create secret generic alertmanager-smtp \
   --from-file=alertmanager.yaml="$WORK/alertmanager.yaml" \
   --dry-run=client -o yaml >"$WORK/alertmanager-smtp.yaml"
 
+# --- website: the read-only deploy key git-sync clones the site with ------------
+
+[[ -n "${WEBSITE_DEPLOY_KEY_B64:-}" ]] || fail "WEBSITE_DEPLOY_KEY_B64 is not set"
+printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d >"$WORK/website-deploy-key" 2>/dev/null ||
+  fail "WEBSITE_DEPLOY_KEY_B64 is not valid base64"
+kubectl create secret generic jeffriffle-git \
+  --namespace website \
+  --from-file=ssh="$WORK/website-deploy-key" \
+  --dry-run=client -o yaml >"$WORK/jeffriffle-git.yaml"
+
 # --- Rancher: the first-login password -----------------------------------------
 
 [[ -n "${RANCHER_BOOTSTRAP_PASSWORD:-}" ]] || fail "RANCHER_BOOTSTRAP_PASSWORD is not set"
@@ -317,6 +327,7 @@ if [[ "$CHECK" == true ]]; then
     check_secret monitoring "$monitoring_secret" "$WORK/$monitoring_secret.yaml" || status=1
   done
   check_secret cattle-system bootstrap-secret "$WORK/bootstrap-secret.yaml" || status=1
+  check_secret website jeffriffle-git "$WORK/jeffriffle-git.yaml" || status=1
   if [[ "$velero_secrets" == true ]]; then
     for velero_secret in velero-garage-credentials velero-repo-credentials; do
       check_secret velero "$velero_secret" "$WORK/$velero_secret.yaml" || status=1
@@ -338,6 +349,7 @@ for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmana
 done
 write_secret "$WORK/bootstrap-secret.yaml" \
   "$CONFIG_REPO/${CONFIG_PATH}rancher/bootstrap-secret.enc.yaml"
+write_secret "$WORK/jeffriffle-git.yaml" "$CONFIG_REPO/${CONFIG_PATH}website/jeffriffle-git.enc.yaml"
 if [[ "$velero_secrets" == true ]]; then
   for velero_secret in velero-garage-credentials velero-repo-credentials; do
     write_secret "$WORK/$velero_secret.yaml" \

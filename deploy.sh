@@ -167,27 +167,6 @@ ensure_namespace() {
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 }
 
-# Wait for a rollout to finish. A deployment that was stuck before this run
-# still carries its old "progress deadline exceeded" status for a moment after
-# it is fixed, and kubectl gives up at once on seeing it; keep waiting until
-# the timeout instead.
-wait_for_rollout() {
-  local ns="$1" name="$2" timeout="$3"
-  local deadline=$((SECONDS + timeout)) output
-  while true; do
-    if output="$(kubectl -n "$ns" rollout status "deployment/$name" \
-        --timeout="$((deadline - SECONDS))s" 2>&1)"; then
-      printf '%s\n' "$output"
-      return 0
-    fi
-    printf '%s\n' "$output"
-    if [[ "$output" != *"exceeded its progress deadline"* ]] || (( SECONDS + 10 >= deadline )); then
-      return 1
-    fi
-    sleep 10
-  done
-}
-
 # Let's Encrypt now and then fails one certificate order at its last step
 # with an error that is not about this cluster ("Certificate not found",
 # "orderNotReady"). cert-manager then waits an hour before trying again,
@@ -706,15 +685,6 @@ kubectl create secret generic repo-k3s-homelab-config \
   | kubectl label --local -f - argocd.argoproj.io/secret-type=repository -o yaml \
   | kubectl apply -f -
 
-# The website's pods cannot start without this key, so it is in place before
-# Argo CD creates them.
-echo "==> Creating/updating jeffriffle.com git-sync deploy key..."
-ensure_namespace website
-kubectl create secret generic jeffriffle-git \
-  --namespace website \
-  --from-file=ssh=<(printf '%s' "$WEBSITE_DEPLOY_KEY_B64" | base64 -d) \
-  --dry-run=client -o yaml | kubectl apply -f -
-
 # Some applications place objects in namespaces that Longhorn's install and
 # other applications create. Argo CD checks a whole application before
 # applying any of it, so a missing namespace would hold back the rest.
@@ -1133,14 +1103,6 @@ esac
 
 cleanup
 PF_PID=""
-
-# The website's deploy key is not in its chart, so roll its pods here when the
-# key changes. Argo CD leaves an annotation it did not set alone.
-WEBSITE_KEY_HASH="$(kubectl -n website get secret jeffriffle-git -o jsonpath='{.data}' | sha256sum | cut -c1-16)"
-kubectl -n website patch deployment jeffriffle --type merge \
-  -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"homelab/deploy-key-hash\":\"${WEBSITE_KEY_HASH}\"}}}}}"
-unset WEBSITE_KEY_HASH
-wait_for_rollout website jeffriffle 300
 
 # The Secrets Argo CD deploys are generated from .secrets.enc. Say so if a
 # value changed there and the generated copy was not refreshed.
