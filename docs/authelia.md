@@ -38,11 +38,12 @@ for every protected route at startup.
   it; a change to its Secret does not, so restart it by hand after one.
 - **Grafana single sign-on:** Authelia is also an OpenID Connect provider with
   one client, `grafana`. Grafana (`auth.generic_oauth` in
-  `monitoring-values.yaml`) redirects straight to Authelia and signs in as the
+  `apps/monitoring/values.yaml`) redirects straight to Authelia and signs in as the
   Authelia user, keyed by email, as a Grafana server admin; only the `admins`
-  group is accepted. `deploy.sh` puts the Authelia URLs, `GF_SERVER_ROOT_URL`
-  and the client secret in the `grafana-oidc` Secret, and maps the Authelia
-  hostname to Traefik on the LAN (`hostAliases`), so Grafana's server-side
+  group is accepted. The Authelia URLs, `GF_SERVER_ROOT_URL`
+  and the client secret are in the `grafana-oidc` Secret, and the Authelia
+  hostname is mapped to Traefik on the LAN (`hostAliases`, in the
+  configuration repository), so Grafana's server-side
   token and userinfo calls never go through Cloudflare. The local `admin`
   login is the break-glass way in: `/login?disableAutoLogin=true` with
   `GRAFANA_ADMIN_PASSWORD`. Signing out of Grafana also signs out of Authelia.

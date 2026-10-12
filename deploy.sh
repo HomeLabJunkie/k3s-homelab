@@ -43,8 +43,6 @@ LONGHORN_HOSTNAME="${LONGHORN_HOSTNAME:-longhorn.${HOSTNAME_DOMAIN}}"
 TRILIUM_HOSTNAME="${TRILIUM_HOSTNAME:-trilium.${HOSTNAME_DOMAIN}}"
 VAULTWARDEN_HOSTNAME="${VAULTWARDEN_HOSTNAME:-vaultwarden.${HOSTNAME_DOMAIN}}"
 AUTHELIA_HOSTNAME="${AUTHELIA_HOSTNAME:-auth.${HOSTNAME_DOMAIN}}"
-KUBE_PROMETHEUS_STACK_VERSION="${KUBE_PROMETHEUS_STACK_VERSION:-92.2.0}"
-MONITORING_VALUES="${MONITORING_VALUES:-$K3S_DIR/monitoring-values.yaml}"
 GRAFANA_HOSTNAME="${GRAFANA_HOSTNAME:-grafana.${HOSTNAME_DOMAIN}}"
 ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.10.2}"
 ARGOCD_VALUES="${ARGOCD_VALUES:-$K3S_DIR/apps/argocd/values.yaml}"
@@ -415,7 +413,6 @@ for file in \
   "$TRAEFIK_VALUES" \
   "$LONGHORN_HOST_PREP_PLAYBOOK" \
   "$LONGHORN_VALUES" \
-  "$MONITORING_VALUES" \
   "$ARGOCD_VALUES" \
   "$ARGOCD_PROJECT" \
   "$ARGOCD_ROOT_APP"
@@ -633,7 +630,6 @@ echo "==> Configuring Helm repositories..."
 helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo add rancher-stable https://releases.rancher.com/server-charts/stable --force-update
 helm repo add longhorn https://charts.longhorn.io --force-update
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update >/dev/null
 
@@ -894,56 +890,11 @@ fi
 # Monitoring - kube-prometheus-stack
 # ------------------------------------------------------------------------------
 
-echo "==> Preparing monitoring namespace and Grafana credentials..."
-ensure_namespace monitoring
-
-kubectl create secret generic grafana-admin \
-  --namespace monitoring \
-  --from-literal=admin-user=admin \
-  --from-file=admin-password=<(printf '%s' "$GRAFANA_ADMIN_PASSWORD") \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# Read-only Cloudflare Web Analytics token for Grafana's Infinity data source
-kubectl create secret generic grafana-cloudflare \
-  --namespace monitoring \
-  --from-file=token=<(printf '%s' "$CLOUDFLARE_ANALYTICS_TOKEN") \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# Single sign-on through Authelia (see auth.generic_oauth in monitoring-values.yaml).
-# Grafana reads these as environment variables; the hash below restarts it when
-# they change, since envFrom is only read at start-up.
-kubectl create secret generic grafana-oidc \
-  --namespace monitoring \
-  --from-literal=GF_SERVER_ROOT_URL="https://${GRAFANA_HOSTNAME}/" \
-  --from-literal=GF_AUTH_GENERIC_OAUTH_AUTH_URL="https://${AUTHELIA_HOSTNAME}/api/oidc/authorization" \
-  --from-literal=GF_AUTH_GENERIC_OAUTH_TOKEN_URL="https://${AUTHELIA_HOSTNAME}/api/oidc/token" \
-  --from-literal=GF_AUTH_GENERIC_OAUTH_API_URL="https://${AUTHELIA_HOSTNAME}/api/oidc/userinfo" \
-  --from-literal=GF_AUTH_SIGNOUT_REDIRECT_URL="https://${AUTHELIA_HOSTNAME}/logout?rd=https%3A%2F%2F${GRAFANA_HOSTNAME}%2F" \
-  --from-file=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=<(printf '%s' "$GRAFANA_OIDC_CLIENT_SECRET") \
-  --dry-run=client -o yaml | kubectl apply -f -
-GRAFANA_OIDC_HASH="$(
-  kubectl -n monitoring get secret grafana-oidc -o jsonpath='{.data}' | sha256sum | cut -c1-16
-)"
-
-echo "==> Configuring Alertmanager SMTP delivery..."
-kubectl create secret generic alertmanager-smtp \
-  --namespace monitoring \
-  --from-file=alertmanager.yaml=<("$K3S_DIR/scripts/render-alertmanager-config.sh") \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "==> Installing kube-prometheus-stack ${KUBE_PROMETHEUS_STACK_VERSION}..."
-# hostAliases sends Grafana's server-side OIDC calls (token, userinfo) for the
-# Authelia hostname straight to Traefik on the LAN instead of out through
-# Cloudflare, whose bot check can reject non-browser clients.
-helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
-  --version "$KUBE_PROMETHEUS_STACK_VERSION" \
-  --namespace monitoring \
-  --create-namespace \
-  --values "$MONITORING_VALUES" \
-  --set-string "grafana.podAnnotations.homelab/oidc-config-hash=${GRAFANA_OIDC_HASH}" \
-  --set-json "grafana.hostAliases=[{\"ip\":\"${CLOUDFLARE_ORIGIN_IP}\",\"hostnames\":[\"${AUTHELIA_HOSTNAME}\"]}]" \
-  --wait \
-  --timeout=900s
+# Argo CD deploys kube-prometheus-stack (apps/monitoring) and the Secrets it
+# reads, which scripts/render-argocd-secrets.sh writes to the private
+# configuration repository. Its volumes need Longhorn, which exists by now.
+echo "==> Waiting for Argo CD to deploy kube-prometheus-stack..."
+wait_for_argocd_app monitoring 1800
 
 remove_replaced_ingress monitoring grafana
 remove_replaced_ingress monitoring prometheus

@@ -1,3 +1,8 @@
+# Argo CD installs kube-prometheus-stack with this file and with
+# monitoring/values.yaml from the private configuration repository, which
+# adds what differs per cluster (where Grafana finds Authelia). The chart
+# version is in apps/argocd/applications/templates/monitoring.yaml.
+
 grafana:
   enabled: true
   defaultDashboardsEnabled: true

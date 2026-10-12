@@ -84,6 +84,8 @@ there.
 
 | `cert-manager/values.yaml` (`adminEmail`, optional `acmeServer`) | The `cert-manager-config` application (`charts/cert-manager-config`) |
 | `cert-manager/cloudflare-api-token.enc.yaml` | The Cloudflare API token cert-manager proves domain ownership with, encrypted |
+| `monitoring/values.yaml` | Added to `apps/monitoring/values.yaml` for the `monitoring` application: where Grafana finds Authelia |
+| `monitoring/*.enc.yaml` | The four monitoring Secrets, encrypted |
 | `routes/values.yaml` (`domain`) | The `routes` application (`charts/routes`) |
 | `monitoring-extras/values.yaml` (`cloudflareAccountId`) | The `monitoring-extras` application (`charts/monitoring-extras`) |
 | `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |
@@ -122,7 +124,9 @@ laptop.
 
 ## Changing a secret Argo CD deploys
 
-The Cloudflare API token for certificates, the tunnel token, Authelia's Secret (admin login, session and storage keys,
+The Cloudflare API token for certificates, the tunnel token, the four
+monitoring Secrets (Grafana's admin login, Cloudflare analytics token and
+single sign-on settings; Alertmanager's configuration), Authelia's Secret (admin login, session and storage keys,
 SMTP login, Duo and OIDC credentials) and Vaultwarden's two Secrets (admin
 token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.enc` is still where their values are set:
 
@@ -135,6 +139,8 @@ token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.e
 4. Restart what reads it, for example
    `kubectl -n authelia rollout restart deployment/authelia`. The same works
    for `cloudflared` and `vaultwarden`, each in the namespace of its name.
+   For the monitoring Secrets, restart `deployment/monitoring-grafana` in
+   `monitoring`; Alertmanager reloads its configuration by itself.
 
 `scripts/render-argocd-secrets.sh --check` compares what it would write with
 the Secrets in the cluster, key by key, and prints only `same` or
