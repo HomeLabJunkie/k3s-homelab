@@ -19,7 +19,7 @@ spec:
     # and the cluster's own settings from the configuration repository...
     - repoURL: https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      targetRevision: 92.2.0
+      targetRevision: 92.3.1
       helm:
         releaseName: monitoring
         valueFiles:
