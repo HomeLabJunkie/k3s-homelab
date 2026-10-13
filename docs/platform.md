@@ -227,7 +227,7 @@ Persistent application data is intentionally stored on Longhorn so it can be pro
 
 ## Argo CD
 
-Argo CD (chart `10.10.2`, Argo CD `v3.5.4`) runs in the `argocd` namespace. It
+Argo CD (chart `10.10.3`, Argo CD `v3.5.5`) runs in the `argocd` namespace. It
 watches git and makes the cluster match it. Each thing it manages is an
 `Application` resource. It deploys every chart and manifest in this
 repository except Longhorn, and that includes its own chart: the `argocd`
@@ -330,8 +330,11 @@ the upgrade: Argo CD applies it within about three minutes, so read the
 chart's release notes first. Longhorn is not covered; its version is in
 `deploy.sh` and held on purpose.
 
-It works only while the Renovate GitHub app is installed on the repository
-(github.com/apps/renovate). Its "Dependency Dashboard" issue lists what it
+It works only while the Renovate GitHub app has access to the repository
+(github.com/apps/renovate) and "Silent mode" is off for it in Mend's portal
+(developer.mend.io, the repository's Settings, Dependencies). The account's
+default there is silent, which shows results only in the portal and creates
+nothing on GitHub; this repository overrides it, with "Automated PRs" on. Its "Dependency Dashboard" issue lists what it
 found and what is waiting.
 
 ### Environments

@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: Argo CD upgraded itself to 3.5.5
+
+Renovate was given access to the repository and opened its Dependency
+Dashboard (issue #143) and its first pull request, chart `argo-cd` `10.10.2`
+to `10.10.3` (Argo CD `v3.5.4` to `v3.5.5`, bug fixes only; the two chart
+versions render the same apart from the image tag). Merging it was the first
+upgrade of Argo CD through its own `argocd` application: every Argo CD pod
+was replaced and the application was Synced and Healthy again 63 seconds
+after the merge. All 25 applications stayed healthy, the three applications
+with encrypted Secrets rendered again after the repo server restarted, and
+the `admin` login was not touched.
+
 ## 2026-10-12: Argo CD deploys the website's deploy key
 
 The `jeffriffle-git` Secret, which git-sync clones the site with, moved to
