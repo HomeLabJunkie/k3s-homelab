@@ -18,7 +18,7 @@ spec:
     # and the cluster's own settings from the configuration repository...
     - repoURL: https://vmware-tanzu.github.io/helm-charts
       chart: velero
-      targetRevision: 12.2.0
+      targetRevision: 12.2.1
       helm:
         releaseName: velero
         valueFiles:
