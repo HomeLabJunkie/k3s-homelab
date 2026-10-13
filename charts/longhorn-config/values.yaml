@@ -5,3 +5,8 @@ backupTargetURL: ""
 # The Secret in longhorn-system holding the share's login (CIFS_USERNAME and
 # CIFS_PASSWORD). The application deploys it from the same repository.
 credentialSecret: longhorn-backup-cifs
+# How often Longhorn checks the target and refreshes its list of backups.
+# Set here because on a new cluster Argo CD can create the target before
+# Longhorn does, and a target created without this never checks itself: it
+# goes on reporting "available" whatever the address is.
+pollInterval: 5m0s
