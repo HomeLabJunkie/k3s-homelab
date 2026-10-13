@@ -299,6 +299,7 @@ install_argocd() {
     --namespace argocd \
     --create-namespace \
     --values "$ARGOCD_VALUES" \
+    --set-string global.domain="$ARGOCD_HOSTNAME" \
     "${without_monitors[@]}" \
     --wait --timeout=600s
 }
