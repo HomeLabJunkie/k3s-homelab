@@ -37,6 +37,16 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: grafana-cilium
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  cilium.json: {{ .Files.Get "dashboards/cilium.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: grafana-jeffriffle-website
   namespace: monitoring
   labels:
