@@ -339,7 +339,8 @@ spec:
   containers:
     - name: curl
       image: curlimages/curl:8.22.0
-      command: ["curl", "--connect-timeout", "10", "--max-time", "30", "-fsS", "${url}"]
+      # The page itself is discarded: only an error is worth showing.
+      command: ["curl", "--connect-timeout", "10", "--max-time", "30", "-fsS", "-o", "/dev/null", "${url}"]
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true
