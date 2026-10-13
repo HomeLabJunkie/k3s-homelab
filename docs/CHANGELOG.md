@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Four chart updates through Renovate
+
+Alloy `1.13.1`, Loki `18.15.1`, kube-prometheus-stack `92.3.1` and Velero
+`12.2.1`, each a Renovate pull request merged on its own with production
+checked in between. The first three were applied to the test cluster
+together beforehand, from a branch. Afterwards on production: 26
+applications Synced and Healthy, 90 of 90 Prometheus targets up, 152 alert
+rules, logs arriving in Loki, and the disposable Velero backup and restore
+test passed on the new chart.
+
 ## 2026-10-13: The forced Argo CD install works
 
 `ARGOCD_FORCE_INSTALL=true ./deploy.sh` had never been run, and failed on
