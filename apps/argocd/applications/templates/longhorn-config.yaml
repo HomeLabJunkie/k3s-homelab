@@ -1,0 +1,51 @@
+{{- if not (has "longhorn-config" .Values.disabled) }}
+# Where Longhorn sends volume backups, and the login for that share. Longhorn
+# itself is installed by deploy.sh; this application cannot sync until its
+# CRDs exist.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn-config
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+  sources:
+    # The chart, from this repository...
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      path: charts/longhorn-config
+      helm:
+        releaseName: longhorn-config
+        valueFiles:
+          - $config/{{ .Values.config.path }}longhorn/values.yaml
+    # ...its settings, from the private configuration repository...
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
+    # ...and the share's login, which KSOPS decrypts from the same repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      path: {{ .Values.config.path }}longhorn
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It never deletes: removing something from git leaves it in the
+    # cluster, marked out of sync, until it is deleted by hand.
+    automated:
+      selfHeal: true
+      prune: false
+    # Keep trying if a sync fails because something it needs is not there
+    # yet: on a new cluster, Longhorn's CRDs.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      # Server-side apply: Longhorn writes to the same object, and each side
+      # keeps the fields it set.
+      - ServerSideApply=true
+{{- end }}

@@ -1,0 +1,15 @@
+# Longhorn creates the "default" backup target, empty, when it is installed.
+# This fills it in. Only these two fields are set here; Longhorn keeps the
+# rest (the poll interval, and a timestamp it rewrites on every sync).
+#
+# Changing the address switches every volume's backups to the new share at
+# once. Check the new share is reachable from a node before changing it:
+# nothing here tests it first.
+apiVersion: longhorn.io/v1beta2
+kind: BackupTarget
+metadata:
+  name: default
+  namespace: longhorn-system
+spec:
+  backupTargetURL: {{ required "backupTargetURL is required" .Values.backupTargetURL | quote }}
+  credentialSecret: {{ required "credentialSecret is required" .Values.credentialSecret | quote }}
