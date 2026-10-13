@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Argo CD knows its own address
+
+Logging out of Argo CD landed on `argocd.example.com`, the chart's
+placeholder: nothing had ever set `global.domain`. It now comes from
+`argocd/values.yaml` in the private configuration repository, generated from
+`config/cluster.env` like the other settings files, and `deploy.sh` passes
+the same address when it installs Argo CD on a new cluster.
+
 ## 2026-10-12: One place for settings; Longhorn's backup target in Argo CD
 
 `scripts/render-argocd-values.sh` now generates every `values.yaml` in the

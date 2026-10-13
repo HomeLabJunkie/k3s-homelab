@@ -73,6 +73,14 @@ render() {
   cat >"$WORK/$1/values.yaml"
 }
 
+argocd_hostname="${ARGOCD_HOSTNAME:-argocd.${BASE_DOMAIN}}"
+{ header "Added to apps/argocd/values.yaml for the argocd application."
+  echo "global:"
+  # Argo CD's own address. It sends the browser here after logging out, and
+  # builds the links it shows from it.
+  echo "  domain: $(quoted "$argocd_hostname")"
+} | render argocd
+
 { header "Read by the authelia application (charts/authelia)."
   echo "domain: $domain"
   echo "adminEmail: $admin_email"

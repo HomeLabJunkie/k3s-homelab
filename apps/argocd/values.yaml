@@ -4,7 +4,9 @@
 #
 # deploy.sh installs this release, because something has to exist before Argo
 # CD can manage anything. It holds no hostnames or secrets, so it is the same
-# on any cluster.
+# on any cluster. Argo CD's own address (global.domain) is added from
+# argocd/values.yaml in the private configuration repository; without it the
+# chart's placeholder, argocd.example.com, is where logging out lands.
 
 configs:
   params:

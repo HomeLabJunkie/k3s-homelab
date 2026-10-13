@@ -22,10 +22,15 @@ spec:
         releaseName: argocd
         valueFiles:
           - $values/apps/argocd/values.yaml
-    # ...and its values, from this repository.
+          - $config/{{ .Values.config.path }}argocd/values.yaml
+    # ...its values, from this repository...
     - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
       targetRevision: {{ .Values.revision }}
       ref: values
+    # ...and its own address, from the configuration repository.
+    - repoURL: git@github.com:HomeLabJunkie/k3s-homelab-config.git
+      targetRevision: {{ .Values.config.revision }}
+      ref: config
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
     # manages. It never deletes: removing something from git leaves it in the
