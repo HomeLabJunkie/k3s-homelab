@@ -6,6 +6,28 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-12: One place for settings; Longhorn's backup target in Argo CD
+
+`scripts/render-argocd-values.sh` now generates every `values.yaml` in the
+private configuration repository from `config/cluster.env`, so a setting is
+changed in one place instead of two. Generated for production and for the
+test cluster, the files held the same settings as the hand-written ones.
+The test cluster's `cluster.env` is kept in that repository as
+`envs/test/cluster.env`. See
+[the private configuration repository](configuration.md#the-private-configuration-repository).
+
+Where Longhorn sends volume backups became the `longhorn-config` application
+(`charts/longhorn-config`): the `default` BackupTarget, and the login for the
+CIFS share as an encrypted Secret. On production the comparison showed only
+ownership annotations and the target stayed available. `deploy.sh` (1,185 to
+1,138 lines) no longer creates that Secret or sets the target; it waits for
+the target to be available. It also no longer tests a changed address with a
+temporary second target before switching: check a new share is reachable
+before changing `BACKUP_NAS_IP` or `LONGHORN_BACKUP_SHARE`.
+
+The disposable Velero test (`scripts/test-velero-backup.sh`) passed the same
+day, the first backup and restore since Argo CD took over Velero.
+
 ## 2026-10-12: Argo CD upgraded itself to 3.5.5
 
 Renovate was given access to the repository and opened its Dependency
