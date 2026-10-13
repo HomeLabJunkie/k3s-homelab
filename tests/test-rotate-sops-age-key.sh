@@ -45,6 +45,11 @@ printf 'EXAMPLE=value\n' >"$TEST_ROOT/plain"
 # shellcheck disable=SC2094 # the override is a name; nothing is read from it
 sops --config "$repo/.sops.yaml" --encrypt --input-type binary --output-type binary \
   --filename-override "$repo/.secrets.enc" "$TEST_ROOT/plain" >"$repo/.secrets.enc"
+# The test cluster's secrets file sits beside it, encrypted to the same key.
+# shellcheck disable=SC2094 # the override is a name; nothing is read from it
+sops --config "$repo/.sops.yaml" --encrypt --input-type binary --output-type binary \
+  --filename-override "$repo/.secrets.test.enc" "$TEST_ROOT/plain" >"$repo/.secrets.test.enc"
+test_recipients() { jq -r '.sops.age[].recipient' "$repo/.secrets.test.enc"; }
 
 # A stand-in for the configuration repository, with somewhere to push to.
 git init --quiet --bare "$TEST_ROOT/config.git"
@@ -83,6 +88,7 @@ sed -i "s/$old_pub/$new_pub/" "$repo/.sops.yaml"
 if rotate; then fail "rotation ran with the old key still in the configuration repository"; fi
 grep -q "still names the key being retired" "$TEST_ROOT/output" || fail "no explanation for the refusal"
 [[ "$(recipients)" == "$old_pub" ]] || fail ".secrets.enc changed on a refused run"
+[[ "$(test_recipients)" == "$old_pub" ]] || fail ".secrets.test.enc changed on a refused run"
 [[ -z "$(git -C "$config" status --porcelain)" ]] || fail "configuration repository changed on a refused run"
 
 # Named in both: everything is re-encrypted and pushed.
@@ -102,6 +108,9 @@ if (cd "$config" && SOPS_AGE_KEY_FILE="$TEST_ROOT/old.key" sops --decrypt app/ex
 fi
 SOPS_AGE_KEY_FILE="$TEST_ROOT/new.key" sops --decrypt "$repo/.secrets.enc" | grep -q "EXAMPLE=value" ||
   fail ".secrets.enc does not decrypt with the new key alone"
+[[ "$(test_recipients)" == "$new_pub" ]] || fail ".secrets.test.enc is not encrypted to the new key"
+SOPS_AGE_KEY_FILE="$TEST_ROOT/new.key" sops --decrypt "$repo/.secrets.test.enc" | grep -q "EXAMPLE=value" ||
+  fail ".secrets.test.enc does not decrypt with the new key alone"
 for stub in backup.sh test-secrets-recovery.sh dr-notify.sh; do
   [[ -e "$TEST_ROOT/ran-$stub" ]] || fail "$stub was not run"
 done
