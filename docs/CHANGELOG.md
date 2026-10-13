@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: The lint copy of the repository no longer holds private files
+
+`ansible-lint` installs this repository as a collection under
+`.ansible/collections` whenever it runs on a laptop. With an empty
+`build_ignore` in `galaxy.yml` that copy included `.secrets.enc`,
+`config/cluster.env`, the inventory, logs, and the `.venv` and `.ansible`
+folders themselves. `build_ignore` now lists them; the built archive went
+from over 100 MB to under 1 MB and holds none of them. The stale copies
+found on both laptops were deleted.
+
 ## 2026-10-13: Laptop age key replaced
 
 `scripts/rotate-sops-age-key.sh` ran against the real laptop key for the
