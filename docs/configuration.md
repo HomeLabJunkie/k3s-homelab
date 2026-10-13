@@ -184,7 +184,8 @@ and in the private one. Both forms commit and push the private repository.
 file beside the old one, and put its public key in `.sops.yaml` here and in
 the private repository in place of the old one. Then run the script with no
 arguments. It refuses to start if the two `.sops.yaml` files disagree,
-re-encrypts the private repository's Secrets and `.secrets.enc`, publishes a
+re-encrypts the private repository's Secrets, `.secrets.enc` and any other
+`.secrets*.enc` file beside it (the test cluster's), publishes a
 recovery bundle, runs the secrets recovery test, and sends a reminder to
 update the key's record in Bitwarden. Argo CD is not affected: its own key
 has not changed.

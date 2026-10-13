@@ -73,7 +73,7 @@ publish_config_repo() {
 }
 
 rotate_laptop_key() {
-  local before after detail key
+  local before after detail key other
   local -a wanted=()
   before="$(mktemp)"; after="$(mktemp)"; detail="$(mktemp)"
   # shellcheck disable=SC2064 # expand the names now
@@ -102,6 +102,16 @@ rotate_laptop_key() {
   echo "==> Re-encrypting the configuration repository's Secrets..."
   rekey_config_repo
   publish_config_repo "Re-encrypt for the new laptop age key"
+
+  # Other secrets files kept beside .secrets.enc (the test cluster's) are
+  # encrypted to the same key. They go before it for the same reason.
+  for other in "$ROOT_DIR"/.secrets*.enc; do
+    [[ -f "$other" && ! "$other" -ef "$SECRETS_FILE" ]] || continue
+    (cd "$ROOT_DIR" && sops updatekeys --yes "$other" >/dev/null 2>&1) ||
+      fail "sops could not re-encrypt $other"
+    sops --decrypt "$other" >/dev/null || fail "$other no longer decrypts"
+    echo "==> Re-encrypted $(basename "$other")."
+  done
 
   # sops looks for .sops.yaml from the working directory, not beside the file.
   (cd "$ROOT_DIR" && sops updatekeys --yes "$SECRETS_FILE")
