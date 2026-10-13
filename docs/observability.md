@@ -26,9 +26,20 @@ cloudflared. These feed the Traefik (per-app requests, 5xx rate, p95 latency)
 and Certificates (days until expiry) dashboards. Vaultwarden and Trilium
 have no metrics endpoint of their own, so Traefik's per-service
 metrics are their traffic view. The Cilium agents serve metrics on port 9962
-of each node (`cilium_agent_metrics` in the inventory's `group_vars/all.yml`,
-applied by `deploy.sh`), scraped by the `cilium-agent` PodMonitor. Changing
-that setting restarts the agents two nodes at a time.
+of each node, scraped by the `cilium-agent` PodMonitor. A new cluster gets
+this from `cilium_agent_metrics` in the inventory's `group_vars/all.yml`. On a
+running cluster `deploy.sh` does not touch Cilium, so a changed Cilium
+setting is applied with Helm, keeping the other values, and the agents
+restart two nodes at a time:
+
+```bash
+helm upgrade cilium cilium --repo https://helm.cilium.io --version 1.20.2 \
+  -n kube-system --reuse-values --set prometheus.enabled=true
+```
+
+Do not use `cilium upgrade` without `k8sServiceHost` and `k8sServicePort`: it
+takes them from the kubeconfig and would change the port from 6444 to 6443,
+which the worker nodes do not listen on.
 
 The log panels on the homelab dashboards filter on Loki's `detected_level`
 rather than matching the word "error" in the line text, so INFO lines that
@@ -47,6 +58,12 @@ The "Homelab - Backups (Velero)" dashboard
 last good backup, the last result, whether the storage is reachable, results
 and duration per day, volume uploads, and restores, where the Sunday restore
 canary appears as one success a week.
+
+The "Homelab - Network (Cilium)" dashboard
+(`charts/monitoring-extras/dashboards/cilium.json`) shows agents up,
+unreachable nodes, pods on the network, traffic forwarded and packets dropped
+by reason and by node, how many pods a network policy covers, how full
+Cilium's kernel tables are, and each agent's errors and memory.
 
 Certificate alerts (`homelab.certificate.rules` in
 `charts/monitoring-extras/manifests/monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
