@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: First real promotion and rollback of a restored volume
+
+`recovery/restore.sh --promote-app trilium` and `--rollback-app trilium` ran
+on production for the first time. The latest Longhorn backup was restored
+into `trilium-restore-test`; the promotion paused the Argo CD application,
+switched the Deployment to the restored volume in 36 seconds and passed its
+health check; Trilium was then used through its public address on the
+restored data. The rollback returned it to the original volume in 29 seconds
+and resumed the Argo CD application, which reported Synced and Healthy. The
+health check no longer prints the page it fetches.
+
 ## 2026-10-13: Nine applications delete what is removed from git
 
 Pruning is on for the applications that hold only configuration: `routes`,
