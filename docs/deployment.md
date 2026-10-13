@@ -155,6 +155,15 @@ ansible-core to the supported 2.21.x series. The `ANSIBLE_CORE_*` bounds in
 `config/toolchain.env` are kept in lockstep with that constraint by
 `scripts/check-requirements-toolchain-sync.sh`, which runs in CI.
 
+The pinned versions are installed in the repository's own `.venv`, not on
+the laptop as a whole. Put it first on `PATH` before running `deploy.sh`, or
+the guard stops at the operating system's older Ansible:
+
+```bash
+export PATH="$PWD/.venv/bin:$PATH"
+./deploy.sh --preflight-only
+```
+
 ### Automatic Ansible dependency bootstrap
 
 `deploy.sh` verifies the project-local Ansible collections before running any Ansible playbook. Exact versions are declared in `collections/requirements.yml` and installed under `.ansible/collections/`, which remains ignored by Git. Missing or mismatched dependencies are installed automatically with `ansible-galaxy`; matching dependencies are left untouched.
