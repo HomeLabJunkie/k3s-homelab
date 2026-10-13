@@ -144,6 +144,23 @@ Afterwards remove the container, volume, network and the files in `$W`.
 
 Application data is backed up through Longhorn to the configured SMB/CIFS backup target. Cluster recovery bundles use the same NAS through its NFSv3 export.
 
+To move the backups to another share, change `BACKUP_NAS_IP` or
+`LONGHORN_BACKUP_SHARE` in `config/cluster.env`, run
+`scripts/render-argocd-values.sh`, and push the configuration repository.
+Argo CD applies the new address within about three minutes and every
+volume's backups switch to it at once. Nothing tests the address first.
+Longhorn checks the target every five minutes; with a wrong address the
+target turns unavailable at the next check and backups fail until then.
+Afterwards, confirm it and take one backup:
+
+```bash
+kubectl -n longhorn-system get backuptargets.longhorn.io default \
+  -o jsonpath='{.status.available}{"\n"}'
+```
+
+Backups already on the old share stay there; Longhorn lists only what is on
+the share it currently points at.
+
 The current DR process requires every protected Longhorn PVC to have a fresh
 completed backup within the configured DR freshness threshold.
 

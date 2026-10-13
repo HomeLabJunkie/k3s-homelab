@@ -1,10 +1,11 @@
 # Longhorn creates the "default" backup target, empty, when it is installed.
-# This fills it in. Only these two fields are set here; Longhorn keeps the
-# rest (the poll interval, and a timestamp it rewrites on every sync).
+# This fills it in. Longhorn keeps the one field not set here, a timestamp
+# it rewrites on every sync.
 #
 # Changing the address switches every volume's backups to the new share at
-# once. Check the new share is reachable from a node before changing it:
-# nothing here tests it first.
+# once, and nothing here tests it first. Longhorn notices a bad address at
+# its next check, up to one poll interval later, and reports the target
+# unavailable; until then backups to it fail.
 apiVersion: longhorn.io/v1beta2
 kind: BackupTarget
 metadata:
@@ -13,3 +14,4 @@ metadata:
 spec:
   backupTargetURL: {{ required "backupTargetURL is required" .Values.backupTargetURL | quote }}
   credentialSecret: {{ required "credentialSecret is required" .Values.credentialSecret | quote }}
+  pollInterval: {{ .Values.pollInterval | quote }}
