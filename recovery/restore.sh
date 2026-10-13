@@ -707,6 +707,24 @@ argocd_app_for_deployment() {
 # Stop Argo CD reconciling one application, so it neither scales the workload
 # back up nor points it at the original volume again. The annotation survives
 # the root application's self-heal, which only restores what is in git.
+# The Argo CD application managing what scale_stateful_app changes: the
+# operator resource (Prometheus, Alertmanager) or the StatefulSet itself.
+# Prints nothing when Argo CD does not manage it.
+argocd_app_for_stateful() {
+  local app="$1" ns="$2" sts="$3" parent kind name tracking
+  if parent="$(operator_parent_for_app "$app" 2>/dev/null)"; then
+    kind="${parent%%|*}"
+    name="${parent##*|}"
+  else
+    kind=statefulset
+    name="$sts"
+  fi
+  tracking="$(kubectl -n "$ns" get "$kind" "$name" \
+    -o jsonpath='{.metadata.annotations.argocd\.argoproj\.io/tracking-id}' 2>/dev/null || true)"
+  [[ -n "$tracking" ]] && printf '%s\n' "${tracking%%:*}"
+  return 0
+}
+
 argocd_pause() {
   local argo_app="$1"
   [[ -n "$argo_app" ]] || return 0
@@ -1179,7 +1197,7 @@ promote_stateful_app() {
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; exit 1; }
 
   local ns pvc kind sts service restore_vol inspect_pod original_pv original_volume
-  local replicas cap sc lh_replicas promoted_pv stamp state_dir template_name
+  local replicas cap sc lh_replicas promoted_pv stamp state_dir template_name argo_app
 
   ns="$(app_field "$app" 2)"
   pvc="$(app_field "$app" 3)"
@@ -1259,6 +1277,12 @@ EOF
   kubectl -n "$ns" delete pvc "$restore_vol" --ignore-not-found
   kubectl delete pv "${restore_vol}-pv" --ignore-not-found
 
+  # Argo CD would put the replica count back within seconds (self-heal) and
+  # start the pod in the middle of the volume swap. It is paused until the
+  # workload is running again; a failure in between leaves it paused.
+  argo_app="$(argocd_app_for_stateful "$app" "$ns" "$sts")"
+  argocd_pause "$argo_app"
+
   scale_stateful_app "$app" "$ns" "$sts" 0
   wait_statefulset_scaled_zero "$ns" "$sts"
   wait_longhorn_detached "$original_volume"
@@ -1283,6 +1307,9 @@ EOF
   kubectl -n "$ns" rollout status statefulset/"$sts" --timeout=300s
 
   sed -i 's/^STATUS=.*/STATUS=promoted/' "$state_dir/state.env"
+  # The claim keeps its name and the replica count is back, so the workload
+  # matches git again and Argo CD can carry on.
+  argocd_resume "$argo_app"
 
   echo
   echo "==> StatefulSet promotion completed."
@@ -1323,6 +1350,10 @@ rollback_stateful_app() {
     exit 1
   }
 
+  local argo_app
+  argo_app="$(argocd_app_for_stateful "$APP" "$NAMESPACE" "$WORKLOAD")"
+  argocd_pause "$argo_app"
+
   scale_stateful_app "$APP" "$NAMESPACE" "$WORKLOAD" 0
   wait_statefulset_scaled_zero "$NAMESPACE" "$WORKLOAD"
   wait_longhorn_detached "$RESTORED_VOLUME"
@@ -1343,6 +1374,7 @@ rollback_stateful_app() {
 
   scale_stateful_app "$APP" "$NAMESPACE" "$WORKLOAD" "$ORIGINAL_REPLICAS"
   kubectl -n "$NAMESPACE" rollout status statefulset/"$WORKLOAD" --timeout=300s
+  argocd_resume "$argo_app"
 
   sed -i 's/^STATUS=.*/STATUS=rolled_back/' "$dir/state.env"
   echo "ROLLED_BACK_AT=$(date -Iseconds)" >> "$dir/state.env"
