@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Laptop age key replaced
+
+`scripts/rotate-sops-age-key.sh` ran against the real laptop key for the
+first time: `.sops.yaml` here and in the configuration repository name the
+new public key, all 27 Secrets there and both secrets files here were
+re-encrypted, and each opens with the new key alone and not with the old
+one. A recovery bundle was published and the secrets recovery test passed.
+Before the run the script would have left `.secrets.test.enc`, the test
+cluster's secrets file, encrypted to the old key; it now re-encrypts every
+`.secrets*.enc` file beside `.secrets.enc`.
+
 ## 2026-10-13: Backup address change proven; the target checks itself again
 
 On the test cluster the Longhorn backup address was changed through
