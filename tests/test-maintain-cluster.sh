@@ -51,6 +51,7 @@ assert_case() {
 
   set +e
   PATH="$MOCK_BIN:$PATH" \
+  USE_PROJECT_VENV=false \
     ROOT_DIR="$FIXTURE_ROOT" \
     INVENTORY="$FIXTURE_ROOT/inventory/hosts.ini" \
     NODE_SCRIPT="$TEST_ROOT/mock-maintain-node.sh" \

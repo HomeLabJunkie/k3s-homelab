@@ -188,6 +188,7 @@ run_case() {
 
   set +e
   PATH="$MOCK_BIN:$PATH" \
+  USE_PROJECT_VENV=false \
     ROOT_DIR="$FIXTURE_ROOT" \
     MOCK_STATE_DIR="$STATE_DIR" \
     MOCK_TARGET="$TARGET" \
