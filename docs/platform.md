@@ -257,7 +257,9 @@ On a cluster that already runs Argo CD, `deploy.sh` leaves the installation
 alone. If Argo CD is too broken to repair itself from git (for example after
 a bad change to its own values), fix the values on `main` and run
 `ARGOCD_FORCE_INSTALL=true ./deploy.sh`, which installs the chart with Helm
-again.
+again. Helm takes over the objects Argo CD created and the fields it last
+wrote; Argo CD still reports itself Synced afterwards, because both apply
+the same chart and values.
 
 | Stage | What moves to Argo CD | State |
 | --- | --- | --- |
