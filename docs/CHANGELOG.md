@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Backup address change proven; the target checks itself again
+
+On the test cluster the Longhorn backup address was changed through
+`config/cluster.env`, the settings script and the configuration repository:
+Argo CD applied it, a backup landed on the new share, and changing it back
+restored the earlier backups to Longhorn's list. A wrong address showed a
+fault: the test cluster's target had a poll interval of `0s`, because Argo
+CD had created it before Longhorn did, so it never checked itself and went
+on reporting "available" while backups failed. `charts/longhorn-config` now
+sets `pollInterval` to `5m0s`; with it, the wrong address was reported
+unavailable within five minutes. Production already had `5m0s`.
+
 ## 2026-10-13: StatefulSet promotion proven; it now pauses Argo CD
 
 `recovery/restore.sh --promote-app alertmanager` and `--rollback-app
