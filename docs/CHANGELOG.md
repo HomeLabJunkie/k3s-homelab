@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: The key rotation test runs in CI
+
+`tests/test-rotate-sops-age-key.sh` skipped on GitHub because sops and age
+were not installed there. The `repo-safety` workflow now installs both (sops
+pinned by version and checksum), and the test fails instead of skipping when
+a tool is missing in CI. Production's Argo CD key was rotated the same day
+with `scripts/rotate-sops-age-key.sh --argocd`: 26 applications Synced and
+Healthy on the new key alone.
+
 ## 2026-10-13: Four chart updates through Renovate
 
 Alloy `1.13.1`, Loki `18.15.1`, kube-prometheus-stack `92.3.1` and Velero
