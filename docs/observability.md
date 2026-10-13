@@ -25,8 +25,10 @@ Cilium operator and Envoy proxies, kube-vip, Loki, loki-canary, Alloy and
 cloudflared. These feed the Traefik (per-app requests, 5xx rate, p95 latency)
 and Certificates (days until expiry) dashboards. Vaultwarden and Trilium
 have no metrics endpoint of their own, so Traefik's per-service
-metrics are their traffic view. The Cilium agent does not serve metrics because
-`prometheus-serve-addr` is unset in `cilium-config`.
+metrics are their traffic view. The Cilium agents serve metrics on port 9962
+of each node (`cilium_agent_metrics` in the inventory's `group_vars/all.yml`,
+applied by `deploy.sh`), scraped by the `cilium-agent` PodMonitor. Changing
+that setting restarts the agents two nodes at a time.
 
 The log panels on the homelab dashboards filter on Loki's `detected_level`
 rather than matching the word "error" in the line text, so INFO lines that
@@ -39,6 +41,12 @@ application with its sync, health and auto-sync state, both over time, syncs
 per hour by application, and how long Argo CD takes to compare with Git. The
 sync counts start again when the application controller restarts, so the
 24-hour totals can read low after one.
+
+The "Homelab - Backups (Velero)" dashboard
+(`charts/monitoring-extras/dashboards/velero.json`) shows the hours since the
+last good backup, the last result, whether the storage is reachable, results
+and duration per day, volume uploads, and restores, where the Sunday restore
+canary appears as one success a week.
 
 Certificate alerts (`homelab.certificate.rules` in
 `charts/monitoring-extras/manifests/monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14

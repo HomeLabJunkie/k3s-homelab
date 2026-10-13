@@ -88,6 +88,11 @@ argument_specs:
         type: bool
         default: true
 
+      cilium_agent_metrics:
+        description: Have the Cilium agents serve Prometheus metrics on port 9962
+        type: bool
+        default: true
+
       cilium_iface:
         description: The network interface used for when Cilium is enabled
         default: ~

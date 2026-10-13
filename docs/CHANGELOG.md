@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Cilium agent metrics on; a Grafana dashboard for Velero
+
+The Cilium agents now serve Prometheus metrics (`cilium_agent_metrics`,
+default on), and a `cilium-agent` PodMonitor scrapes them. The Ansible role
+used to change Cilium only when its version changed; it now also compares the
+agents' metrics address with the setting, so `deploy.sh` applies this without
+a version bump. "Homelab - Backups (Velero)" joins the dashboards: backup
+age, results, duration, volume uploads and restores.
+
 ## 2026-10-13: A Grafana dashboard for Argo CD
 
 "Homelab - Argo CD (GitOps)" joins the dashboards in

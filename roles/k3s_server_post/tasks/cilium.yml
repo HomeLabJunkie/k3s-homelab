@@ -153,16 +153,31 @@
                 | default('unknown')
               }}
 
+        # A changed setting does not change the version, so the agents'
+        # metrics address is compared with what is wanted as well.
+        - name: Check whether the Cilium agents serve metrics
+          ansible.builtin.command: >-
+            {{ k3s_kubectl_binary | default('k3s kubectl') }} -n kube-system get configmap cilium-config
+            -o jsonpath={.data.prometheus-serve-addr}
+          register: cilium_metrics_addr
+          failed_when: false
+          changed_when: false
+
         - name: Determine if Cilium needs update
           ansible.builtin.set_fact:
             cilium_needs_update: >-
-              {{ 'v' + installed_cilium_version != cilium_tag }}
+              {{
+                'v' + installed_cilium_version != cilium_tag
+                or (cilium_agent_metrics | bool) != (cilium_metrics_addr.stdout | default('') | length > 0)
+              }}
 
         - name: Log result
           ansible.builtin.debug:
             msg: >
               Installed Cilium version: {{ installed_cilium_version }},
               Target Cilium version: {{ cilium_tag }},
+              Agent metrics on: {{ cilium_metrics_addr.stdout | default('') | length > 0 }},
+              wanted: {{ cilium_agent_metrics }},
               Update needed: {{ cilium_needs_update }}
 
     - name: Install Cilium
@@ -189,6 +204,7 @@
         --helm-set hubble.enabled={{ "true" if cilium_hubble else "false" }}
         --helm-set hubble.relay.enabled={{ "true" if cilium_hubble else "false" }}
         --helm-set hubble.ui.enabled={{ "true" if cilium_hubble else "false" }}
+        --helm-set prometheus.enabled={{ "true" if cilium_agent_metrics else "false" }}
         {% if kube_proxy_replacement is not false %}
         --helm-set bpf.loadBalancer.algorithm={{ bpf_lb_algorithm }}
         --helm-set bpf.loadBalancer.mode={{ bpf_lb_mode }}

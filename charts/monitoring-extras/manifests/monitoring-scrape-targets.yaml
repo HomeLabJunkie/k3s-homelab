@@ -105,6 +105,21 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
+  name: cilium-agent
+  namespace: kube-system
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  podMetricsEndpoints:
+    - port: prometheus
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
   name: cilium-operator
   namespace: kube-system
   labels:

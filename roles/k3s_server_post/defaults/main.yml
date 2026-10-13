@@ -19,6 +19,7 @@ cilium_bgp_neighbors: []
 cilium_bgp_neighbors_groups: ['k3s_all']
 cilium_bgp_lb_cidr: 192.168.31.0/24
 cilium_hubble: true
+cilium_agent_metrics: true
 cilium_mode: native
 
 cluster_cidr: 10.42.0.0/16
