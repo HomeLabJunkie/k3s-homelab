@@ -32,6 +32,14 @@ The log panels on the homelab dashboards filter on Loki's `detected_level`
 rather than matching the word "error" in the line text, so INFO lines that
 mention error fields no longer appear.
 
+The "Homelab - Argo CD (GitOps)" dashboard
+(`charts/monitoring-extras/dashboards/argocd.json`) shows what Argo CD is
+doing: how many applications are out of sync or not healthy, a row per
+application with its sync, health and auto-sync state, both over time, syncs
+per hour by application, and how long Argo CD takes to compare with Git. The
+sync counts start again when the application controller restarts, so the
+24-hour totals can read low after one.
+
 Certificate alerts (`homelab.certificate.rules` in
 `charts/monitoring-extras/manifests/monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
 days left, a critical under 7 days, a warning when one stays not Ready for an

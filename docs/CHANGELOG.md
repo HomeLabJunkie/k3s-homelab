@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: A Grafana dashboard for Argo CD
+
+"Homelab - Argo CD (GitOps)" joins the dashboards in
+`charts/monitoring-extras`: applications out of sync or not healthy, a table
+of all applications, sync and health over time, syncs per hour and Argo CD's
+own timings and memory. It uses the metrics Argo CD's ServiceMonitors
+already supplied.
+
 ## 2026-10-13: The lint copy of the repository no longer holds private files
 
 `ansible-lint` installs this repository as a collection under
