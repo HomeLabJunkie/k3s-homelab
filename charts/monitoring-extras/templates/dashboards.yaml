@@ -27,6 +27,16 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: grafana-velero
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  velero.json: {{ .Files.Get "dashboards/velero.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: grafana-jeffriffle-website
   namespace: monitoring
   labels:
