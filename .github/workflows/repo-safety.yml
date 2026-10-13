@@ -17,6 +17,19 @@ jobs:
         run: find . -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
       - name: Toolchain policy sync
         run: ./scripts/check-requirements-toolchain-sync.sh
+      # tests/test-rotate-sops-age-key.sh needs both. sops is pinned by
+      # version and checksum; age comes from the runner's package archive.
+      - name: Install sops and age
+        env:
+          SOPS_VERSION: v3.13.3
+          SOPS_SHA256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          curl -fsSL -o /tmp/sops \
+            "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          echo "${SOPS_SHA256}  /tmp/sops" | sha256sum --check --quiet
+          sudo install -m 0755 /tmp/sops /usr/local/bin/sops
       - name: Maintenance safety tests
         run: |
           ./tests/test-maintain-node-validation.sh

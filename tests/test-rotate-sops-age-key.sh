@@ -6,7 +6,11 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 for command in sops age-keygen git jq; do
-  command -v "$command" >/dev/null 2>&1 || { echo "SKIP: $command is not installed"; exit 0; }
+  command -v "$command" >/dev/null 2>&1 && continue
+  # A missing tool skips the test on a laptop, but not in CI, where a skip
+  # would go unnoticed.
+  if [[ -n "${CI:-}" ]]; then echo "FAIL: $command is not installed" >&2; exit 1; fi
+  echo "SKIP: $command is not installed"; exit 0
 done
 
 TEST_ROOT="$(mktemp -d)"
