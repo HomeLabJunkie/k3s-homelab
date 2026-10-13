@@ -24,11 +24,12 @@ spec:
       ref: values
   syncPolicy:
     # Apply changes from git by itself and undo manual edits to what it
-    # manages. It never deletes: removing something from git leaves it in the
-    # cluster, marked out of sync, until it is deleted by hand.
+    # manages. It also deletes: something removed from git is removed from
+    # the cluster. This application holds only configuration, nothing with
+    # data and no CRDs, so a leftover is the greater risk.
     automated:
       selfHeal: true
-      prune: false
+      prune: true
     # Keep trying if a sync fails because something it needs is not there
     # yet, such as a namespace or a CRD another application creates.
     retry:
@@ -38,6 +39,9 @@ spec:
         factor: 2
         maxDuration: 5m
     syncOptions:
+      # Delete what was removed from git only after everything else in the
+      # sync has been applied and is healthy.
+      - PruneLast=true
       - CreateNamespace=true
       # Server-side apply: these charts carry CRDs too large for the
       # annotation that client-side apply writes.

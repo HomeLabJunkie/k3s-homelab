@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Nine applications delete what is removed from git
+
+Pruning is on for the applications that hold only configuration: `routes`,
+`network-policies`, `monitoring-extras`, `kyverno-policies`,
+`kyverno-custom-policies`, `backup-config`, `cert-manager-config`,
+`cloudflared` and `website`. The other seventeen keep `prune: false`; see
+[Working with Argo CD](platform.md#argo-cd) for the reasons.
+
 ## 2026-10-13: The key rotation test runs in CI
 
 `tests/test-rotate-sops-age-key.sh` skipped on GitHub because sops and age

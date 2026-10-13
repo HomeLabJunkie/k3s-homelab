@@ -307,8 +307,27 @@ their settings and their Secrets from it.
   three Helm-chart applications use server-side apply, which the charts'
   large CRDs require; there, a value another tool adds to a list can survive
   beside Argo CD's own.
-- Argo CD never deletes (`prune: false`). Removing a file from git leaves the
-  resource in the cluster, shown as out of sync, until it is deleted by hand.
+- Whether Argo CD deletes what is removed from git depends on the
+  application:
+
+  | Deletes (`prune: true`) | Never deletes (`prune: false`) |
+  |---|---|
+  | `routes`, `network-policies`, `monitoring-extras`, `kyverno-policies`, `kyverno-custom-policies`, `backup-config`, `cert-manager-config`, `cloudflared`, `website` | everything else |
+
+  The first group holds only configuration: routes, policies, dashboards,
+  alert rules, backup jobs. There a leftover is the risk, such as a removed
+  route that keeps a service reachable or a removed alert that keeps firing.
+  Deleting waits until the rest of the change is applied and healthy.
+
+  The second group keeps `prune: false` for one of three reasons. It holds
+  data (`authelia`, `trilium`, `vaultwarden`, `fb-search`: a volume claim or
+  the namespace itself could be deleted). Or it is someone else's chart that
+  carries CRDs (`cert-manager`, `kyverno`, `monitoring`, `traefik`, `velero`
+  and the rest): a chart upgrade that drops a CRD would delete every object
+  of that kind. Or deleting would be drastic (`root`, which owns the other
+  applications; `argocd` itself; `longhorn-config`, the backup target).
+  There, removing a file from git leaves the resource in the cluster, shown
+  as out of sync, until it is deleted by hand.
 
 ```bash
 kubectl -n argocd get applications
