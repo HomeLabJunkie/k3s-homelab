@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Full deploy.sh run on production
+
+The first run on production since `deploy.sh` became a bootstrap: exit 0 in
+161 seconds. Ansible changed nothing on any of the six nodes and restarted
+no K3s service; the Longhorn Helm step re-applied chart `1.12.1` with no pod
+restarted and all volumes healthy; Argo CD's install was skipped; the Rancher
+password step and the Vaultwarden invitation found their work already done;
+the settings and Secrets comparisons reported every item the same. All 26
+applications stayed Synced and Healthy.
+
 ## 2026-10-13: First real promotion and rollback of a restored volume
 
 `recovery/restore.sh --promote-app trilium` and `--rollback-app trilium` ran
