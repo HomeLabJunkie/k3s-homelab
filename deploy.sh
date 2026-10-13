@@ -283,6 +283,11 @@ wait_for_all_argocd_apps() {
 # ServiceMonitors, which need the monitoring CRDs; a new cluster does not have
 # those yet, so they are left out here and Argo CD adds them itself once the
 # monitoring application has installed the CRDs.
+#
+# With ARGOCD_FORCE_INSTALL=true this runs over an installation Argo CD has
+# been managing. Helm then meets objects Argo CD created (those
+# ServiceMonitors) and fields Argo CD last wrote, and refuses both unless
+# told to take them over, which the last two options do.
 install_argocd() {
   local without_monitors=()
   if ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
@@ -301,6 +306,7 @@ install_argocd() {
     --values "$ARGOCD_VALUES" \
     --set-string global.domain="$ARGOCD_HOSTNAME" \
     "${without_monitors[@]}" \
+    --take-ownership --force-conflicts \
     --wait --timeout=600s
 }
 

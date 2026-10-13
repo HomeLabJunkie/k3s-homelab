@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: The forced Argo CD install works
+
+`ARGOCD_FORCE_INSTALL=true ./deploy.sh` had never been run, and failed on
+its first try on the test cluster: Helm refused the ServiceMonitors that
+Argo CD had created itself. The Helm step now takes ownership of what is
+there (`--take-ownership --force-conflicts`). On the test cluster it then
+passed twice, once over a healthy Argo CD and once after its server and
+repository server were deleted; all 24 applications stayed Synced and
+Healthy.
+
 ## 2026-10-13: Key rotation covers the configuration repository
 
 `scripts/rotate-sops-age-key.sh` re-encrypted only `.secrets.enc`, so after a
