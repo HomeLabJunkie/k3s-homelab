@@ -411,7 +411,13 @@ setting the `argocd.argoproj.io/skip-reconcile` annotation, so nothing puts
 the old volume back. `--rollback-app` removes the annotation once the
 Deployment matches git again.
 
-After a promotion that is kept, the application stays paused, because the
+For an app that runs as a StatefulSet (Prometheus, Alertmanager, Loki) the
+script pauses the application only while it swaps the volume. The claim
+keeps its name, so the workload matches git again as soon as it is running
+and the application is resumed at the end of both `--promote-app` and
+`--rollback-app`. A failure in between leaves it paused.
+
+After a Deployment's promotion that is kept, the application stays paused, because the
 Deployment uses the `APP-restore-test` volume and git names the original. Argo
 CD ignores the application until the annotation is removed, and its status
 there goes stale. To see or clear a pause:

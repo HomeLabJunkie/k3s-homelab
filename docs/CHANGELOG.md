@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: StatefulSet promotion proven; it now pauses Argo CD
+
+`recovery/restore.sh --promote-app alertmanager` and `--rollback-app
+alertmanager` ran on production: 51 and 41 seconds, health checks passed,
+Alertmanager held the Watchdog alert again on the restored volume and on the
+original. Before the run, the StatefulSet path did not pause Argo CD, whose
+self-heal would have put the replica count back in the middle of the volume
+swap; it now pauses the owning application for the swap and resumes it
+afterwards. The same day `ARGOCD_FORCE_INSTALL=true ./deploy.sh` ran on
+production (exit 0, Helm revision 5, no Argo CD pod restarted, 26
+applications Synced and Healthy).
+
 ## 2026-10-13: Scripts use the repository's Ansible by themselves
 
 `deploy.sh` stopped at its toolchain guard on production because the
