@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Key rotation covers the configuration repository
+
+`scripts/rotate-sops-age-key.sh` re-encrypted only `.secrets.enc`, so after a
+laptop key rotation the Secrets Argo CD deploys would still have been
+encrypted to the old key. It now re-encrypts and pushes the private
+configuration repository as well, and refuses to start if the two
+`.sops.yaml` files disagree. A new form, `--argocd`, replaces Argo CD's own
+key: see [Replacing an age key](configuration.md#replacing-an-age-key).
+`tests/test-rotate-sops-age-key.sh` covers the laptop form with throwaway
+keys.
+
 ## 2026-10-13: Argo CD knows its own address
 
 Logging out of Argo CD landed on `argocd.example.com`, the chart's

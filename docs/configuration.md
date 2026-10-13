@@ -174,12 +174,42 @@ token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.e
 the Secrets in the cluster, key by key, and prints only `same` or
 `DIFFERENT`. `deploy.sh` runs it at the end and warns on a difference.
 
-If the laptop's age key is rotated (`scripts/rotate-sops-age-key.sh`), put
-the new public key in the private repository's `.sops.yaml` and run
-`sops updatekeys` on each `.enc.yaml` file there. To replace Argo CD's own
-key, generate one with `age-keygen`, set `ARGOCD_SOPS_AGE_KEY`, put its
-public key in that `.sops.yaml`, run `sops updatekeys` on the same files,
-and run `deploy.sh`.
+### Replacing an age key
+
+`scripts/rotate-sops-age-key.sh` replaces either of the two keys and
+re-encrypts everything that was encrypted to the old one, in this repository
+and in the private one. Both forms commit and push the private repository.
+
+**The laptop key.** Generate a key with `age-keygen`, add it to the sops key
+file beside the old one, and put its public key in `.sops.yaml` here and in
+the private repository in place of the old one. Then run the script with no
+arguments. It refuses to start if the two `.sops.yaml` files disagree,
+re-encrypts the private repository's Secrets and `.secrets.enc`, publishes a
+recovery bundle, runs the secrets recovery test, and sends a reminder to
+update the key's record in Bitwarden. Argo CD is not affected: its own key
+has not changed.
+
+**Argo CD's key.** Run `scripts/rotate-sops-age-key.sh --argocd` with
+`kubectl` pointed at the cluster. It generates the new key itself and:
+
+1. checks that the cluster holds the key in `.secrets.enc` and that every
+   application is Synced and Healthy;
+2. gives Argo CD both keys, so it can decrypt whichever commit it is looking
+   at;
+3. puts the new public key in the private repository's `.sops.yaml`,
+   re-encrypts the Secrets, checks each decrypts with the new key alone, and
+   pushes;
+4. stores the new key in `.secrets.enc` as `ARGOCD_SOPS_AGE_KEY`;
+5. takes the old key away from Argo CD, has it render every application
+   again, and waits until all are Synced and Healthy on the pushed commit;
+6. publishes a recovery bundle, because an older one restores a key that
+   opens nothing any more.
+
+A failure before the push in step 3 puts everything back as it was. On a
+test cluster, set `SKIP_RECOVERY_BACKUP=true`; the script also updates the
+copy of that cluster's key in `envs/test/argocd-sops-age-key.enc.yaml`.
+Afterwards copy `.secrets.enc` to the other laptop (`k3s-sync push`) and pull
+the private repository there.
 
 ## K3s cluster token
 
