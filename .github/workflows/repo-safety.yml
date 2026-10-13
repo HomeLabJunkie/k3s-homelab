@@ -27,6 +27,7 @@ jobs:
           ./tests/test-alertmanager-config.sh
           ./tests/test-backup-latest-symlink.sh
           ./tests/test-backup-bundle-permissions.sh
+          ./tests/test-rotate-sops-age-key.sh
           ./tests/test-verify-velero.sh
       # Argo CD renders these charts from main, so a chart that does not
       # render must not merge. ci-values.yaml stands in for the settings in
