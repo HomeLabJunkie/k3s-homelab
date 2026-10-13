@@ -178,12 +178,12 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Outside access | Cloudflare Tunnel (cloudflared) | 2 copies |
 | Storage | Longhorn | 1.12.1 |
 | Management | Rancher | 2.15.2 |
-| Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 92.2.0 |
-| Logging | Loki + Alloy | chart 18.14.0 / 1.13.0 |
+| Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 92.3.1 |
+| Logging | Loki + Alloy | chart 18.15.1 / 1.13.1 |
 | Security scanning | Trivy Operator | chart 0.37.0 |
 | Policy | Kyverno | chart 3.9.1 |
 | GitOps | Argo CD | chart 10.10.3 |
-| Second backup | Velero → Garage | chart 12.2.0 |
+| Second backup | Velero → Garage | chart 12.2.1 |
 
 ---
 
