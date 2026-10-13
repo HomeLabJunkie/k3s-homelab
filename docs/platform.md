@@ -243,7 +243,8 @@ application keeps the installation matching `apps/argocd/values.yaml`.
 3. The two Secrets Argo CD cannot deploy for itself: the key it decrypts
    with (`sops-age`) and its login to the private configuration repository.
 4. The `homelab` project and the `root` Application.
-5. Longhorn, with Helm, and its backup target.
+5. Longhorn, with Helm. Where it sends backups is set by Argo CD (the
+   `longhorn-config` application).
 
 On a new cluster most applications cannot sync at first: the CRDs, storage
 or Traefik they need are not there yet. Each one retries for about two
@@ -274,6 +275,7 @@ again.
 | 10 | Rancher (its certificate is in `routes`) | Done 2026-10-12 |
 | 11 | Traefik | Done 2026-10-12 |
 | 12 | Argo CD's own chart (`argocd`); `deploy.sh` reduced to a bootstrap | Done 2026-10-12 |
+| 13 | The website's deploy key; Longhorn's backup target and its login (`longhorn-config`) | Done 2026-10-12 |
 
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
 Rancher installs Fleet, another GitOps engine; nothing in this repository

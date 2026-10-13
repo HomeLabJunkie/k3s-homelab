@@ -220,6 +220,19 @@ kubectl create secret generic jeffriffle-git \
   --from-file=ssh="$WORK/website-deploy-key" \
   --dry-run=client -o yaml >"$WORK/jeffriffle-git.yaml"
 
+# --- Longhorn: the login for the backup share ----------------------------------
+
+for var in LONGHORN_CIFS_USERNAME LONGHORN_CIFS_PASSWORD; do
+  [[ -n "${!var:-}" ]] || fail "$var is not set"
+done
+# The Secret's name; the same one charts/longhorn-config points Longhorn at.
+backup_login_name="${LONGHORN_BACKUP_CREDENTIAL_SECRET:-longhorn-backup-cifs}"
+kubectl create secret generic "$backup_login_name" \
+  --namespace longhorn-system \
+  --from-file=CIFS_USERNAME=<(printf '%s' "$LONGHORN_CIFS_USERNAME") \
+  --from-file=CIFS_PASSWORD=<(printf '%s' "$LONGHORN_CIFS_PASSWORD") \
+  --dry-run=client -o yaml >"$WORK/longhorn-backup-credentials.yaml"
+
 # --- Rancher: the first-login password -----------------------------------------
 
 [[ -n "${RANCHER_BOOTSTRAP_PASSWORD:-}" ]] || fail "RANCHER_BOOTSTRAP_PASSWORD is not set"
@@ -328,6 +341,7 @@ if [[ "$CHECK" == true ]]; then
   done
   check_secret cattle-system bootstrap-secret "$WORK/bootstrap-secret.yaml" || status=1
   check_secret website jeffriffle-git "$WORK/jeffriffle-git.yaml" || status=1
+  check_secret longhorn-system "$backup_login_name" "$WORK/longhorn-backup-credentials.yaml" || status=1
   if [[ "$velero_secrets" == true ]]; then
     for velero_secret in velero-garage-credentials velero-repo-credentials; do
       check_secret velero "$velero_secret" "$WORK/$velero_secret.yaml" || status=1
@@ -350,6 +364,8 @@ done
 write_secret "$WORK/bootstrap-secret.yaml" \
   "$CONFIG_REPO/${CONFIG_PATH}rancher/bootstrap-secret.enc.yaml"
 write_secret "$WORK/jeffriffle-git.yaml" "$CONFIG_REPO/${CONFIG_PATH}website/jeffriffle-git.enc.yaml"
+write_secret "$WORK/longhorn-backup-credentials.yaml" \
+  "$CONFIG_REPO/${CONFIG_PATH}longhorn/backup-credentials.enc.yaml"
 if [[ "$velero_secrets" == true ]]; then
   for velero_secret in velero-garage-credentials velero-repo-credentials; do
     write_secret "$WORK/$velero_secret.yaml" \

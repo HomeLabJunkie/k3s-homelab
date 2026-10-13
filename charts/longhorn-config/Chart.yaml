@@ -1,0 +1,8 @@
+# A local chart, not published anywhere. Argo CD renders it (the
+# `longhorn-config` application) with settings from the private configuration
+# repository. Longhorn itself is installed by deploy.sh.
+apiVersion: v2
+name: longhorn-config
+description: Where Longhorn sends volume backups
+type: application
+version: 1.0.0

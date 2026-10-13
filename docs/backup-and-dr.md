@@ -293,25 +293,24 @@ separate clone with its own settings and secrets:
 1. Clone the repository somewhere private, for example
    `~/.local/state/k3s-homelab/deploy-test/repo`, and copy `.ansible/` into
    it from the normal checkout.
-2. Write its `config/cluster.env` from production's, replacing every
-   address: `KUBE_VIP=10.90.0.50`, `K3S_NODE_0` to `K3S_NODE_5` as
-   `10.90.0.11` to `.13` and `.21` to `.23`,
-   `METALLB_IP_RANGE=10.90.0.100-10.90.0.120`,
-   `CLOUDFLARE_ORIGIN_IP=10.90.0.100`, `BACKUP_NAS_IP=10.90.0.8`, and an
-   `UNRAID_IP` that nothing answers on. Set `BASE_DOMAIN` to a separate test
-   domain and `CLOUDFLARE_TUNNEL_ID` to a separate test tunnel. Add the three
-   lines that keep Argo CD away from production's settings:
+2. Copy `envs/test/cluster.env` from the configuration repository to the
+   clone's `config/cluster.env`. It is production's file with every address
+   replaced by one on the sealed test network, a separate test domain, an
+   `UNRAID_IP` that nothing answers on, Let's Encrypt's staging service, and
+   the three lines that keep Argo CD away from production's settings:
 
    ```text
    ARGOCD_APPS_REVISION=main
    ARGOCD_APPS_CONFIG_PATH=envs/test/
-   ARGOCD_APPS_DISABLED=fb-search
+   ARGOCD_APPS_DISABLED=fb-search,velero
    ```
 
    Without `ARGOCD_APPS_CONFIG_PATH`, Argo CD on the test cluster would
    deploy production's Secrets, including the production tunnel token, and
    the test cluster would start serving the real sites. To test a branch,
-   put its name in `ARGOCD_APPS_REVISION`.
+   put its name in `ARGOCD_APPS_REVISION`. After changing the file, run
+   `ENV_FILE=<that file> scripts/render-argocd-values.sh` to regenerate the
+   settings under `envs/test/`.
 3. Give it its own `.secrets.enc` with a new `K3S_TOKEN`, the test tunnel's
    token, a Cloudflare API token scoped to the test zone only, and
    `LONGHORN_CIFS_USERNAME` and `LONGHORN_CIFS_PASSWORD` both set to

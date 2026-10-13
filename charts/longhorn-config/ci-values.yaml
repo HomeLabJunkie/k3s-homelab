@@ -1,0 +1,3 @@
+# Placeholder settings, used only by scripts/validate-manifests.sh to render
+# the chart for checking.
+backupTargetURL: cifs://192.0.2.8/backup/longhorn?cifsOptions=vers%3D3.0

@@ -93,6 +93,7 @@ there.
 | `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |
 | `cloudflared/tunnel-token.enc.yaml` | The tunnel token, encrypted |
 | `authelia/values.yaml` (`domain`, `adminEmail`) | The `authelia` application (`charts/authelia`) |
+| `longhorn/values.yaml`, `longhorn/backup-credentials.enc.yaml` | The `longhorn-config` application (`charts/longhorn-config`): the address of the share Longhorn backs volumes up to, and its login, encrypted |
 | `authelia/authelia-secrets.enc.yaml` | Authelia's Secret, encrypted |
 | `trilium/values.yaml` (`domain`) | The `trilium` application (`charts/trilium`) |
 | `vaultwarden/values.yaml` (`domain`, `adminEmail`) | The `vaultwarden` application (`charts/vaultwarden`) |
@@ -118,17 +119,38 @@ Put `base64 -w0 < /dev/shm/argocd-config-key` in `.secrets.enc` as
 `ARGOCD_CONFIG_REPO_KEY_B64`, run `deploy.sh`, then delete the key files and
 the old deploy key on GitHub.
 
-The domain, admin email and Traefik address are therefore set in two places:
-`config/cluster.env`, for everything `deploy.sh` still deploys, and the
-`values.yaml` files in the private repository. Keep them the same. A rebuild needs both
-repositories; the private one is on GitHub and cloned beside this one on each
-laptop.
+Those `values.yaml` files are generated, not edited.
+`config/cluster.env` is the one place a setting is changed:
+
+1. Change the value in `config/cluster.env`.
+2. Run `scripts/render-argocd-values.sh`. It rewrites the `values.yaml`
+   files in the private repository whose content changed.
+3. Commit and push the private repository. Argo CD applies the change
+   within about three minutes.
+
+`scripts/render-argocd-values.sh --check` compares what it would write with
+the files there now and prints `same` or `DIFFERENT` for each. `deploy.sh`
+runs it at the end and warns on a difference.
+
+| Setting in `config/cluster.env` | Goes to |
+| --- | --- |
+| `BASE_DOMAIN` | `domain` for authelia, routes, trilium, vaultwarden and website; Rancher's hostname; the Authelia hostname Grafana is pointed at |
+| `ADMIN_EMAIL` | `adminEmail` for authelia, cert-manager and vaultwarden |
+| `CLOUDFLARE_ORIGIN_IP` | cloudflared's `originIP`; the address Grafana uses for Authelia |
+| `CLOUDFLARE_ACCOUNT_ID` | monitoring-extras |
+| `BACKUP_NAS_IP`, `LONGHORN_BACKUP_SHARE`, `LONGHORN_BACKUP_CREDENTIAL_SECRET` | Longhorn's backup target (`longhorn/values.yaml`) |
+| `UNRAID_IP` | Velero's backup store address |
+| `ACME_SERVER` (optional) | A different certificate authority address; the test cluster sets Let's Encrypt's staging service |
+
+A rebuild needs both repositories; the private one is on GitHub and cloned
+beside this one on each laptop.
 
 ## Changing a secret Argo CD deploys
 
 The Cloudflare API token for certificates, the tunnel token, the four
 monitoring Secrets (Grafana's admin login, Cloudflare analytics token and
-single sign-on settings; Alertmanager's configuration), Authelia's Secret (admin login, session and storage keys,
+single sign-on settings; Alertmanager's configuration), the login for
+Longhorn's backup share, the website's deploy key, Authelia's Secret (admin login, session and storage keys,
 SMTP login, Duo and OIDC credentials) and Vaultwarden's two Secrets (admin
 token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.enc` is still where their values are set:
 
@@ -143,7 +165,9 @@ token; SMTP login and Yubico key) reach the cluster through Argo CD. `.secrets.e
    for `cloudflared` and `vaultwarden`, each in the namespace of its name.
    For the monitoring Secrets, restart `deployment/monitoring-grafana` in
    `monitoring`; Alertmanager reloads its configuration by itself. For the
-   website's deploy key, restart `deployment/jeffriffle` in `website`.
+   website's deploy key, restart `deployment/jeffriffle` in `website`. Longhorn
+   reads the backup share's login again at its next check of the target,
+   within five minutes.
 
 `scripts/render-argocd-secrets.sh --check` compares what it would write with
 the Secrets in the cluster, key by key, and prints only `same` or

@@ -1,0 +1,7 @@
+# Where Longhorn sends volume backups: the CIFS share on the backup NAS. The
+# real value comes from longhorn/values.yaml in the private configuration
+# repository; rendering fails without one.
+backupTargetURL: ""
+# The Secret in longhorn-system holding the share's login (CIFS_USERNAME and
+# CIFS_PASSWORD). The application deploys it from the same repository.
+credentialSecret: longhorn-backup-cifs

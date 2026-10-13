@@ -757,73 +757,6 @@ kubectl -n longhorn-system wait \
   --field-selector=status.phase!=Succeeded,status.phase!=Failed \
   --timeout=600s
 
-echo "==> Creating/updating Longhorn CIFS backup credentials..."
-kubectl create secret generic "$LONGHORN_BACKUP_CREDENTIAL_SECRET" \
-  --from-file=CIFS_USERNAME=<(printf '%s' "$LONGHORN_CIFS_USERNAME") \
-  --from-file=CIFS_PASSWORD=<(printf '%s' "$LONGHORN_CIFS_PASSWORD") \
-  --namespace longhorn-system \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "==> Configuring Longhorn CIFS backup target..."
-LONGHORN_BACKUP_TARGET="cifs://${BACKUP_NAS_IP}/${LONGHORN_BACKUP_SHARE}?cifsOptions=vers%3D3.0"
-wait_longhorn_backup_target_available() {
-  local target_name="$1" target_label="$2" available i
-
-  for i in {1..60}; do
-    available="$(
-      kubectl -n longhorn-system get backuptarget "$target_name" \
-        -o jsonpath='{.status.available}' 2>/dev/null || true
-    )"
-    [[ "$available" == "true" ]] && return 0
-    sleep 5
-  done
-
-  echo "ERROR: Longhorn ${target_label} backup target did not become available."
-  kubectl -n longhorn-system get backuptarget "$target_name" -o yaml || true
-  return 1
-}
-
-CURRENT_LONGHORN_BACKUP_TARGET="$(
-  kubectl -n longhorn-system get backuptarget default \
-    -o jsonpath='{.spec.backupTargetURL}' 2>/dev/null || true
-)"
-
-# Validate a changed destination while the current default remains usable. The
-# probe must be removed before cutover because Longhorn requires target URLs to
-# be unique across BackupTarget objects.
-if [[ "$CURRENT_LONGHORN_BACKUP_TARGET" != "$LONGHORN_BACKUP_TARGET" ]]; then
-  LONGHORN_BACKUP_PROBE=default-migration-probe
-  python3 - "$LONGHORN_BACKUP_PROBE" "$LONGHORN_BACKUP_TARGET" \
-    "$LONGHORN_BACKUP_CREDENTIAL_SECRET" <<'PY_LONGHORN_PROBE' | kubectl apply -f -
-import json
-import sys
-
-name, url, secret = sys.argv[1:]
-print(json.dumps({
-    "apiVersion": "longhorn.io/v1beta2",
-    "kind": "BackupTarget",
-    "metadata": {"name": name, "namespace": "longhorn-system"},
-    "spec": {
-        "backupTargetURL": url,
-        "credentialSecret": secret,
-        "pollInterval": "30s",
-    },
-}))
-PY_LONGHORN_PROBE
-  wait_longhorn_backup_target_available "$LONGHORN_BACKUP_PROBE" "migration probe"
-  kubectl -n longhorn-system delete backuptarget "$LONGHORN_BACKUP_PROBE" --wait=true
-fi
-
-LONGHORN_BACKUP_PATCH="$(
-  python3 -c 'import json,sys; print(json.dumps({"spec":{"backupTargetURL":sys.argv[1],"credentialSecret":sys.argv[2]}}))' \
-    "$LONGHORN_BACKUP_TARGET" "$LONGHORN_BACKUP_CREDENTIAL_SECRET"
-)"
-kubectl -n longhorn-system patch backuptarget default \
-  --type=merge \
-  --patch "$LONGHORN_BACKUP_PATCH"
-wait_longhorn_backup_target_available default "CIFS"
-
-
 echo "==> Verifying all Longhorn nodes have the dedicated storage disk..."
 EXPECTED_LONGHORN_NODES="$(kubectl get nodes --no-headers | wc -l | tr -d ' ')"
 for i in {1..60}; do
@@ -864,6 +797,21 @@ fi
 
 echo "==> Waiting for Argo CD to deploy every application..."
 wait_for_all_argocd_apps 2700
+
+# The longhorn-config application sets where Longhorn sends volume backups
+# (charts/longhorn-config) and deploys the login for that share.
+echo "==> Waiting for Longhorn's backup target to become available..."
+for i in {1..60}; do
+  backup_target_available="$(kubectl -n longhorn-system get backuptarget default \
+    -o jsonpath='{.status.available}' 2>/dev/null || true)"
+  [[ "$backup_target_available" == "true" ]] && break
+  if [[ "$i" -eq 60 ]]; then
+    echo "ERROR: Longhorn's backup target did not become available."
+    kubectl -n longhorn-system get backuptarget default -o yaml || true
+    exit 1
+  fi
+  sleep 5
+done
 
 echo "==> Waiting for the HTTPS certificates..."
 wait_for_all_certificates 900
@@ -1104,8 +1052,13 @@ esac
 cleanup
 PF_PID=""
 
-# The Secrets Argo CD deploys are generated from .secrets.enc. Say so if a
-# value changed there and the generated copy was not refreshed.
+# The settings and Secrets Argo CD deploys are generated from
+# config/cluster.env and .secrets.enc. Say so if a value changed there and
+# the generated copy was not refreshed.
+echo "==> Comparing Argo CD's settings with config/cluster.env..."
+"$K3S_DIR/scripts/render-argocd-values.sh" --check ||
+  echo "WARNING: a settings file differs. Run scripts/render-argocd-values.sh, then commit and push the configuration repository."
+
 echo "==> Comparing Argo CD's Secrets with .secrets.enc..."
 "$K3S_DIR/scripts/render-argocd-secrets.sh" --check ||
   echo "WARNING: a Secret differs. Run scripts/render-argocd-secrets.sh, then commit and push the configuration repository."

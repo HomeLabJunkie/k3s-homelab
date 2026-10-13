@@ -98,7 +98,7 @@ Install Argo CD if the cluster has none; create its
 Secrets, the project and the root Application
         |
         v
-Install/verify Longhorn and its backup target
+Install/verify Longhorn
         |
         v
 Wait for every Argo CD application and certificate
