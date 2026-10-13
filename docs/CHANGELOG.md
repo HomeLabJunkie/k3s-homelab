@@ -6,6 +6,13 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-13: Scripts use the repository's Ansible by themselves
+
+`deploy.sh` stopped at its toolchain guard on production because the
+laptop's own Ansible was older than the pinned one in `.venv`. Each script
+that runs Ansible now puts `.venv/bin` first on `PATH` itself when the
+directory exists, so nothing has to be exported first.
+
 ## 2026-10-13: Full deploy.sh run on production
 
 The first run on production since `deploy.sh` became a bootstrap: exit 0 in

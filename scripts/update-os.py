@@ -12,6 +12,9 @@ import time
 from datetime import datetime
 
 ROOT = Path(__file__).resolve().parent.parent
+# Use the repository's pinned Ansible (.venv) ahead of the laptop's own.
+if os.environ.get('USE_PROJECT_VENV', 'true') == 'true' and (ROOT / '.venv/bin').is_dir():
+    os.environ['PATH'] = f"{ROOT / '.venv/bin'}{os.pathsep}{os.environ.get('PATH', '')}"
 
 
 def run(args, capture=False):
