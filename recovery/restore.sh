@@ -1030,6 +1030,18 @@ wait_statefulset_scaled_zero() {
   return 1
 }
 
+# Scaled through its operator (Prometheus, Alertmanager), a StatefulSet keeps
+# its old replica count for a moment, and `rollout status` then reports success
+# with no pod running. Wait for the new count first.
+wait_statefulset_rollout() {
+  local ns="$1" sts="$2" replicas="$3"
+  for _ in {1..60}; do
+    [[ "$(kubectl -n "$ns" get statefulset "$sts" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)" == "$replicas" ]] && break
+    sleep 2
+  done
+  kubectl -n "$ns" rollout status statefulset/"$sts" --timeout=300s
+}
+
 wait_pv_phase() {
   local pv="$1" desired="$2"
   for _ in {1..60}; do
@@ -1304,7 +1316,7 @@ EOF
   sed -i 's/^STATUS=.*/STATUS=bound_restored/' "$state_dir/state.env"
 
   scale_stateful_app "$app" "$ns" "$sts" "$replicas"
-  kubectl -n "$ns" rollout status statefulset/"$sts" --timeout=300s
+  wait_statefulset_rollout "$ns" "$sts" "$replicas"
 
   sed -i 's/^STATUS=.*/STATUS=promoted/' "$state_dir/state.env"
   # The claim keeps its name and the replica count is back, so the workload
@@ -1320,6 +1332,7 @@ EOF
   verify_service_endpoints "$ns" "$service" || true
 
   echo
+  health_check_app "$app" || echo "WARNING: promotion completed but health verification reported a warning."
   echo "Rollback: $0 --rollback-app $app --confirm"
 }
 
@@ -1373,7 +1386,7 @@ rollback_stateful_app() {
   wait_pvc_bound_to_pv "$NAMESPACE" "$PVC" "$ORIGINAL_PV"
 
   scale_stateful_app "$APP" "$NAMESPACE" "$WORKLOAD" "$ORIGINAL_REPLICAS"
-  kubectl -n "$NAMESPACE" rollout status statefulset/"$WORKLOAD" --timeout=300s
+  wait_statefulset_rollout "$NAMESPACE" "$WORKLOAD" "$ORIGINAL_REPLICAS"
   argocd_resume "$argo_app"
 
   sed -i 's/^STATUS=.*/STATUS=rolled_back/' "$dir/state.env"
