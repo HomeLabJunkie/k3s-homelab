@@ -6,6 +6,23 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-14: Prometheus and Loki promotion proven on production
+
+`recovery/restore.sh` restored each app's 09:20 backup into a test volume
+(Prometheus 23 minutes for about 24 GB, Loki 3 minutes), promoted it, and
+rolled back. Promoted, Prometheus held history up to 09:18 and Loki logs up to
+the backup; rolled back, both had their full last 24 hours again, with no
+gaps and new data arriving. Argo CD was paused only during each swap, and all
+26 applications ended Synced and Healthy. Promotion took 30 seconds for
+Prometheus and 97 for Loki; rollback 74 and 65.
+
+The Prometheus run found two faults in StatefulSet promotion, now fixed. Its
+replica count changes through the operator, so the StatefulSet still showed
+zero for a moment and `rollout status` reported success with no pod running;
+the script now waits for the new count first, in promotion and rollback.
+Promotion also skipped the health check its plan lists; it now runs it, as
+rollback did.
+
 ## 2026-10-13: Cilium agent metrics on; Grafana dashboards for Velero and Cilium
 
 The Cilium agents now serve Prometheus metrics (`cilium_agent_metrics`,
