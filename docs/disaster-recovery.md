@@ -20,8 +20,9 @@ in the application. A restored volume or a running pod is not enough.
 ## Rebuild the cluster
 
 For when the nodes are reinstalled or replaced and nothing of the old cluster
-is left. Steps 2–4 were proven on the test cluster on 2026-10-12, with no
-data to restore. Step 5 has not been done yet.
+is left. The whole sequence, data included, was proven on the test cluster on
+2026-10-15: its nodes were deleted and rebuilt, and Trilium and Vaultwarden
+came back with their notes and keys.
 
 ### 1. What you need
 
@@ -72,23 +73,27 @@ that Secret.
 
 ### 5. Restore the data
 
-Not built or tested yet (to-do 14). The rebuilt cluster has new, empty
-volumes, and `restore.sh` finds backups only by the current volume's name.
-The old names are in the bundle's `cluster-state/pvc-volume-map.txt`.
+The rebuilt apps start empty. Longhorn on the new cluster reads the old
+backups from the NAS within a few minutes. For each app in
+`recovery/apps.conf`, Vaultwarden and Trilium first:
 
-Until it is, the outline in Longhorn's own terms, one app at a time, starting
-with Vaultwarden and Trilium:
+```bash
+recovery/restore.sh --list-backups vaultwarden     # the old volume, by claim
+recovery/restore.sh --restore-app vaultwarden      # newest backup of the old volume
+kubectl -n vaultwarden exec -it vaultwarden-restore-inspect -- sh   # look first
+recovery/restore.sh --promote-app vaultwarden --confirm
+recovery/restore.sh --accept-app vaultwarden --confirm
+```
 
-1. Pause the app's Argo CD application and scale the app to zero (see
-   [Argo CD and restores](platform.md#argo-cd-and-restores)).
-2. In the Longhorn UI, Backup: find the old volume name from the map, and
-   "Restore Latest Backup" to a new volume.
-3. Delete the app's empty claim, then on the restored volume use "Create
-   PV/PVC" with the same namespace and claim name.
-4. Scale the app back up, check its data in the app, and resume Argo CD.
+With no backups of its own, the new volume makes `--restore-app` fall back to
+the old volume that held the same claim. Once the nightly backup has run on
+the new cluster it has backups of the empty volume too, and those become the
+default: then use `--from-volume` with the old volume from `--list-backups`.
+Check each app in its own UI before accepting. See
+[Restore one application](backups.md#restore-one-application).
 
-The backups on the NAS are not touched by any of this. Do not delete them,
-and do not point the new cluster's Longhorn at a different share.
+Do not delete the backups on the NAS, and do not point the new cluster's
+Longhorn at a different share.
 
 ### 6. Protect the new cluster
 
@@ -179,10 +184,12 @@ only as fresh as the last time the server was on.
 ./recovery/dr-test-cluster.sh create      # network and seven VMs, about 3 minutes
 ./recovery/dr-test-cluster.sh bootstrap   # site.yml only: K3s, kube-vip, Cilium, MetalLB
 ./recovery/dr-test-cluster.sh status
+./recovery/dr-test-cluster.sh destroy-nodes   # delete the nodes, keep the stand-in NAS and its backups
 ./recovery/dr-test-cluster.sh destroy
 ```
 
-Six nodes (three servers, three workers) and a stand-in NAS at `10.90.0.8`
+`destroy-nodes` then `create` gives brand-new nodes with the backups still on
+the stand-in NAS, which is how a rebuild with data is rehearsed. Six nodes (three servers, three workers) and a stand-in NAS at `10.90.0.8`
 sit on `10.90.0.0/24`. They reach the internet but nothing on the home
 network, which `create` checks. Nothing from production is copied in.
 
@@ -199,14 +206,14 @@ a separate clone:
    keeps Argo CD on the test settings; without it the test cluster would
    deploy production's Secrets, tunnel token included, and serve the real
    sites. To test a branch, set `ARGOCD_APPS_REVISION`.
-3. Copy `.secrets.test.enc` to the clone's `.secrets.enc`. It has the test
-   cluster's own token, tunnel, Cloudflare token for the test zone, and
-   `dummy` for the stand-in NAS login. It also needs
-   `ARGOCD_CONFIG_REPO_KEY_B64` from production's file and the test
-   cluster's own `ARGOCD_SOPS_AGE_KEY` (kept encrypted in the configuration
-   repository as `envs/test/argocd-sops-age-key.enc.yaml`). The mail login
-   and the website deploy key are real; Authelia will not start without a
-   working mail login. Then run
+3. Build the clone's `.secrets.enc` from `.secrets.test.enc`, which has the
+   test cluster's own token, tunnel, Cloudflare token for the test zone, and
+   `dummy` for the stand-in NAS login. Add four lines from production's file,
+   `ARGOCD_CONFIG_REPO_KEY_B64`, `WEBSITE_DEPLOY_KEY_B64`,
+   `VAULTWARDEN_SMTP_USERNAME` and `VAULTWARDEN_SMTP_PASSWORD` (Authelia will
+   not start without a working mail login), and the test cluster's own
+   `ARGOCD_SOPS_AGE_KEY`, kept encrypted in the configuration repository as
+   `envs/test/argocd-sops-age-key.enc.yaml`. Then run
    `CONFIG_REPO=<path to k3s-homelab-config> scripts/render-argocd-secrets.sh`
    from the clone and push the configuration repository.
 4. In the clone only, set `flannel_iface` and `cilium_iface` to `enp1s0` in

@@ -133,30 +133,47 @@ first control-plane node, so the laptop needs no sudo. It updates
 data, lets you look at it, and only then swaps it in. Each step is separate.
 
 ```bash
-recovery/restore.sh --plan trilium           # live volume, latest backup, steps
+recovery/restore.sh --plan trilium           # live volume, the backup it would use, steps
 recovery/restore.sh --restore-app trilium    # restore into trilium-restore-test; live app untouched
 kubectl -n trilium exec -it trilium-restore-inspect -- sh   # look at the restored files
 recovery/restore.sh --promote-app trilium --confirm         # swap it in
-recovery/restore.sh --rollback-app trilium --confirm        # undo the swap
-recovery/restore.sh --cleanup-test trilium                  # remove the test volume
+recovery/restore.sh --rollback-app trilium --confirm        # undo the swap, or
+recovery/restore.sh --accept-app trilium --confirm          # keep it
+recovery/restore.sh --cleanup-test trilium                  # remove what is no longer used
 ```
 
 - `--restore-app` takes a few minutes for a small volume; Prometheus's 24 GB
   took 23 minutes.
-- `--promote-app` stops the app, points it at the restored volume, starts it
-  and runs a health check. The live volume is kept, set to `Retain`, so
-  `--rollback-app` can put it back.
-- Argo CD is paused while the volume is swapped. For a Deployment (Trilium,
-  Vaultwarden, Authelia) it stays paused after a promotion that is kept; see
-  [Argo CD and restores](platform.md#argo-cd-and-restores) for clearing that.
+- `--promote-app` stops the app, makes the restored volume take over the
+  live claim's name, starts the app and runs a health check. Argo CD is
+  paused only during the swap. The volume the app used before is kept
+  (`Retain`), so `--rollback-app` can put it back.
+- `--accept-app` closes a swap you keep, so the DR checks stop reporting it,
+  and prints how to delete the old volume. After that, `--cleanup-test`
+  deletes the old volume too. The next restore goes into
+  `trilium-restore-test-b`, since `trilium-restore-test` is now live; the two
+  names alternate.
 - State is saved under `recovery/state/<app>/`, so `--promotion-status APP`
   shows where it got to.
 - To restore without promoting, copy what you need out of the inspect pod,
   then run `--cleanup-test`.
 
-`restore.sh` finds backups by the live volume's name, so it works on the
-cluster that made them. On a rebuilt cluster the volumes have new names; see
-[Disaster recovery](disaster-recovery.md#5-restore-the-data).
+### Choosing the backup
+
+By default `--restore-app` uses the newest backup of the live volume. If the
+live volume has none, as on a rebuilt cluster, it uses the newest backup of
+the volume that held the same claim before. `--list-backups APP` shows every
+volume with backups of the app's claim, and `--from-volume VOLUME` picks one:
+
+```bash
+recovery/restore.sh --list-backups trilium
+recovery/restore.sh --restore-app trilium --from-volume pvc-73903032-e5f6-4176-95f6-e57a24a4d558
+```
+
+The nightly backups record which claim they came from. Backups taken by hand
+and Longhorn's own system backups do not; `--list-backups` lists those
+separately, by volume, for volumes no longer in the cluster, and the recovery
+bundle's `cluster-state/pvc-volume-map.txt` names their claims.
 
 ### From Velero instead
 
