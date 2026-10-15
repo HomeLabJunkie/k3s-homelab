@@ -4,7 +4,7 @@
 
 ## Rancher
 
-Rancher runs in `cattle-system`, deployed by Argo CD (the `rancher` application; see [Argo CD](platform.md#argo-cd)). `deploy.sh` sets the admin password and server URL through its API after the first install.
+Rancher runs in `cattle-system`, deployed by Argo CD (the `rancher` application; see [Argo CD](argocd.md)). `deploy.sh` sets the admin password and server URL through its API after the first install.
 
 The deployment includes:
 
@@ -18,7 +18,7 @@ The deployment includes:
 
 Trilium is deployed by Argo CD from the `charts/trilium` chart, with
 persistent Longhorn storage. Self-heal is off for it; see
-[Argo CD and restores](platform.md#argo-cd-and-restores).
+[Sync policy](argocd.md#sync-policy).
 
 Protected PVC:
 
@@ -37,7 +37,7 @@ group-writable.
 
 Vaultwarden is deployed by Argo CD from the `charts/vaultwarden` chart, with
 persistent Longhorn storage. Self-heal is off for it; see
-[Argo CD and restores](platform.md#argo-cd-and-restores).
+[Sync policy](argocd.md#sync-policy).
 
 Protected PVC:
 
@@ -65,7 +65,7 @@ Image upgrades are recorded in the [changelog](CHANGELOG.md).
 
 The `charts/website` Helm chart runs the `jeffriffle` Deployment in the
 `website` namespace. Argo CD deploys it (the `website` application, see
-[Argo CD](platform.md#argo-cd)) and takes the domain from
+[Argo CD](argocd.md)) and takes the domain from
 `website/values.yaml` in the private configuration repository. The site is
 served from the private `HomeLabJunkie/jeffriffle.com` repo at that domain,
 and `www.` redirects there. The chart also holds the route for `/fb-search`,

@@ -5,7 +5,7 @@
 Everyday tasks on the running cluster. Argo CD deploys everything except
 K3s, Cilium, kube-vip, MetalLB and Longhorn, so almost every change is the
 same: edit git, merge, and Argo CD applies it within about three minutes.
-[Platform components](platform.md#argo-cd) explains how that works.
+[Argo CD](argocd.md) explains how that works.
 
 Two repositories are involved:
 
@@ -234,4 +234,4 @@ kubectl -n argocd scale statefulset argocd-application-controller --replicas=1
 
 When the controller starts again it restores what git says, so make the
 same change in git first if it should last. To pause one application
-instead, see [Argo CD and restores](platform.md#argo-cd-and-restores).
+instead, see [Pausing one application](argocd.md#pausing-one-application).
