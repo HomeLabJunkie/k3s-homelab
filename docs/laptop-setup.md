@@ -22,8 +22,7 @@ cd ~/dotfiles && ./bootstrap.sh --packages
 The cluster tools in that list are `kubectl`, `helm`, `argocd`, `kubectx`
 (and `kubens`), `cilium-cli`, `velero`, `trivy`, `k9s`, `kubeconform`,
 `github-cli`, `sops`, `age`, `direnv`, `jq` and `go-yq`. `deploy.sh` also
-needs `argon2`, which arrives as a dependency of `bitwarden-cli` (also in the
-list).
+needs `argon2`, which is in the list too.
 
 The dotfiles also define an `argocd` shell function that uses kubectl's
 access (`--core`), so `argocd app list` works without an Argo CD login.

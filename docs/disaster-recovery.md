@@ -20,9 +20,8 @@ in the application. A restored volume or a running pod is not enough.
 ## Rebuild the cluster
 
 For when the nodes are reinstalled or replaced and nothing of the old cluster
-is left. The whole sequence, data included, was proven on the test cluster on
-2026-10-15: its nodes were deleted and rebuilt, and Trilium and Vaultwarden
-came back with their notes and keys.
+is left. The whole sequence, data included, has been tested on the test
+cluster; the [changelog](CHANGELOG.md) has the results.
 
 ### 1. What you need
 
@@ -165,8 +164,7 @@ app with no route to it, checks the data at application level (Trilium's
 notes, Vaultwarden's database, Prometheus's history, Loki's logs and so on),
 then removes everything it made. If a check fails it stops and leaves the
 restored state for a look. The DR host needs room for every protected volume
-plus 20%, which `dr-status.sh` checks. The last full run passed 20 of 20
-checks on 2026-08-21.
+plus 20%, which `dr-status.sh` checks.
 
 The DR host is a VM (8 vCPUs, 32 GB, 500 GB) with K3s, Cilium and Longhorn
 pointed at production's backup target. `recovery/dr-host-build.sh` builds or
@@ -243,8 +241,7 @@ real secrets.
 
 `dr-rehearsal.sh` restores volumes, not etcd. The etcd snapshot is tested in a
 container that cannot reach the network and runs no workloads, so kube-vip,
-MetalLB and cloudflared never start against the real addresses. On
-2026-10-09 every one of 180 Secrets was readable.
+MetalLB and cloudflared never start against the real addresses.
 
 With the snapshot copied out of a bundle to `$W/snapshot` and `$W/env` (mode
 600) holding `K3S_TOKEN=<the cluster token>`:

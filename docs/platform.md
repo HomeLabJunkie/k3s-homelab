@@ -261,24 +261,6 @@ again. Helm takes over the objects Argo CD created and the fields it last
 wrote; Argo CD still reports itself Synced afterwards, because both apply
 the same chart and values.
 
-| Stage | What moves to Argo CD | State |
-| --- | --- | --- |
-| 1 | The engine itself, UI behind Authelia | Done 2026-10-11 |
-| 2 | Trivy Operator, Kyverno and its policies, network policies | Done 2026-10-11 |
-| 3 | Website (with the private configuration repository) | Done 2026-10-11 |
-| 3 | fb-search (manifests and source moved to the private configuration repository) | Done 2026-10-11 |
-| 4 | cloudflared and Authelia, with their Secrets encrypted in the private repository | Done 2026-10-11 |
-| 5 | Trilium and Vaultwarden (self-heal off; `restore.sh` pauses Argo CD) | Done 2026-10-11 |
-| 6 | cert-manager and its issuer; Argo CD installed first by `deploy.sh` | Done 2026-10-12 |
-| 7 | The admin UIs' routes (`routes`); alert rules, scrape targets, the Loki data source and dashboards (`monitoring-extras`) | Done 2026-10-12 |
-| 8 | Loki and Alloy | Done 2026-10-12 |
-| 9 | kube-prometheus-stack and its Secrets | Done 2026-10-12 |
-| 10 | Velero, with the snapshot controller and Longhorn's backup settings | Done 2026-10-12 |
-| 10 | Rancher (its certificate is in `routes`) | Done 2026-10-12 |
-| 11 | Traefik | Done 2026-10-12 |
-| 12 | Argo CD's own chart (`argocd`); `deploy.sh` reduced to a bootstrap | Done 2026-10-12 |
-| 13 | The website's deploy key; Longhorn's backup target and its login (`longhorn-config`) | Done 2026-10-12 |
-
 K3s, Cilium, kube-vip, MetalLB and Longhorn stay with Ansible and `deploy.sh`.
 Rancher installs Fleet, another GitOps engine; nothing in this repository
 uses it, and the two must not manage the same resources.
@@ -338,7 +320,7 @@ kubectl -n argocd exec argocd-application-controller-0 -- argocd app diff <name>
 `deploy.sh` upgrades; `argocd`, which `deploy.sh` installs on a new cluster
 and `ARGOCD_FORCE_INSTALL=true` reuses; `cilium`, from Ansible; and the
 releases Rancher installs for itself. The records of the releases handed to
-Argo CD were deleted on 2026-10-12.
+Argo CD were deleted.
 
 ### Chart updates
 
@@ -441,8 +423,8 @@ change in git before then if it should last.
 ### The UI
 
 The UI is at `https://argocd.${BASE_DOMAIN}`, behind Authelia (two-factor,
-`admins` group) and then Argo CD's own login. Since 2026-10-11 the hostname
-is a public hostname on the Cloudflare tunnel, set up like the other
+`admins` group) and then Argo CD's own login. The hostname is a public
+hostname on the Cloudflare tunnel, set up like the other
 Authelia-protected UIs (see [Authelia](authelia.md)), so it is reachable from
 anywhere. The tunnel route is configured in the Cloudflare dashboard, not in
 this repository.
@@ -453,8 +435,8 @@ If the tunnel or Authelia is down, skip both from a machine with `kubectl`:
 kubectl -n argocd port-forward svc/argocd-server 8080:80   # http://localhost:8080
 ```
 
-The login is user `admin`. Its password was changed from the generated one on
-2026-10-11 and is kept in the password manager, not in `.secrets.enc`. On a
+The login is user `admin`. Its password was changed from the generated one
+and is kept in the password manager, not in `.secrets.enc`. On a
 rebuilt cluster the first login uses the generated password in the
 `argocd-initial-admin-secret` Secret: read it in your own terminal, change it
 in the UI (User Info, Update Password), then delete that Secret.
