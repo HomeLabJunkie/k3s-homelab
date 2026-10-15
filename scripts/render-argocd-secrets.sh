@@ -233,14 +233,6 @@ kubectl create secret generic "$backup_login_name" \
   --from-file=CIFS_PASSWORD=<(printf '%s' "$LONGHORN_CIFS_PASSWORD") \
   --dry-run=client -o yaml >"$WORK/longhorn-backup-credentials.yaml"
 
-# --- Rancher: the first-login password -----------------------------------------
-
-[[ -n "${RANCHER_BOOTSTRAP_PASSWORD:-}" ]] || fail "RANCHER_BOOTSTRAP_PASSWORD is not set"
-kubectl create secret generic bootstrap-secret \
-  --namespace cattle-system \
-  --from-file=bootstrapPassword=<(printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD") \
-  --dry-run=client -o yaml >"$WORK/bootstrap-secret.yaml"
-
 # --- Velero: the S3 login and the backup repository password --------------------
 
 # A test cluster has no backup store and leaves the velero application out,
@@ -339,7 +331,6 @@ if [[ "$CHECK" == true ]]; then
   for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmanager-smtp; do
     check_secret monitoring "$monitoring_secret" "$WORK/$monitoring_secret.yaml" || status=1
   done
-  check_secret cattle-system bootstrap-secret "$WORK/bootstrap-secret.yaml" || status=1
   check_secret website jeffriffle-git "$WORK/jeffriffle-git.yaml" || status=1
   check_secret longhorn-system "$backup_login_name" "$WORK/longhorn-backup-credentials.yaml" || status=1
   if [[ "$velero_secrets" == true ]]; then
@@ -361,8 +352,6 @@ for monitoring_secret in grafana-admin grafana-cloudflare grafana-oidc alertmana
   write_secret "$WORK/$monitoring_secret.yaml" \
     "$CONFIG_REPO/${CONFIG_PATH}monitoring/$monitoring_secret.enc.yaml"
 done
-write_secret "$WORK/bootstrap-secret.yaml" \
-  "$CONFIG_REPO/${CONFIG_PATH}rancher/bootstrap-secret.enc.yaml"
 write_secret "$WORK/jeffriffle-git.yaml" "$CONFIG_REPO/${CONFIG_PATH}website/jeffriffle-git.enc.yaml"
 write_secret "$WORK/longhorn-backup-credentials.yaml" \
   "$CONFIG_REPO/${CONFIG_PATH}longhorn/backup-credentials.enc.yaml"

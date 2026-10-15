@@ -167,7 +167,7 @@ CRDs through two separate providers. At startup the Ingress routes used to load
 a moment before the middlewares, and each one logged
 `middleware "...@kubernetescrd" does not exist` (harmless, since the pod was not
 Ready yet). IngressRoutes and Middlewares load together, so the errors are
-gone. Routes without a middleware (Authelia, Rancher, Vaultwarden, the website)
+gone. Routes without a middleware (Authelia, Vaultwarden, the website)
 are still Ingresses.
 
 Chart upgrades and value changes are recorded in the [changelog](CHANGELOG.md).

@@ -34,7 +34,6 @@ Sensitive values should be kept in the encrypted/local secrets workflow and not 
 
 Expected sensitive values include:
 
-- Rancher bootstrap/admin credentials
 - Cloudflare API/tunnel credentials
 - Vaultwarden admin token
 - initial Vaultwarden account address
@@ -88,7 +87,6 @@ there.
 | `monitoring/*.enc.yaml` | The four monitoring Secrets, encrypted |
 | `velero/values.yaml`, `velero/*.enc.yaml` | The `velero` application: the backup store's address, and its two Secrets, encrypted. Production only |
 | `argocd/values.yaml` (`global.domain`) | The `argocd` application: Argo CD's own address, where it sends the browser after logging out |
-| `rancher/values.yaml` (`hostname`), `rancher/bootstrap-secret.enc.yaml` | The `rancher` application: its hostname, and the first-login password, encrypted |
 | `routes/values.yaml` (`domain`) | The `routes` application (`charts/routes`) |
 | `monitoring-extras/values.yaml` (`cloudflareAccountId`) | The `monitoring-extras` application (`charts/monitoring-extras`) |
 | `cloudflared/values.yaml` (`originIP`) | The `cloudflared` application (`charts/cloudflared`) |
@@ -135,7 +133,7 @@ runs it at the end and warns on a difference.
 
 | Setting in `config/cluster.env` | Goes to |
 | --- | --- |
-| `BASE_DOMAIN` | `domain` for authelia, routes, trilium, vaultwarden and website; Rancher's hostname; the Authelia hostname Grafana is pointed at |
+| `BASE_DOMAIN` | `domain` for authelia, routes, trilium, vaultwarden and website; the Authelia hostname Grafana is pointed at |
 | `ADMIN_EMAIL` | `adminEmail` for authelia, cert-manager and vaultwarden |
 | `CLOUDFLARE_ORIGIN_IP` | cloudflared's `originIP`; the address Grafana uses for Authelia |
 | `CLOUDFLARE_ACCOUNT_ID` | monitoring-extras |

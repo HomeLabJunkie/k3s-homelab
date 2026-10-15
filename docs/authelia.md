@@ -71,5 +71,5 @@ too, set up the same way; a hostname without one is reachable only from the
 LAN. The Authelia-protected hostnames are not in a
   Cloudflare Access application and do not enforce Access JWT validation on
   their tunnel routes; either one would put a second login in front of
-  Authelia, or return 403. Rancher and `${BASE_DOMAIN}/admin` still use
-  Cloudflare Access.
+  Authelia, or return 403. `${BASE_DOMAIN}/admin` still uses Cloudflare
+  Access.

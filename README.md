@@ -31,7 +31,7 @@ Core platform:
 | TLS | cert-manager + Let's Encrypt |
 | External access | Cloudflare Tunnel |
 | Persistent storage | Longhorn |
-| Cluster management | Rancher |
+| Cluster UI | Headlamp, behind Authelia |
 | Metrics | kube-prometheus-stack |
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
@@ -86,7 +86,7 @@ request; see [How to](docs/how-to.md). Plain `./deploy.sh` reconciles the
 | How Argo CD deploys everything, sync policy, chart updates | [Argo CD](docs/argocd.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
-| Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
+| Headlamp, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
 | Prometheus, Grafana, alerts, Loki | [Monitoring and logging](docs/observability.md) |
 | What is backed up, checking backups, restoring one app | [Backups](docs/backups.md) |
 | Rebuilding the cluster or a laptop, DR rehearsals | [Disaster recovery](docs/disaster-recovery.md) |
