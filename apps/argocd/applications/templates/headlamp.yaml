@@ -1,0 +1,45 @@
+{{- if not (has "headlamp" .Values.disabled) }}
+# Headlamp, the web UI for the cluster (it replaced Rancher). Its route
+# and Authelia login are in charts/routes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: headlamp
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: headlamp
+  sources:
+    # The chart, at a pinned version...
+    - repoURL: https://kubernetes-sigs.github.io/headlamp/
+      chart: headlamp
+      targetRevision: 0.45.0
+      helm:
+        releaseName: headlamp
+        valueFiles:
+          - $values/apps/headlamp/values.yaml
+    # ...and its values, from this repository.
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It also deletes: something removed from git is removed from
+    # the cluster. Headlamp holds no data and its chart has no CRDs, so a
+    # leftover is the greater risk.
+    automated:
+      selfHeal: true
+      prune: true
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as a namespace or a CRD another application creates.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

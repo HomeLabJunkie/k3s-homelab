@@ -2,6 +2,27 @@
 
 [Back to the README](../README.md)
 
+## Headlamp
+
+Headlamp is the web UI for the cluster, at `https://headlamp.${BASE_DOMAIN}`:
+every resource, pod logs, restarts, scaling, cordoning and draining a node,
+editing an object. Argo CD deploys it from the upstream chart (the
+`headlamp` application, values in `apps/headlamp/values.yaml`).
+
+There is no Headlamp login. Authelia (two-factor, `admins` group) is the only
+gate, and Headlamp then acts as its own service account, which is
+**cluster-admin**: anything, Secrets included. A network policy
+(`apps/network-policies/headlamp.yaml`) lets only Traefik connect, so nothing
+inside the cluster can reach it around Authelia.
+
+A change made in Headlamp to something Argo CD manages is undone within
+seconds, as with `kubectl`: scale or edit through git instead, or pause the
+application first (see [Pausing one application](argocd.md#pausing-one-application)).
+Restarting a workload, deleting a pod and cordoning a node are not undone.
+
+The hostname needs a public route on the Cloudflare tunnel, set in the
+Cloudflare dashboard; without one it works only on the LAN.
+
 ## Rancher
 
 Rancher runs in `cattle-system`, deployed by Argo CD (the `rancher` application; see [Argo CD](argocd.md)). `deploy.sh` sets the admin password and server URL through its API after the first install.

@@ -23,6 +23,7 @@ spec:
     - https://grafana-community.github.io/helm-charts
     - https://grafana.github.io/helm-charts
     - https://argoproj.github.io/argo-helm
+    - https://kubernetes-sigs.github.io/headlamp/
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

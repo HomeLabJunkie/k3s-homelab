@@ -63,10 +63,11 @@ maintenance in place until git changes.
 
 | Deletes (`prune: true`) | Never deletes (`prune: false`) |
 |---|---|
-| `routes`, `network-policies`, `monitoring-extras`, `kyverno-policies`, `kyverno-custom-policies`, `backup-config`, `cert-manager-config`, `cloudflared`, `website` | everything else |
+| `routes`, `network-policies`, `monitoring-extras`, `kyverno-policies`, `kyverno-custom-policies`, `backup-config`, `cert-manager-config`, `cloudflared`, `website`, `headlamp` | everything else |
 
-The first group holds only configuration: routes, policies, dashboards,
-alert rules, backup jobs. There a leftover is the risk, such as a removed
+The first group holds only configuration (routes, policies, dashboards,
+alert rules, backup jobs) or, for `headlamp`, a stateless UI with no CRDs.
+There a leftover is the risk, such as a removed
 route that keeps a service reachable or a removed alert that keeps firing.
 Deleting waits until the rest of the change is applied and healthy.
 
