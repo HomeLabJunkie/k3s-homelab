@@ -238,7 +238,7 @@ before anything is applied. `--offline` reuses the schemas cached in
 
 ## Retiring or replacing a laptop
 
-Set up a new laptop with [Operator laptop setup](../operator-laptop-setup.md).
+Set up a new laptop with [Laptop setup](laptop-setup.md).
 Before retiring one, or the DR host, run this on the laptop that will remain:
 
 ```bash
