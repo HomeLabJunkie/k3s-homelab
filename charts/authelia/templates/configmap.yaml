@@ -65,6 +65,7 @@ data:
             - grafana.{{ .Values.domain }}
             - trilium.{{ .Values.domain }}
             - argocd.{{ .Values.domain }}
+            - headlamp.{{ .Values.domain }}
           subject: group:admins
           policy: two_factor
     # Sessions are kept in memory (one replica): an Authelia restart logs

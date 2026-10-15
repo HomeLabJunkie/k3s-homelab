@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: Headlamp added as the cluster UI
+
+Headlamp (chart 0.45.0) is a new Argo CD application, at
+`headlamp.<domain>` behind Authelia, to replace Rancher as the web UI for
+looking at the cluster and doing common fixes. It has no login of its own and
+acts as cluster-admin, so a network policy admits only Traefik. Rancher is
+still installed; removing it is a separate change.
+
 ## 2026-10-15: Data restored onto a rebuilt cluster
 
 A rebuild could bring back every application but not its data:
