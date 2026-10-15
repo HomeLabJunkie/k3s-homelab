@@ -93,8 +93,7 @@ established cluster.
 | --- | --- |
 | Plain-English tour of the cluster | [How Our Home Cluster Works](docs/CLUSTER-STORY.md) |
 | Everyday tasks: add an app, change a setting or secret, upgrade, undo | [How to](docs/how-to.md) |
-| How deployment and maintenance work, preflight checks, toolchain | [Deployment and maintenance](docs/deployment.md) |
-| Step-by-step maintenance and OS updates | [Maintenance cheat sheet](cheat-sheet.md) |
+| Node maintenance, OS updates, deploy.sh, preflight checks | [Maintenance](docs/maintenance.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
 | Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
