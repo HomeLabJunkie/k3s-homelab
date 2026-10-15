@@ -54,8 +54,7 @@ that disk.
 About 25 minutes. Ansible builds K3s, Cilium, kube-vip and MetalLB; `deploy.sh`
 installs Argo CD, gives it its two Secrets, and installs Longhorn. Argo CD
 then deploys every application from git, and `deploy.sh` waits for all of
-them and every certificate, then sets Rancher's admin password and creates
-the first Vaultwarden invitation.
+them and every certificate, then creates the first Vaultwarden invitation.
 
 The Cloudflare tunnel token is in the configuration repository, so the
 public hostnames reconnect by themselves; nothing changes in Cloudflare.

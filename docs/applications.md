@@ -4,7 +4,7 @@
 
 ## Headlamp
 
-Headlamp is the web UI for the cluster, at `https://headlamp.${BASE_DOMAIN}`:
+Headlamp is the web UI for the cluster (it replaced Rancher), at `https://headlamp.${BASE_DOMAIN}`:
 every resource, pod logs, restarts, scaling, cordoning and draining a node,
 editing an object. Argo CD deploys it from the upstream chart (the
 `headlamp` application, values in `apps/headlamp/values.yaml`).
@@ -22,18 +22,6 @@ Restarting a workload, deleting a pod and cordoning a node are not undone.
 
 The hostname needs a public route on the Cloudflare tunnel, set in the
 Cloudflare dashboard; without one it works only on the LAN.
-
-## Rancher
-
-Rancher runs in `cattle-system`, deployed by Argo CD (the `rancher` application; see [Argo CD](argocd.md)). `deploy.sh` sets the admin password and server URL through its API after the first install.
-
-The deployment includes:
-
-- TLS certificate from cert-manager
-- Traefik ingress
-- two Rancher replicas
-- bootstrap/admin credential configuration
-- server URL configuration
 
 ## Trilium
 

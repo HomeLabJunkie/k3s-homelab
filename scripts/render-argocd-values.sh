@@ -65,7 +65,6 @@ domain="$(quoted "$BASE_DOMAIN")"
 # shellcheck disable=SC2153 # set in cluster.env
 admin_email="$(quoted "$ADMIN_EMAIL")"
 authelia_hostname="${AUTHELIA_HOSTNAME:-auth.${BASE_DOMAIN}}"
-rancher_hostname="${RANCHER_HOSTNAME:-rancher.${BASE_DOMAIN}}"
 
 # render <app>: writes stdin as that application's settings file.
 render() {
@@ -125,10 +124,6 @@ grafana:
         - $(quoted "$authelia_hostname")
 EOF
 } | render monitoring
-
-{ header "Added to apps/rancher/values.yaml for the rancher application."
-  echo "hostname: $(quoted "$rancher_hostname")"
-} | render rancher
 
 for app in routes trilium website; do
   { header "Read by the $app application (charts/$app)."

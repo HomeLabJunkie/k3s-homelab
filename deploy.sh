@@ -30,15 +30,6 @@ LONGHORN_CHART_VERSION="${LONGHORN_CHART_VERSION:-1.12.1}"
 # Ingress hostnames default to <app>.$BASE_DOMAIN from cluster.env. Without
 # BASE_DOMAIN they fall back to *.example.invalid, which the guard below refuses.
 HOSTNAME_DOMAIN="${BASE_DOMAIN:-example.invalid}"
-RANCHER_HOSTNAME="${RANCHER_HOSTNAME:-rancher.${HOSTNAME_DOMAIN}}"
-# Rancher's bootstrap always creates the local admin as "admin"; the name is
-# not configurable, so refuse a different value instead of printing it.
-if [[ -n "${RANCHER_ADMIN_USER:-}" && "$RANCHER_ADMIN_USER" != "admin" ]]; then
-  echo "ERROR: RANCHER_ADMIN_USER=$RANCHER_ADMIN_USER is not supported: Rancher's bootstrap admin is always 'admin'."
-  echo "Remove RANCHER_ADMIN_USER from $ENV_FILE."
-  exit 1
-fi
-RANCHER_ADMIN_USER="admin"
 
 LONGHORN_HOST_PREP_PLAYBOOK="${LONGHORN_HOST_PREP_PLAYBOOK:-$K3S_DIR/longhorn-host-prep.yml}"
 LONGHORN_VALUES="${LONGHORN_VALUES:-$K3S_DIR/longhorn-values.yaml}"
@@ -69,7 +60,7 @@ ARGOCD_CONFIG_REPO_URL="${ARGOCD_CONFIG_REPO_URL:-git@github.com:HomeLabJunkie/k
 LONGHORN_STORAGE_RESERVED_BYTES="${LONGHORN_STORAGE_RESERVED_BYTES:-53687091200}"
 
 # Refuse to push a placeholder hostname into the cluster.
-for hostname_var in RANCHER_HOSTNAME LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
+for hostname_var in LONGHORN_HOSTNAME TRILIUM_HOSTNAME \
   VAULTWARDEN_HOSTNAME GRAFANA_HOSTNAME AUTHELIA_HOSTNAME ARGOCD_HOSTNAME; do
   if [[ "${!hostname_var}" == *.invalid ]]; then
     echo "ERROR: $hostname_var is the placeholder ${!hostname_var}."
@@ -469,8 +460,6 @@ set +a
 for var in \
   KUBE_VIP \
   K3S_TOKEN \
-  RANCHER_BOOTSTRAP_PASSWORD \
-  RANCHER_ADMIN_PASSWORD \
   CLOUDFLARE_API_TOKEN \
   CLOUDFLARE_TUNNEL_TOKEN \
   VAULTWARDEN_ADMIN_TOKEN \
@@ -499,11 +488,6 @@ for var in \
 do
   require_var "$var"
 done
-
-if (( ${#RANCHER_ADMIN_PASSWORD} < 12 )); then
-  echo "ERROR: RANCHER_ADMIN_PASSWORD must be at least 12 characters."
-  exit 1
-fi
 
 if (( ${#ADMIN_UI_PASSWORD} < 12 )); then
   echo "ERROR: ADMIN_UI_PASSWORD must be at least 12 characters."
@@ -701,7 +685,7 @@ kubectl create secret generic repo-k3s-homelab-config \
 # Some applications place objects in namespaces that Longhorn's install and
 # other applications create. Argo CD checks a whole application before
 # applying any of it, so a missing namespace would hold back the rest.
-for platform_namespace in traefik longhorn-system monitoring logging cattle-system headlamp; do
+for platform_namespace in traefik longhorn-system monitoring logging headlamp; do
   ensure_namespace "$platform_namespace"
 done
 
@@ -864,139 +848,6 @@ for protected_host in "traefik.${HOSTNAME_DOMAIN}" "$LONGHORN_HOSTNAME"; do
   echo "  ${protected_host}: redirects to ${AUTHELIA_HOSTNAME}"
 done
 
-echo "==> Configuring Rancher admin credentials..."
-kubectl port-forward -n cattle-system svc/rancher 8443:443 >/dev/null 2>&1 &
-PF_PID=$!
-
-for i in {1..30}; do
-  if curl -sk --connect-timeout 2 https://localhost:8443/ping >/dev/null 2>&1; then
-    break
-  fi
-  sleep 5
-done
-
-ACTUAL_BOOTSTRAP="$(
-  kubectl get secret -n cattle-system bootstrap-secret \
-    -o go-template='{{.data.bootstrapPassword|base64decode}}' \
-    2>/dev/null || printf '%s' "$RANCHER_BOOTSTRAP_PASSWORD"
-)"
-
-# Sets LOGIN_TOKEN (empty on failure) and RANCHER_LOGIN_HTTP for password $1.
-# Secrets travel through the environment and stdin, never process arguments,
-# which any local user can read in ps.
-rancher_login() {
-  local payload response
-  payload="$(RANCHER_LOGIN_USER="$RANCHER_ADMIN_USER" RANCHER_LOGIN_PASSWORD="$1" \
-    python3 -c 'import json,os; print(json.dumps({"username":os.environ["RANCHER_LOGIN_USER"],"password":os.environ["RANCHER_LOGIN_PASSWORD"]}))')"
-  response="$(
-    curl -sk -X POST \
-      "https://localhost:8443/v3-public/localProviders/local?action=login" \
-      -H "Content-Type: application/json" \
-      -w '\n%{http_code}' \
-      --data @- <<<"$payload" 2>/dev/null || true
-  )"
-  RANCHER_LOGIN_HTTP="${response##*$'\n'}"
-  LOGIN_TOKEN="$(
-    printf '%s' "${response%$'\n'*}" | python3 -c 'import json,sys
-try:
-    print(json.load(sys.stdin).get("token",""))
-except Exception:
-    print("")' || true
-  )"
-}
-
-# Redeploys: the admin password is already set and the bootstrap password is
-# stale, so try the configured password first instead of retrying for minutes.
-LOGIN_TOKEN=""
-RANCHER_PASSWORD_ALREADY_SET=false
-for i in {1..20}; do
-  rancher_login "$RANCHER_ADMIN_PASSWORD"
-  if [[ -n "$LOGIN_TOKEN" ]]; then
-    RANCHER_PASSWORD_ALREADY_SET=true
-    echo "  Rancher API ready; admin password already configured"
-    break
-  fi
-  admin_login_http="$RANCHER_LOGIN_HTTP"
-
-  rancher_login "$ACTUAL_BOOTSTRAP"
-  if [[ -n "$LOGIN_TOKEN" ]]; then
-    echo "  Rancher API ready"
-    break
-  fi
-
-  # A responding API that rejects both passwords will not change by waiting.
-  if [[ "$admin_login_http" == "401" && "$RANCHER_LOGIN_HTTP" == "401" ]]; then
-    echo "  Rancher rejected both RANCHER_ADMIN_PASSWORD and the bootstrap password."
-    break
-  fi
-
-  echo "  waiting for Rancher API... ($i/20)"
-  sleep 15
-done
-
-if [[ -n "$LOGIN_TOKEN" && "$RANCHER_PASSWORD_ALREADY_SET" == true ]]; then
-  echo "==> Rancher admin password already set; skipping password change"
-elif [[ -n "$LOGIN_TOKEN" ]]; then
-  ADMIN_USER_ID="$(
-    kubectl get users.management.cattle.io \
-      -o jsonpath="{range .items[?(@.username==\"${RANCHER_ADMIN_USER}\")]}{.metadata.name}{\"\\n\"}{end}" \
-    | head -n1
-  )"
-
-  if [[ -z "$ADMIN_USER_ID" ]]; then
-    echo "ERROR: Could not determine Rancher admin user ID."
-    exit 1
-  fi
-
-  echo "==> Changing Rancher admin password for ${ADMIN_USER_ID}..."
-
-  # Serialize with json.dumps so quotes, backslashes, or newlines in a password
-  # cannot break or alter the manifest; env vars keep them out of ps output.
-  PCR_USER_ID="$ADMIN_USER_ID" \
-  PCR_CURRENT_PASSWORD="$ACTUAL_BOOTSTRAP" \
-  PCR_NEW_PASSWORD="$RANCHER_ADMIN_PASSWORD" \
-    python3 - <<'PY_PASSWORD_CHANGE' | kubectl create -f -
-import json
-import os
-
-print(json.dumps({
-    "apiVersion": "ext.cattle.io/v1",
-    "kind": "PasswordChangeRequest",
-    "metadata": {"generateName": "admin-password-change-"},
-    "spec": {
-        "userID": os.environ["PCR_USER_ID"],
-        "currentPassword": os.environ["PCR_CURRENT_PASSWORD"],
-        "newPassword": os.environ["PCR_NEW_PASSWORD"],
-    },
-}))
-PY_PASSWORD_CHANGE
-fi
-
-if [[ -n "$LOGIN_TOKEN" ]]; then
-  echo "==> Setting Rancher server URL..."
-
-  SERVER_URL_PAYLOAD="$(
-    python3 -c 'import json,sys; print(json.dumps({"value":sys.argv[1]}))' \
-      "https://${RANCHER_HOSTNAME}"
-  )"
-
-  curl -fsSk -X PUT \
-    "https://localhost:8443/v3/settings/server-url" \
-    -H @<(printf 'Authorization: Bearer %s\n' "$LOGIN_TOKEN") \
-    -H "Content-Type: application/json" \
-    -d "$SERVER_URL_PAYLOAD" \
-    >/dev/null
-
-  echo "==> Rancher admin credentials configured successfully"
-else
-  echo "WARNING: Could not log in to Rancher with RANCHER_ADMIN_PASSWORD or the bootstrap password."
-  echo "         Rancher itself remains installed; if the admin password was changed in the UI,"
-  echo "         update RANCHER_ADMIN_PASSWORD in .secrets.enc to match."
-fi
-
-cleanup
-PF_PID=""
-
 echo "==> Seeding Vaultwarden initial invitation for ${VAULTWARDEN_INITIAL_EMAIL}..."
 
 kubectl port-forward -n vaultwarden svc/vaultwarden 8081:80 >/dev/null 2>&1 &
@@ -1097,7 +948,7 @@ echo "==========================================================================
 echo " Deployment complete"
 echo "============================================================================"
 echo " Kubernetes API: https://${KUBE_VIP}:6443"
-echo " Rancher:        https://${RANCHER_HOSTNAME}"
+echo " Headlamp:       https://headlamp.${HOSTNAME_DOMAIN}"
 echo " Longhorn:       https://${LONGHORN_HOSTNAME}"
 echo " Argo CD:        https://${ARGOCD_HOSTNAME}"
 echo " Authelia:       https://${AUTHELIA_HOSTNAME}"
@@ -1145,7 +996,3 @@ echo " app or security key: Authelia emails a one-time code to ${ADMIN_EMAIL}."
 echo " Change the password in .secrets.enc (ADMIN_UI_PASSWORD) and redeploy."
 echo "============================================================================"
 
-echo
-echo "============================================================================"
-echo " Rancher user:   ${RANCHER_ADMIN_USER}"
-echo "============================================================================"

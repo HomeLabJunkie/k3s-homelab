@@ -12,9 +12,6 @@ and Longhorn, which stay with Ansible and `deploy.sh`, and that includes its
 own chart: the `argocd` application keeps the installation matching
 `apps/argocd/values.yaml`.
 
-Rancher installs Fleet, another GitOps engine. Nothing in this repository
-uses it, and the two must not manage the same resources.
-
 ## Checking it
 
 ```bash
@@ -29,7 +26,7 @@ argocd app diff NAME          # what git would change
 
 `helm list` shows only what Helm still installs: `longhorn` (upgraded by
 `deploy.sh`), `argocd` (installed by `deploy.sh` on a new cluster), `cilium`
-(from Ansible), and the releases Rancher installs for itself.
+(from Ansible).
 
 ## How a change reaches the cluster
 
@@ -103,8 +100,7 @@ shows which policy to pick for a new app.
 On a new cluster most applications cannot sync at first: the CRDs, storage
 or Traefik they need are not there yet. Each one retries for about two
 hours. `deploy.sh` waits for all of them, then for every certificate, then
-sets Rancher's admin password and server URL and creates the first
-Vaultwarden invitation.
+creates the first Vaultwarden invitation.
 
 On a cluster that already runs Argo CD, `deploy.sh` leaves it alone.
 

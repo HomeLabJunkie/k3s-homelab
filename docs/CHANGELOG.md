@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: Rancher removed
+
+Rancher, deployed by Argo CD but unused since Headlamp arrived, is gone from
+git and from the cluster. `scripts/remove-rancher.sh` removed what Rancher
+had installed by itself: Fleet, Turtles and Cluster API, its webhook, the
+system upgrade controller (no upgrade plans used it), 99 CRDs with their
+objects, 17 namespaces and 69 ClusterRoles and bindings. Rancher's own
+rancher-cleanup script was not used, because it also deletes the
+`monitoring-*` ClusterRoles and every Prometheus Operator object and CRD,
+which here belong to kube-prometheus-stack. `deploy.sh` no longer sets a
+Rancher password, and Traefik no longer skips certificate checks on HTTPS
+backends, a setting added for Rancher that no route needs.
+
 ## 2026-10-15: Headlamp added as the cluster UI
 
 Headlamp (chart 0.45.0) is a new Argo CD application, at

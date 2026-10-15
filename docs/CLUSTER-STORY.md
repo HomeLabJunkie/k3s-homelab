@@ -37,7 +37,7 @@ Each computer has 8 processor cores, between 14 and 30 GB of memory, and about 2
 | **3** | The network | Lets apps and computers talk to each other | Cilium, Hubble, MetalLB |
 | **4** | Secure access from outside | One safe front door with HTTPS | Traefik, cert-manager, Cloudflare Tunnel |
 | **5** | Storage | Data survives a failed computer | Longhorn |
-| **6** | Management tools | See and control everything from a web page | Rancher |
+| **6** | Management tools | See and control everything from a web page | Headlamp |
 | **7** | The applications | The reason the cluster exists | Vaultwarden, Trilium, a website, fb-search |
 | **8** | Monitoring and alerts | Notice problems early, and keep history | Prometheus, Grafana, Alertmanager, Loki |
 | **9** | Backups and disaster recovery | Recover from the worst case | Longhorn backups, Velero, Garage, a spare computer |
@@ -97,7 +97,7 @@ By default, an app's data lives on whichever computer it happens to run on, whic
 
 Two web-based control panels make the cluster easy to see and manage:
 
-- **Rancher** is the main dashboard: all six computers, everything running on them, and their health in one place. Two copies run for redundancy.
+- **Headlamp** is the main dashboard: all six computers, everything running on them, and their health in one place, with buttons for the common fixes such as restarting an app.
 - **Longhorn** also has its own dashboard for the storage system.
 
 ## Step 7 — The applications
@@ -177,7 +177,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Certificates | cert-manager | v1.21.2 |
 | Outside access | Cloudflare Tunnel (cloudflared) | 2 copies |
 | Storage | Longhorn | 1.12.1 |
-| Management | Rancher | 2.15.2 |
+| Management | Headlamp | 0.45.0 |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 92.3.1 |
 | Logging | Loki + Alloy | chart 18.15.1 / 1.13.1 |
 | Security scanning | Trivy Operator | chart 0.37.0 |
