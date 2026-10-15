@@ -209,7 +209,7 @@ recovery/restore.sh --plan vaultwarden     # shows the latest backup
 
 **Not through Argo CD:** Longhorn's version is in `deploy.sh` and held at
 1.12.1 until 1.13.1. K3s and Cilium are upgraded with Ansible; see
-[Deployment and maintenance](deployment.md).
+[Maintenance](maintenance.md).
 
 ## Undo a bad change
 
