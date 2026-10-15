@@ -1,12 +1,41 @@
 # Argo CD installs the chart with this file; the chart version is in
 # apps/argocd/applications/templates/alloy.yaml.
 
+global:
+  podSecurityContext:
+    fsGroup: 473
+    seccompProfile:
+      type: RuntimeDefault
+
 controller:
   type: deployment
   replicas: 1
+  # Alloy keeps its read positions in its storage path (/tmp/alloy). The root
+  # filesystem is read-only, so that path is a scratch volume; it was already
+  # lost on every restart.
+  volumes:
+    extra:
+      - name: storage
+        emptyDir:
+          sizeLimit: 256Mi
 
 alloy:
   enableReporting: false
+  # Alloy reads logs through the Kubernetes API, not from host folders, so it
+  # needs no root: run as the image's own alloy user (473).
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 473
+    runAsGroup: 473
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  mounts:
+    extra:
+      - name: storage
+        mountPath: /tmp/alloy
   configMap:
     create: true
     content: |
