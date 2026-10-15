@@ -123,7 +123,7 @@ Alloy's `drop_stale` stage drops lines older than 167h before sending them;
 ## Security scanning
 
 Trivy Operator runs in the `trivy-system` namespace, installed by Argo CD
-(see [Argo CD](platform.md#argo-cd)) from `apps/trivy-operator/values.yaml`. It only reads the cluster: it starts
+(see [Argo CD](argocd.md)) from `apps/trivy-operator/values.yaml`. It only reads the cluster: it starts
 short-lived scan jobs in its own namespace and stores the results as report
 resources next to each workload. It does not change or block anything.
 
@@ -224,7 +224,7 @@ Things to know:
 - To add a namespace, make its policy report clean first, then add it to the
   list in the policy file and merge it; Argo CD applies the change.
 - To stop enforcing in an emergency, stop Argo CD's controller first (see
-  [Stopping Argo CD in an emergency](platform.md#stopping-argo-cd-in-an-emergency)),
+  [Stopping Argo CD in an emergency](how-to.md#stop-argo-cd-in-an-emergency)),
   then `kubectl delete validatingpolicy enforce-app-namespaces`. Without that
   step Argo CD restores the policy, or its `Deny` action, within seconds.
 

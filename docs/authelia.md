@@ -3,7 +3,7 @@
 [Back to the README](../README.md)
 
 Authelia (the `charts/authelia` chart, namespace `authelia`, deployed by
-[Argo CD](platform.md#argo-cd)) is the login portal at
+[Argo CD](argocd.md)) is the login portal at
 `auth.${BASE_DOMAIN}` in front of the admin UIs: the Traefik dashboard,
 Longhorn, Prometheus, Grafana, Trilium and Argo CD. Their routes use the
 shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`

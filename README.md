@@ -83,6 +83,7 @@ request; see [How to](docs/how-to.md). Plain `./deploy.sh` reconciles the
 | Plain-English tour of the cluster | [How Our Home Cluster Works](docs/CLUSTER-STORY.md) |
 | Everyday tasks: add an app, change a setting or secret, upgrade, undo | [How to](docs/how-to.md) |
 | Node maintenance, OS updates, deploy.sh, preflight checks | [Maintenance](docs/maintenance.md) |
+| How Argo CD deploys everything, sync policy, chart updates | [Argo CD](docs/argocd.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
 | Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |

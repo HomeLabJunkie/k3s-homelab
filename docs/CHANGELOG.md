@@ -259,7 +259,7 @@ the Secret Argo CD renders was compared with the live one first and matched.
 `renovate.json` was added so that Renovate opens a pull request when a
 chart in an Argo CD Application file has a newer version (eleven charts and
 the snapshot controller). Nothing merges by itself. See
-[Chart updates](platform.md#chart-updates).
+[Chart updates](argocd.md#chart-updates).
 
 The Helm release records of the ten releases Argo CD now owns were deleted
 from production the same day (82 records), so `helm list` shows only what
