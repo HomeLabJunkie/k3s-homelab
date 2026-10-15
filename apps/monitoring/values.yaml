@@ -61,6 +61,12 @@ grafana:
     storageClassName: longhorn
     accessModes: [ReadWriteOnce]
     size: 10Gi
+  # No root init container to chown the volume on every start: Grafana runs
+  # as uid 472, the pod's fsGroup 472 makes the volume writable for it, and
+  # the files are already owned by 472. The root step was the only part of
+  # the pod failing the restricted Pod Security rules.
+  initChownData:
+    enabled: false
   sidecar:
     dashboards:
       enabled: true
