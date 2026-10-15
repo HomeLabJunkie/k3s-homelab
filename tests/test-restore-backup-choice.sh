@@ -16,6 +16,7 @@ case "$*" in
   *"get pvc trilium-data -o jsonpath={.spec.volumeName}"*) printf '%s' pvc-new ;;
   *"get backups.longhorn.io -o json"*) printf '%s\n' "${BACKUPS_JSON:?}" ;;
   *"get backupvolumes.longhorn.io -o json"*) printf '%s\n' "${BACKUPVOLUMES_JSON:?}" ;;
+  *"get volumes.longhorn.io -o json"*) printf '%s\n' '{"items":[{"metadata":{"name":"pvc-new"}}]}' ;;
   *) echo "unexpected kubectl arguments: $*" >&2; exit 1 ;;
 esac
 EOF
@@ -23,11 +24,11 @@ chmod +x "$TEST_ROOT/kubectl"
 
 printf 'trilium|trilium|trilium-data|deployment|trilium|trilium|trilium\n' >"$TEST_ROOT/apps.conf"
 
-backup() { # name volume created [pvcName]
-  jq -cn --arg n "$1" --arg v "$2" --arg at "$3" --arg pvc "${4:-trilium-data}" '{
+backup() { # name volume created [pvcName, or "" for a backup that records no claim]
+  jq -cn --arg n "$1" --arg v "$2" --arg at "$3" --arg pvc "${4-trilium-data}" '{
     metadata:{name:$n},
-    status:{state:"Completed", volumeName:$v, backupCreatedAt:$at,
-      labels:{KubernetesStatus:({namespace:"trilium", pvcName:$pvc}|tojson)}}}'
+    status:{state:"Completed", volumeName:$v, backupCreatedAt:$at, volumeSize:"21474836480",
+      labels:(if $pvc == "" then {} else {KubernetesStatus:({namespace:"trilium", pvcName:$pvc}|tojson)} end)}}'
 }
 backupvolume() { # volume last-backup last-at
   jq -cn --arg v "$1" --arg b "$2" --arg at "$3" \
@@ -45,7 +46,8 @@ export BACKUPS_JSON BACKUPVOLUMES_JSON
 BACKUPS_JSON="$(jq -sc '{items:.}' <(
   backup old-1 pvc-old 2026-10-01T02:37:00Z
   backup old-2 pvc-old 2026-10-02T02:37:00Z
-  backup other pvc-other 2026-10-03T02:37:00Z other-claim))"
+  backup other pvc-other 2026-10-03T02:37:00Z other-claim
+  backup by-hand pvc-unclaimed 2026-10-02T09:00:00Z ""))"
 BACKUPVOLUMES_JSON="$(jq -sc '{items:.}' <(
   backupvolume pvc-old old-2 2026-10-02T02:37:00Z
   backupvolume pvc-other other 2026-10-03T02:37:00Z))"
@@ -57,6 +59,7 @@ grep -q 'latest backup:  old-2 2026-10-02T02:37:00Z pvc-old-' <<<"$out" ||
 out="$(run --list-backups trilium)"
 grep -q '^pvc-old .* 2026-10-02T02:37:00Z  2 ' <<<"$out" || fail "the old volume is not listed with its two backups: $out"
 grep -q 'pvc-other' <<<"$out" && fail "another claim's backups are listed"
+grep -q '^pvc-unclaimed .* 1 .*20 GiB' <<<"$out" || fail "a gone volume whose backups record no claim is not listed: $out"
 
 # A nightly backup of the new, empty volume has run since: it is the default
 # now, the list shows both, and --from-volume reaches the old one.

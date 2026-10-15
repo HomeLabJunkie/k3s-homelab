@@ -281,6 +281,35 @@ list_backups() {
     printf '%-45s %-21s %-6s %s\n' "$vol" "$at" "$count" "$([[ "$vol" == "$live" ]] && echo "(live volume)")"
   done
   echo
+  # Backups made by hand or by Longhorn's system backup do not record the
+  # claim. Volumes that are gone from this cluster may be the old ones; the
+  # recovery bundle's cluster-state/pvc-volume-map.txt names their claims.
+  echo "==> Backups of volumes not in this cluster that record no claim"
+  {
+    kubectl -n longhorn-system get volumes.longhorn.io -o json
+    kubectl -n longhorn-system get backups.longhorn.io -o json
+  } | python3 -c '
+import json,sys
+dec=json.JSONDecoder(); text=sys.stdin.read().strip(); docs=[]
+while text:
+    obj,end=dec.raw_decode(text); docs.append(obj); text=text[end:].strip()
+present={v["metadata"]["name"] for v in docs[0].get("items",[])}
+vols={}
+for b in docs[1].get("items",[]):
+    st=b.get("status",{})
+    if st.get("state")!="Completed" or st.get("volumeName") in present:
+        continue
+    claimed="KubernetesStatus" in (st.get("labels") or {})
+    v=vols.setdefault(st.get("volumeName",""),{"at":"","n":0,"claimed":False,"size":st.get("volumeSize","")})
+    v["n"]+=1; v["claimed"]|=claimed
+    v["at"]=max(v["at"],st.get("backupCreatedAt",""))
+for vol,v in sorted(vols.items(),key=lambda kv:kv[1]["at"],reverse=True):
+    if vol and not v["claimed"]:
+        size,at,n=str(v["size"]),v["at"],v["n"]
+        gib=f"{int(size)/2**30:.0f} GiB" if size.isdigit() else ""
+        print(f"{vol:<45} {at:<21} {n:<6} {gib}")
+'
+  echo
   echo "Restore the newest backup of one: $0 --restore-app $app --from-volume VOLUME"
 }
 
@@ -334,44 +363,25 @@ plan_app() {
   [[ -n "$ingress" ]] && echo "    ingress:         $ingress"
 
   echo
-  case "$kind" in
-    deployment)
-      cat <<EOF
+  local parent=""
+  [[ "$kind" == statefulset ]] && parent="$(operator_parent_for_app "$app" 2>/dev/null || true)"
+  cat <<EOF
 Promotion plan:
   1. Require a completed non-destructive restore test.
-  2. Save Deployment/PVC state under recovery/state/${app}/.
-  3. Delete inspection pod and wait for restored volume to detach.
-  4. Scale Deployment to 0.
-  5. Patch claimName ${pvc} -> ${app}-restore-test.
-  6. Restore replica count and wait for rollout.
-  7. Run health checks.
-Rollback reverses the claimName patch.
-EOF
-      ;;
-    statefulset)
-      local parent
-      parent="$(operator_parent_for_app "$app" 2>/dev/null || true)"
-      cat <<EOF
-Promotion plan:
-  1. Require a completed non-destructive restore test.
-  2. Save StatefulSet/PVC/PV/Longhorn state under recovery/state/${app}/.
+  2. Save ${kind}/PVC/PV/Longhorn state under recovery/state/${app}/.
   3. Remove inspection objects but preserve ${app}-restore-test.
-  4. Scale workload to 0.
+  4. Pause Argo CD and scale the workload to 0.
 EOF
-      if [[ -n "$parent" ]]; then
-        echo "     Scaling is performed through Operator resource ${parent%%|*}/${parent##*|}."
-      else
-        echo "     Scaling is performed directly on StatefulSet/$workload."
-      fi
-      cat <<EOF
+  if [[ -n "$parent" ]]; then
+    echo "     Scaling is performed through Operator resource ${parent%%|*}/${parent##*|}."
+  fi
+  cat <<EOF
   5. Change original PV reclaim policy to Retain.
-  6. Rebind the generated PVC name to a PV backed by ${app}-restore-test.
-  7. Restore replicas and wait for rollout.
+  6. Rebind PVC ${pvc} to a PV backed by ${app}-restore-test.
+  7. Restore replicas, wait for rollout and resume Argo CD.
   8. Run health checks.
-Rollback rebinds the generated PVC to the original retained PV.
+Rollback rebinds the PVC to the original retained PV.
 EOF
-      ;;
-  esac
 }
 
 # The user and group the app's own pods run as, "uid gid". The helper pods
@@ -921,132 +931,8 @@ promotion_status() {
   cat "$dir/state.env"
 }
 
-promote_deployment_app() {
-  local app="$1" confirm="${2:-}"
-  [[ "$confirm" == "--confirm" ]] || {
-    echo "ERROR: promotion requires --confirm"
-    echo "Usage: $0 --promote-app $app --confirm"
-    exit 2
-  }
-
-  app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; exit 1; }
-
-  local ns pvc kind workload service ingress restore_vol pod replicas stamp state_dir old_volume
-  ns="$(app_field "$app" 2)"
-  pvc="$(app_field "$app" 3)"
-  kind="$(app_field "$app" 4)"
-  workload="$(app_field "$app" 5)"
-  service="$(app_field "$app" 6)"
-  ingress="$(app_field "$app" 7)"
-  restore_vol="${app}-restore-test"
-  pod="${app}-restore-inspect"
-
-  [[ "$kind" == "deployment" ]] || {
-    echo "ERROR: promotion currently supports Deployment workloads only."
-    echo "$app uses $kind/$workload."
-    exit 1
-  }
-
-  kubectl -n "$ns" get pvc "$restore_vol" >/dev/null 2>&1 || {
-    echo "ERROR: test restore PVC $ns/$restore_vol does not exist."
-    echo "Run: $0 --restore-app $app"
-    exit 1
-  }
-
-  [[ "$(kubectl -n "$ns" get pvc "$restore_vol" -o jsonpath='{.status.phase}')" == "Bound" ]] || {
-    echo "ERROR: test restore PVC is not Bound."
-    exit 1
-  }
-
-  kubectl -n longhorn-system get volume "$restore_vol" >/dev/null 2>&1 || {
-    echo "ERROR: restored Longhorn volume $restore_vol does not exist."
-    exit 1
-  }
-
-  [[ "$(kubectl -n "$ns" get pod "$pod" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)" == "True" ]] || {
-    echo "ERROR: inspection pod $ns/$pod is not Ready."
-    echo "Run and verify a non-destructive restore first."
-    exit 1
-  }
-
-  old_volume="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}')"
-  replicas="$(kubectl -n "$ns" get deployment "$workload" -o jsonpath='{.spec.replicas}')"
-  [[ -n "$replicas" ]] || replicas=1
-
-  stamp="$(date +%Y%m%d-%H%M%S)"
-  state_dir="${STATE_ROOT}/${app}/${stamp}"
-  mkdir -p "$state_dir"
-
-  local argo_app
-  argo_app="$(argocd_app_for_deployment "$ns" "$workload")"
-
-  kubectl -n "$ns" get deployment "$workload" -o yaml > "$state_dir/deployment-before.yaml"
-  kubectl -n "$ns" get pvc "$pvc" -o yaml > "$state_dir/live-pvc-before.yaml"
-  kubectl -n "$ns" get pvc "$restore_vol" -o yaml > "$state_dir/restored-pvc-before.yaml"
-
-  cat > "$state_dir/state.env" <<EOF
-APP=${app}
-NAMESPACE=${ns}
-WORKLOAD=${workload}
-KIND=${kind}
-ORIGINAL_PVC=${pvc}
-ORIGINAL_VOLUME=${old_volume}
-RESTORED_PVC=${restore_vol}
-RESTORED_VOLUME=${restore_vol}
-ORIGINAL_REPLICAS=${replicas}
-ARGOCD_APP=${argo_app}
-PROMOTED_AT=$(date -Iseconds)
-STATUS=preparing
-EOF
-
-  save_operator_parent "$app" "$ns" "$state_dir"
-
-  ln -sfn "$stamp" "${STATE_ROOT}/${app}/current"
-
-  echo "==> Removing inspection pod..."
-  kubectl -n "$ns" delete pod "$pod" --wait=true
-  wait_longhorn_detached "$restore_vol"
-
-  argocd_pause "$argo_app"
-
-  echo "==> Scaling deployment/$workload to zero..."
-  kubectl -n "$ns" scale deployment "$workload" --replicas=0
-  wait_deployment_scaled_zero "$ns" "$workload"
-
-  echo "==> Switching PVC $pvc -> $restore_vol..."
-  deployment_claim_patch "$ns" "$workload" "$pvc" "$restore_vol"
-  sed -i 's/^STATUS=.*/STATUS=patched/' "$state_dir/state.env"
-
-  echo "==> Scaling deployment/$workload back to $replicas..."
-  kubectl -n "$ns" scale deployment "$workload" --replicas="$replicas"
-
-  if ! kubectl -n "$ns" rollout status deployment/"$workload" --timeout=300s; then
-    echo "ERROR: promoted workload failed to roll out."
-    echo "Rollback with: $0 --rollback-app $app --confirm"
-    exit 1
-  fi
-
-  sed -i 's/^STATUS=.*/STATUS=promoted/' "$state_dir/state.env"
-
-  echo
-  echo "==> Promotion completed."
-  kubectl -n "$ns" get deployment "$workload"
-  kubectl -n "$ns" get pvc "$pvc" "$restore_vol" -o wide
-  verify_service_endpoints "$ns" "$service" || true
-  if [[ -n "$ingress" ]]; then get_app_route "$ns" "$ingress" || true; fi
-
-  echo
-  echo "Rollback state: $state_dir"
-  health_check_app "$app" || echo "WARNING: promotion completed but health verification reported a warning."
-  echo "Rollback: $0 --rollback-app $app --confirm"
-  if [[ -n "$argo_app" ]]; then
-    echo
-    echo "Argo CD application $argo_app stays paused: the Deployment now uses"
-    echo "$restore_vol, which is not what git describes. A rollback resumes it."
-    echo "See docs/platform.md, \"Argo CD and restores\"."
-  fi
-}
-
+# Rolls back a Deployment promotion recorded before promotions rebound the
+# claim, when the Deployment was pointed at APP-restore-test instead.
 # shellcheck disable=SC2153 # upper-case state vars come from state.env
 rollback_deployment_app() {
   local app="$1" confirm="${2:-}"
@@ -1286,6 +1172,48 @@ save_operator_parent() {
   fi
 }
 
+# Scaling and waiting for either kind of workload. A StatefulSet may be scaled
+# through its operator (scale_stateful_app); a Deployment is scaled directly.
+scale_workload() {
+  local app="$1" ns="$2" kind="$3" name="$4" replicas="$5"
+  if [[ "$kind" == statefulset ]]; then
+    scale_stateful_app "$app" "$ns" "$name" "$replicas"
+  else
+    echo "==> Scaling deployment/${name} to ${replicas}..."
+    kubectl -n "$ns" scale deployment "$name" --replicas="$replicas"
+  fi
+}
+
+wait_workload_zero() {
+  local ns="$1" kind="$2" name="$3"
+  if [[ "$kind" == statefulset ]]; then
+    wait_statefulset_scaled_zero "$ns" "$name"
+  else
+    wait_deployment_scaled_zero "$ns" "$name"
+  fi
+}
+
+wait_workload_rollout() {
+  local ns="$1" kind="$2" name="$3" replicas="$4"
+  if [[ "$kind" == statefulset ]]; then
+    wait_statefulset_rollout "$ns" "$name" "$replicas"
+  else
+    kubectl -n "$ns" rollout status deployment/"$name" --timeout=300s
+  fi
+}
+
+workload_argocd_app() {
+  local app="$1" ns="$2" kind="$3" name="$4"
+  if [[ "$kind" == statefulset ]]; then
+    argocd_app_for_stateful "$app" "$ns" "$name"
+  else
+    argocd_app_for_deployment "$ns" "$name"
+  fi
+}
+
+# Promotion for both kinds: the restored volume takes over the live claim's
+# name, so the workload matches git again and Argo CD is paused only during
+# the swap. The old volume is kept (Retain) for --rollback-app.
 promote_stateful_app() {
   local app="$1" confirm="${2:-}"
   [[ "$confirm" == "--confirm" ]] || {
@@ -1308,19 +1236,19 @@ promote_stateful_app() {
   inspect_pod="${app}-restore-inspect"
   promoted_pv="${app}-restore-promoted-pv"
 
-  [[ "$kind" == "statefulset" ]] || {
-    echo "ERROR: $app is not a StatefulSet app."
-    exit 1
-  }
-
-  replicas="$(get_stateful_desired_replicas "$app" "$ns" "$sts")"
+  if [[ "$kind" == statefulset ]]; then
+    replicas="$(get_stateful_desired_replicas "$app" "$ns" "$sts")"
+    template_name="$(stateful_claim_template_name "$ns" "$sts" "$pvc")" || {
+      echo "ERROR: $pvc does not match a volumeClaimTemplate for $sts ordinal 0."
+      exit 1
+    }
+  else
+    replicas="$(kubectl -n "$ns" get deployment "$sts" -o jsonpath='{.spec.replicas}')"
+    [[ -n "$replicas" ]] || replicas=1
+    template_name=""
+  fi
   [[ "$replicas" == "1" ]] || {
-    echo "ERROR: v9 StatefulSet promotion supports exactly 1 replica; $sts has $replicas."
-    exit 1
-  }
-
-  template_name="$(stateful_claim_template_name "$ns" "$sts" "$pvc")" || {
-    echo "ERROR: $pvc does not match a volumeClaimTemplate for $sts ordinal 0."
+    echo "ERROR: promotion supports exactly 1 replica; $kind/$sts has $replicas."
     exit 1
   }
 
@@ -1345,7 +1273,7 @@ promote_stateful_app() {
   state_dir="${STATE_ROOT}/${app}/${stamp}"
   mkdir -p "$state_dir"
 
-  kubectl -n "$ns" get statefulset "$sts" -o yaml > "$state_dir/statefulset-before.yaml"
+  kubectl -n "$ns" get "$kind" "$sts" -o yaml > "$state_dir/${kind}-before.yaml"
   kubectl -n "$ns" get pvc "$pvc" -o yaml > "$state_dir/live-pvc-before.yaml"
   kubectl get pv "$original_pv" -o yaml > "$state_dir/original-pv-before.yaml"
   kubectl -n longhorn-system get volume "$original_volume" -o yaml > "$state_dir/original-longhorn-before.yaml"
@@ -1355,7 +1283,7 @@ promote_stateful_app() {
 APP=${app}
 NAMESPACE=${ns}
 WORKLOAD=${sts}
-KIND=statefulset
+KIND=${kind}
 PVC=${pvc}
 CLAIM_TEMPLATE=${template_name}
 ORIGINAL_PV=${original_pv}
@@ -1380,11 +1308,11 @@ EOF
   # Argo CD would put the replica count back within seconds (self-heal) and
   # start the pod in the middle of the volume swap. It is paused until the
   # workload is running again; a failure in between leaves it paused.
-  argo_app="$(argocd_app_for_stateful "$app" "$ns" "$sts")"
+  argo_app="$(workload_argocd_app "$app" "$ns" "$kind" "$sts")"
   argocd_pause "$argo_app"
 
-  scale_stateful_app "$app" "$ns" "$sts" 0
-  wait_statefulset_scaled_zero "$ns" "$sts"
+  scale_workload "$app" "$ns" "$kind" "$sts" 0
+  wait_workload_zero "$ns" "$kind" "$sts"
   wait_longhorn_detached "$original_volume"
 
   echo "==> Protecting original PV with Retain..."
@@ -1397,14 +1325,14 @@ EOF
   echo "==> Creating restored PV $promoted_pv..."
   create_longhorn_pv "$promoted_pv" "$cap" "$restore_vol" "$lh_replicas" "$sc"
 
-  echo "==> Recreating StatefulSet PVC name $pvc bound to restored PV..."
+  echo "==> Recreating PVC $pvc bound to restored PV..."
   create_prebound_pvc "$ns" "$pvc" "$promoted_pv" "$cap" "$sc"
   wait_pvc_bound_to_pv "$ns" "$pvc" "$promoted_pv"
 
   sed -i 's/^STATUS=.*/STATUS=bound_restored/' "$state_dir/state.env"
 
-  scale_stateful_app "$app" "$ns" "$sts" "$replicas"
-  wait_statefulset_rollout "$ns" "$sts" "$replicas"
+  scale_workload "$app" "$ns" "$kind" "$sts" "$replicas"
+  wait_workload_rollout "$ns" "$kind" "$sts" "$replicas"
 
   sed -i 's/^STATUS=.*/STATUS=promoted/' "$state_dir/state.env"
   # The claim keeps its name and the replica count is back, so the workload
@@ -1412,8 +1340,8 @@ EOF
   argocd_resume "$argo_app"
 
   echo
-  echo "==> StatefulSet promotion completed."
-  kubectl -n "$ns" get statefulset "$sts"
+  echo "==> Promotion completed."
+  kubectl -n "$ns" get "$kind" "$sts"
   kubectl -n "$ns" get pvc "$pvc" -o wide
   kubectl get pv "$original_pv" "$promoted_pv" -o wide
   kubectl -n longhorn-system get volume "$original_volume" "$restore_vol"
@@ -1442,8 +1370,8 @@ rollback_stateful_app() {
   # shellcheck disable=SC1090,SC1091
   source "$dir/state.env"
 
-  [[ "$KIND" == "statefulset" ]] || {
-    echo "ERROR: saved state is not a StatefulSet promotion."
+  [[ -n "${PROMOTED_PV:-}" ]] || {
+    echo "ERROR: saved state is not a claim-rebinding promotion."
     exit 1
   }
   [[ "$STATUS" == "promoted" || "$STATUS" == "bound_restored" ]] || {
@@ -1452,11 +1380,11 @@ rollback_stateful_app() {
   }
 
   local argo_app
-  argo_app="$(argocd_app_for_stateful "$APP" "$NAMESPACE" "$WORKLOAD")"
+  argo_app="$(workload_argocd_app "$APP" "$NAMESPACE" "$KIND" "$WORKLOAD")"
   argocd_pause "$argo_app"
 
-  scale_stateful_app "$APP" "$NAMESPACE" "$WORKLOAD" 0
-  wait_statefulset_scaled_zero "$NAMESPACE" "$WORKLOAD"
+  scale_workload "$APP" "$NAMESPACE" "$KIND" "$WORKLOAD" 0
+  wait_workload_zero "$NAMESPACE" "$KIND" "$WORKLOAD"
   wait_longhorn_detached "$RESTORED_VOLUME"
 
   echo "==> Protecting promoted PV with Retain..."
@@ -1469,20 +1397,20 @@ rollback_stateful_app() {
   echo "==> Clearing old claimRef from original PV so it can bind again..."
   kubectl patch pv "$ORIGINAL_PV" --type=json -p='[{"op":"remove","path":"/spec/claimRef"}]' || true
 
-  echo "==> Recreating original StatefulSet PVC binding..."
+  echo "==> Recreating original PVC binding..."
   create_prebound_pvc "$NAMESPACE" "$PVC" "$ORIGINAL_PV" "$CAPACITY" "$STORAGE_CLASS"
   wait_pvc_bound_to_pv "$NAMESPACE" "$PVC" "$ORIGINAL_PV"
 
-  scale_stateful_app "$APP" "$NAMESPACE" "$WORKLOAD" "$ORIGINAL_REPLICAS"
-  wait_statefulset_rollout "$NAMESPACE" "$WORKLOAD" "$ORIGINAL_REPLICAS"
+  scale_workload "$APP" "$NAMESPACE" "$KIND" "$WORKLOAD" "$ORIGINAL_REPLICAS"
+  wait_workload_rollout "$NAMESPACE" "$KIND" "$WORKLOAD" "$ORIGINAL_REPLICAS"
   argocd_resume "$argo_app"
 
   sed -i 's/^STATUS=.*/STATUS=rolled_back/' "$dir/state.env"
   echo "ROLLED_BACK_AT=$(date -Iseconds)" >> "$dir/state.env"
 
   echo
-  echo "==> StatefulSet rollback completed."
-  kubectl -n "$NAMESPACE" get statefulset "$WORKLOAD"
+  echo "==> Rollback completed."
+  kubectl -n "$NAMESPACE" get "$KIND" "$WORKLOAD"
   kubectl -n "$NAMESPACE" get pvc "$PVC" -o wide
   kubectl get pv "$ORIGINAL_PV" "$PROMOTED_PV" -o wide
   kubectl -n longhorn-system get volume "$ORIGINAL_VOLUME" "$RESTORED_VOLUME"
@@ -1498,21 +1426,19 @@ promote_app() {
   local kind
   kind="$(app_field "$app" 4)"
   case "$kind" in
-    deployment) promote_deployment_app "$app" "$confirm" ;;
-    statefulset) promote_stateful_app "$app" "$confirm" ;;
+    deployment|statefulset) promote_stateful_app "$app" "$confirm" ;;
     *) echo "ERROR: unsupported workload kind: $kind"; exit 1 ;;
   esac
 }
 
 rollback_app() {
-  local app="$1" confirm="${2:-}"
-  local kind
-  kind="$(app_field "$app" 4)"
-  case "$kind" in
-    deployment) rollback_deployment_app "$app" "$confirm" ;;
-    statefulset) rollback_stateful_app "$app" "$confirm" ;;
-    *) echo "ERROR: unsupported workload kind: $kind"; exit 1 ;;
-  esac
+  local app="$1" confirm="${2:-}" dir
+  dir="$(promotion_state_dir "$app" || true)"
+  if [[ -n "$dir" && -f "$dir/state.env" ]] && ! grep -q '^PROMOTED_PV=' "$dir/state.env"; then
+    rollback_deployment_app "$app" "$confirm"
+  else
+    rollback_stateful_app "$app" "$confirm"
+  fi
 }
 
 # Only these modes read the NAS recovery bundle; the rest work from the cluster
