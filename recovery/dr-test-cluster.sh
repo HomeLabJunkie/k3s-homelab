@@ -54,6 +54,11 @@ Usage:
                                           stand-in NAS
   recovery/dr-test-cluster.sh bootstrap   Run site.yml against them
   recovery/dr-test-cluster.sh status      Show VMs and, if built, the nodes
+  recovery/dr-test-cluster.sh destroy-nodes
+                                          Delete the six nodes and their disks
+                                          but keep the stand-in NAS and its
+                                          backups; create then builds new
+                                          nodes, as for a rebuild
   recovery/dr-test-cluster.sh destroy     Delete the VMs, disks and network
 
 Settings, from config/cluster.env or the environment:
@@ -368,6 +373,22 @@ cmd_status() {
   fi
 }
 
+cmd_destroy_nodes() {
+  "${HYPERVISOR[@]}" 'sudo -n bash -s' <<'REMOTE'
+set -Eeuo pipefail
+for name in $(virsh list --all --name | grep -E '^k3s-test-(server|worker)-' || true); do
+  virsh destroy "$name" >/dev/null 2>&1 || true
+  virsh undefine "$name" --nvram >/dev/null
+  rm -f "/tank/vm/k3s-test/$name.qcow2" "/tank/vm/k3s-test/$name-storage.qcow2" \
+    "/tank/vm/k3s-test/$name-seed.iso"
+  echo "  removed $name"
+done
+REMOTE
+  # New nodes get new host keys.
+  rm -f "$STATE_DIR/known_hosts"
+  echo "Nodes removed; the stand-in NAS and its backups are kept."
+}
+
 cmd_destroy() {
   "${HYPERVISOR[@]}" 'sudo -n bash -s' <<'REMOTE'
 set -Eeuo pipefail
@@ -398,6 +419,7 @@ case "$1" in
   create) cmd_create ;;
   bootstrap) cmd_bootstrap ;;
   status) cmd_status ;;
+  destroy-nodes) cmd_destroy_nodes ;;
   destroy) cmd_destroy ;;
   *) usage >&2; exit 2 ;;
 esac

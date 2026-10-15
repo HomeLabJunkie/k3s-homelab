@@ -404,23 +404,15 @@ Trilium and Vaultwarden hold data, so their applications sync changes from
 git but do not self-heal: a manual scale-down for maintenance stays as it
 is until git changes.
 
-`recovery/restore.sh --promote-app APP` scales a Deployment to zero and points
-it at a restored volume. If Argo CD manages that Deployment (Trilium,
-Vaultwarden and Authelia today), the script first pauses its application by
-setting the `argocd.argoproj.io/skip-reconcile` annotation, so nothing puts
-the old volume back. `--rollback-app` removes the annotation once the
-Deployment matches git again.
-
-For an app that runs as a StatefulSet (Prometheus, Alertmanager, Loki) the
-script pauses the application only while it swaps the volume. The claim
-keeps its name, so the workload matches git again as soon as it is running
-and the application is resumed at the end of both `--promote-app` and
-`--rollback-app`. A failure in between leaves it paused.
-
-After a Deployment's promotion that is kept, the application stays paused, because the
-Deployment uses the `APP-restore-test` volume and git names the original. Argo
-CD ignores the application until the annotation is removed, and its status
-there goes stale. To see or clear a pause:
+`recovery/restore.sh --promote-app APP` swaps an app onto a restored volume.
+It pauses the app's Argo CD application (the `argocd.argoproj.io/skip-reconcile`
+annotation) only while it does so: it scales the workload to zero, makes the
+restored volume take over the live claim's name, keeping the claim's Argo CD
+tracking, and scales back up. The workload then matches git again, so the
+application is resumed at the end of both `--promote-app` and `--rollback-app`.
+This is the same for Deployments (Trilium, Vaultwarden, Authelia, Grafana) and
+StatefulSets (Prometheus, Alertmanager, Loki). A failure in between leaves the
+application paused. To see or clear a pause:
 
 ```bash
 kubectl -n argocd get applications.argoproj.io \
@@ -428,8 +420,9 @@ kubectl -n argocd get applications.argoproj.io \
 kubectl -n argocd annotate applications.argoproj.io APP argocd.argoproj.io/skip-reconcile-
 ```
 
-Clearing it while the Deployment still uses the restored volume makes Argo
-CD switch it back to the original at the next sync.
+Before 2026-10-15 a Deployment's promotion pointed the Deployment at
+`APP-restore-test` instead and left the application paused; `--rollback-app`
+still undoes one of those.
 
 ### Stopping Argo CD in an emergency
 
