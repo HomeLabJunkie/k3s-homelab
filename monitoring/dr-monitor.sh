@@ -98,10 +98,12 @@ for current in "$ROOT"/recovery/state/*/current; do
   case "$status" in ""|rolled_back|completed|cleaned) ;; *) warn "$app has active promotion state: $status" ;; esac
 done
 
+# A kept promotion leaves the app on its restore volume; that one is live.
 while read -r v; do
   [[ -z "$v" ]] && continue
+  [[ "$(kubectl get pv "$v" -o jsonpath='{.status.phase}' 2>/dev/null || true)" == Bound ]] && continue
   warn "Restore-test Longhorn volume still exists: $v"
-done < <(kubectl -n longhorn-system get volumes.longhorn.io -o name 2>/dev/null | sed 's#^.*/##' | grep -- '-restore-test$' || true)
+done < <(kubectl -n longhorn-system get volumes.longhorn.io -o name 2>/dev/null | sed 's#^.*/##' | grep -E -- '-restore-test(-b)?$' || true)
 
 if [[ -f "$APPS_FILE" ]]; then
   bjson="$(kubectl -n longhorn-system get backupvolumes.longhorn.io -o json 2>/dev/null || echo '{"items":[]}')"

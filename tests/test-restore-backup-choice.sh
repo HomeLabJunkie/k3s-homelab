@@ -16,6 +16,7 @@ case "$*" in
   *"get pvc trilium-data -o jsonpath={.spec.volumeName}"*) printf '%s' pvc-new ;;
   *"get backups.longhorn.io -o json"*) printf '%s\n' "${BACKUPS_JSON:?}" ;;
   *"get backupvolumes.longhorn.io -o json"*) printf '%s\n' "${BACKUPVOLUMES_JSON:?}" ;;
+  *"get pv pvc-new -o jsonpath={.spec.csi.volumeHandle}"*) printf '%s' pvc-new ;;
   *"get volumes.longhorn.io -o json"*) printf '%s\n' '{"items":[{"metadata":{"name":"pvc-new"}}]}' ;;
   *) echo "unexpected kubectl arguments: $*" >&2; exit 1 ;;
 esac

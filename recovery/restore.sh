@@ -67,6 +67,7 @@ Usage:
   restore.sh --cleanup-test APP
   restore.sh --promote-app APP --confirm
   restore.sh --rollback-app APP --confirm
+  restore.sh --accept-app APP --confirm
   restore.sh --promotion-status APP
   restore.sh --plan APP [--from-volume VOLUME]
   restore.sh --health-check APP
@@ -167,6 +168,16 @@ app_field() {
   awk -F'|' -v n="$field" '{print $n}' <<<"$line"
 }
 
+# The Longhorn volume behind the claim NS/PVC. Usually the PV has the
+# volume's name; a promotion before 2026-10-15 named it APP-restore-promoted-pv.
+claim_volume() {
+  local ns="$1" pvc="$2" pv handle
+  pv="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)"
+  [[ -n "$pv" ]] || return 0
+  handle="$(kubectl get pv "$pv" -o jsonpath='{.spec.csi.volumeHandle}' 2>/dev/null || true)"
+  printf '%s\n' "${handle:-$pv}"
+}
+
 list_apps() {
   printf "%-12s %-14s %-55s %-12s %s\n" "APP" "NAMESPACE" "PVC" "KIND" "WORKLOAD"
   printf "%-12s %-14s %-55s %-12s %s\n" "------------" "--------------" "-------------------------------------------------------" "------------" "------------------------------"
@@ -199,7 +210,7 @@ inspect_app() {
   echo "==> PVC:"
   kubectl -n "$ns" get pvc "$pvc" -o wide
 
-  volume="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}')"
+  volume="$(claim_volume "$ns" "$pvc")"
   echo
   echo "==> Longhorn volume:"
   kubectl -n longhorn-system get volume "$volume"
@@ -273,7 +284,7 @@ list_backups() {
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; return 1; }
   ns="$(app_field "$app" 2)"
   pvc="$(app_field "$app" 3)"
-  live="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)"
+  live="$(claim_volume "$ns" "$pvc")"
 
   echo "==> Backups of $ns/$pvc, by volume (newest first)"
   printf '%-45s %-21s %-6s %s\n' VOLUME NEWEST BACKUPS ""
@@ -336,6 +347,21 @@ resolve_backup() {
 }
 
 
+# The Longhorn volume a new restore of APP goes into. A promotion that is kept
+# leaves the app running on its restore volume, so the next restore uses the
+# other of two names, and the two alternate.
+restore_volume_name() {
+  local app="$1" ns pvc live
+  ns="$(app_field "$app" 2)"
+  pvc="$(app_field "$app" 3)"
+  live="$(claim_volume "$ns" "$pvc")"
+  if [[ "$live" == "${app}-restore-test" ]]; then
+    echo "${app}-restore-test-b"
+  else
+    echo "${app}-restore-test"
+  fi
+}
+
 plan_app() {
   local app="$1"
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; return 1; }
@@ -347,7 +373,7 @@ plan_app() {
   workload="$(app_field "$app" 5)"
   service="$(app_field "$app" 6)"
   ingress="$(app_field "$app" 7)"
-  volume="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}')"
+  volume="$(claim_volume "$ns" "$pvc")"
   backup_line="$(resolve_backup "$ns" "$pvc" "$volume" "${FROM_VOLUME:-}" 2>/dev/null || true)"
 
   echo "==> DR PLAN: $app"
@@ -356,8 +382,8 @@ plan_app() {
   echo "    live PVC:       $pvc"
   echo "    live volume:    $volume"
   echo "    latest backup:  ${backup_line:-NONE}"
-  echo "    test volume:    ${app}-restore-test"
-  echo "    test PVC:       ${app}-restore-test"
+  echo "    test volume:    $(restore_volume_name "$app")"
+  echo "    test PVC:       $(restore_volume_name "$app")"
   echo "    inspect pod:    ${app}-restore-inspect"
   [[ -n "$service" ]] && echo "    service:         $service"
   [[ -n "$ingress" ]] && echo "    ingress:         $ingress"
@@ -565,7 +591,7 @@ restore_app() {
 
   ns="$(app_field "$app" 2)"
   pvc="$(app_field "$app" 3)"
-  volume="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}')"
+  volume="$(claim_volume "$ns" "$pvc")"
 
   backup_line="$(resolve_backup "$ns" "$pvc" "$volume" "${FROM_VOLUME:-}")" || {
     echo "ERROR: no completed Longhorn backup found for $ns/$pvc (${FROM_VOLUME:-$volume})"
@@ -577,7 +603,7 @@ restore_app() {
   backup_url="$(kubectl -n longhorn-system get backup "$backup" -o jsonpath='{.status.url}')"
   backup_size="$(kubectl -n longhorn-system get backup "$backup" -o jsonpath='{.status.volumeSize}')"
 
-  restore_vol="${app}-restore-test"
+  restore_vol="$(restore_volume_name "$app")"
   pv="${restore_vol}-pv"
   pod="${app}-restore-inspect"
   read -r run_uid run_gid <<<"$(app_run_ids "$app" "$ns")"
@@ -759,9 +785,11 @@ cleanup_test() {
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; exit 1; }
 
   ns="$(app_field "$app" 2)"
-  restore_vol="${app}-restore-test"
+  restore_vol="$(restore_volume_name "$app")"
   pv="${restore_vol}-pv"
-  promoted_pv="${app}-restore-promoted-pv"
+  # The PV a promotion makes has the volume's name; before 2026-10-15 it was
+  # APP-restore-promoted-pv. Either is removed only when nothing is bound to it.
+  promoted_pv="$restore_vol"
   pod="${app}-restore-inspect"
 
   local current_dir current_status
@@ -781,7 +809,14 @@ cleanup_test() {
   kubectl -n "$ns" delete pod "$pod" --ignore-not-found
   kubectl -n "$ns" delete pvc "$restore_vol" --ignore-not-found
   kubectl delete pv "$pv" --ignore-not-found
-  kubectl delete pv "$promoted_pv" --ignore-not-found
+  local old_pv
+  for old_pv in "$promoted_pv" "${app}-restore-promoted-pv"; do
+    if [[ "$(kubectl get pv "$old_pv" -o jsonpath='{.status.phase}' 2>/dev/null || true)" == Bound ]]; then
+      echo "ERROR: PV $old_pv is bound; it holds live data. Leaving it and $restore_vol alone."
+      return 1
+    fi
+    kubectl delete pv "$old_pv" --ignore-not-found
+  done
   kubectl -n longhorn-system delete volume "$restore_vol" --ignore-not-found
 
   if [[ -n "${current_status:-}" && "$current_status" == "rolled_back" ]]; then
@@ -929,6 +964,36 @@ promotion_status() {
   fi
   echo "==> Promotion state: $dir"
   cat "$dir/state.env"
+}
+
+# Keeps a promotion: the restored data stays, the state is closed and
+# archived, and the DR checks stop reporting it. The volume the app used
+# before is left (Retain) for deleting by hand once it is not wanted.
+# shellcheck disable=SC2153 # upper-case state vars come from state.env
+accept_app() {
+  local app="$1" confirm="${2:-}" dir
+  [[ "$confirm" == "--confirm" ]] || {
+    echo "ERROR: accepting a promotion requires --confirm"
+    echo "Usage: $0 --accept-app $app --confirm"
+    exit 2
+  }
+  dir="$(promotion_state_dir "$app" || true)"
+  [[ -n "$dir" && -f "$dir/state.env" ]] || { echo "ERROR: no promotion state found for $app."; exit 1; }
+  # shellcheck disable=SC1090,SC1091
+  source "$dir/state.env"
+  [[ "$STATUS" == promoted ]] || { echo "ERROR: promotion state is $STATUS; only a promoted app can be accepted."; exit 1; }
+  [[ -n "${PROMOTED_PV:-}" ]] || {
+    echo "ERROR: this promotion predates claim rebinding; roll it back and promote again."
+    exit 1
+  }
+
+  sed -i 's/^STATUS=.*/STATUS=completed/' "$dir/state.env"
+  echo "ACCEPTED_AT=$(date -Iseconds)" >> "$dir/state.env"
+  archive_state "$app"
+  echo "==> $app keeps the restored data (volume $RESTORED_VOLUME)."
+  echo "The volume it used before is kept. Delete it when it is no longer wanted:"
+  echo "  kubectl delete pv $ORIGINAL_PV"
+  echo "  kubectl -n longhorn-system delete volumes.longhorn.io $ORIGINAL_VOLUME"
 }
 
 # Rolls back a Deployment promotion recorded before promotions rebound the
@@ -1233,9 +1298,11 @@ promote_stateful_app() {
   kind="$(app_field "$app" 4)"
   sts="$(app_field "$app" 5)"
   service="$(app_field "$app" 6)"
-  restore_vol="${app}-restore-test"
+  restore_vol="$(restore_volume_name "$app")"
   inspect_pod="${app}-restore-inspect"
-  promoted_pv="${app}-restore-promoted-pv"
+  # Named like the volume, as Longhorn names the PVs it creates: the checks
+  # find a claim's backups through the PV name.
+  promoted_pv="$restore_vol"
 
   if [[ "$kind" == statefulset ]]; then
     replicas="$(get_stateful_desired_replicas "$app" "$ns" "$sts")"
@@ -1326,8 +1393,8 @@ EOF
   echo "==> Creating restored PV $promoted_pv..."
   # Left from an earlier promotion that was rolled back but not cleaned up,
   # it still names the claim that was deleted then, and nothing could bind.
-  if kubectl get pv "$promoted_pv" >/dev/null 2>&1; then
-    kubectl patch pv "$promoted_pv" --type=json -p='[{"op":"remove","path":"/spec/claimRef"}]' 2>/dev/null || true
+  if [[ "$(kubectl get pv "$promoted_pv" -o jsonpath='{.status.phase}' 2>/dev/null || true)" == Released ]]; then
+    kubectl patch pv "$promoted_pv" --type=json -p='[{"op":"remove","path":"/spec/claimRef"}]'
   fi
   create_longhorn_pv "$promoted_pv" "$cap" "$restore_vol" "$lh_replicas" "$sc"
 
@@ -1356,6 +1423,7 @@ EOF
   echo
   health_check_app "$app" || echo "WARNING: promotion completed but health verification reported a warning."
   echo "Rollback: $0 --rollback-app $app --confirm"
+  echo "Keep it:  $0 --accept-app $app --confirm"
 }
 
 # shellcheck disable=SC2153 # upper-case state vars come from state.env
@@ -1520,6 +1588,10 @@ case "$MODE" in
   --rollback-app)
     [[ -n "$APP_NAME" ]] || { usage; exit 2; }
     rollback_app "$APP_NAME" "${3:-}"
+    ;;
+  --accept-app)
+    [[ -n "$APP_NAME" ]] || { usage; exit 2; }
+    accept_app "$APP_NAME" "${3:-}"
     ;;
   --promotion-status)
     [[ -n "$APP_NAME" ]] || { usage; exit 2; }
