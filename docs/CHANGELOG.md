@@ -6,6 +6,42 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: Data restored onto a rebuilt cluster
+
+A rebuild could bring back every application but not its data:
+`recovery/restore.sh` found backups only by the live volume's name, and a
+rebuilt cluster's volumes are new. Longhorn records the claim on each nightly
+backup, so `restore.sh` now falls back to the newest backup of the volume that
+held the same claim before, `--list-backups` shows the backups by volume
+(including old volumes whose hand-made or system backups record no claim),
+and `--from-volume` picks one.
+
+Proven on the test cluster with `dr-test-cluster.sh destroy-nodes` (new): the
+six nodes were deleted and rebuilt with `deploy.sh --bootstrap` three times
+while the stand-in NAS kept the backups. Trilium and Vaultwarden came back
+with the same Trilium document ID and 577 notes, the same Vaultwarden signing
+key and a marker file written before the backup, checked by salted hash. Both
+ways were tried: the automatic fallback, and `--from-volume` after the
+nightly job had already backed up the new, empty volume. The third bootstrap
+stopped at the Longhorn wait because the laptop slept for seven hours during
+it; a second `deploy.sh` finished it.
+
+The test found that a kept promotion was not safe to live with, now fixed:
+
+- A Deployment's promotion pointed it at `APP-restore-test` and left Argo CD
+  paused for good, so later backups recorded that claim while the checks
+  watched the empty original. Deployments now promote like StatefulSets: the
+  restored volume takes over the live claim's name, with its Argo CD tracking,
+  and Argo CD resumes. A promotion recorded the old way still rolls back.
+- The next restore would have reused the live volume's name. Restore volumes
+  now alternate between `APP-restore-test` and `APP-restore-test-b`, the PV a
+  promotion makes is named like its volume, `--cleanup-test` never deletes a
+  bound PV, and backup volumes are matched by exact name in `restore.sh`,
+  `dr-status.sh`, the DR monitor and the Longhorn canary.
+- A promotion after a rollback without cleanup could not bind; it can now.
+- `--accept-app` closes a kept promotion, and the DR monitor no longer warns
+  about a restore volume that is in use.
+
 ## 2026-10-14: Prometheus and Loki promotion proven on production
 
 `recovery/restore.sh` restored each app's 09:20 backup into a test volume

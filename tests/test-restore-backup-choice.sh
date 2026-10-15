@@ -77,6 +77,12 @@ grep -q '^pvc-old ' <<<"$out" || fail "the old volume is missing once the new on
 out="$(run --plan trilium --from-volume pvc-old)"
 grep -q 'latest backup:  old-2 ' <<<"$out" || fail "--from-volume did not pick the old volume: $out"
 
+# trilium-restore-test-b's backups are not trilium-restore-test's.
+BACKUPVOLUMES_JSON="$(jq -c --argjson b "$(backupvolume trilium-restore-test-b newer-b 2026-10-09T02:37:00Z)" '.items += [$b]' <<<"$BACKUPVOLUMES_JSON")"
+BACKUPVOLUMES_JSON="$(jq -c --argjson b "$(backupvolume trilium-restore-test older-a 2026-10-08T02:37:00Z)" '.items += [$b]' <<<"$BACKUPVOLUMES_JSON")"
+out="$(run --plan trilium --from-volume trilium-restore-test)"
+grep -q 'latest backup:  older-a ' <<<"$out" || fail "a volume's backups were mixed with those of its -b namesake: $out"
+
 out="$(run --plan trilium --from-volume pvc-missing)"
 grep -q 'latest backup:  NONE' <<<"$out" || fail "a volume with no backups did not show NONE: $out"
 

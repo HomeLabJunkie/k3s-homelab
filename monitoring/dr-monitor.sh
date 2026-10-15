@@ -112,11 +112,12 @@ if [[ -f "$APPS_FILE" ]]; then
     vol="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)"
     [[ -n "$vol" ]] || { crit "$app PVC $ns/$pvc is missing or unbound"; continue; }
     last="$(printf '%s' "$bjson" | python3 -c '
-import json,sys
+import json,re,sys
 vol=sys.argv[1]; d=json.load(sys.stdin); xs=[]
+own=re.compile(re.escape(vol)+r"-[0-9a-f]{8}$")  # not APP-restore-test-b for APP-restore-test
 for i in d.get("items",[]):
  n=i.get("metadata",{}).get("name",""); s=i.get("status",{})
- if n.startswith(vol+"-") or s.get("volumeName")==vol:
+ if own.match(n) or s.get("volumeName")==vol:
   t=s.get("lastBackupAt","")
   if t: xs.append(t)
 print(max(xs) if xs else "")

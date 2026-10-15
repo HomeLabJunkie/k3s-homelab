@@ -225,14 +225,17 @@ latest_backup_for_volume() {
 
   kubectl -n longhorn-system get backupvolumes.longhorn.io -o json |
   python3 -c '
-import json,sys
+import json,re,sys
 vol=sys.argv[1]
 data=json.load(sys.stdin)
 matches=[]
+# A backup volume is named after its volume plus "-" and eight hex digits; a
+# bare prefix match would also take APP-restore-test-b for APP-restore-test.
+own=re.compile(re.escape(vol)+r"-[0-9a-f]{8}$")
 for item in data.get("items",[]):
     name=item["metadata"]["name"]
     st=item.get("status",{})
-    if name.startswith(vol+"-") or st.get("volumeName")==vol:
+    if own.match(name) or st.get("volumeName")==vol:
         lb=st.get("lastBackupName","")
         lat=st.get("lastBackupAt","")
         if lb:
