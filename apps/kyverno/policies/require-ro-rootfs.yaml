@@ -19,6 +19,13 @@ spec:
         apiVersions: [v1]
         operations: [CREATE, UPDATE]
         resources: [pods]
+    # Not the namespaces whose pods need a writable host or root by design;
+    # keep in step with vpolExclude in ../policies-values.yaml.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, longhorn-system, metallb-system]
   variables:
     - name: allContainers
       expression: >-
