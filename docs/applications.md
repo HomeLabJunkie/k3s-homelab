@@ -2,23 +2,32 @@
 
 [Back to the README](../README.md)
 
-## Rancher
+## Headlamp
 
-Rancher runs in `cattle-system`, deployed by Argo CD (the `rancher` application; see [Argo CD](platform.md#argo-cd)). `deploy.sh` sets the admin password and server URL through its API after the first install.
+Headlamp is the web UI for the cluster (it replaced Rancher), at `https://headlamp.${BASE_DOMAIN}`:
+every resource, pod logs, restarts, scaling, cordoning and draining a node,
+editing an object. Argo CD deploys it from the upstream chart (the
+`headlamp` application, values in `apps/headlamp/values.yaml`).
 
-The deployment includes:
+There is no Headlamp login. Authelia (two-factor, `admins` group) is the only
+gate, and Headlamp then acts as its own service account, which is
+**cluster-admin**: anything, Secrets included. A network policy
+(`apps/network-policies/headlamp.yaml`) lets only Traefik connect, so nothing
+inside the cluster can reach it around Authelia.
 
-- TLS certificate from cert-manager
-- Traefik ingress
-- two Rancher replicas
-- bootstrap/admin credential configuration
-- server URL configuration
+A change made in Headlamp to something Argo CD manages is undone within
+seconds, as with `kubectl`: scale or edit through git instead, or pause the
+application first (see [Pausing one application](argocd.md#pausing-one-application)).
+Restarting a workload, deleting a pod and cordoning a node are not undone.
+
+The hostname needs a public route on the Cloudflare tunnel, set in the
+Cloudflare dashboard; without one it works only on the LAN.
 
 ## Trilium
 
 Trilium is deployed by Argo CD from the `charts/trilium` chart, with
 persistent Longhorn storage. Self-heal is off for it; see
-[Argo CD and restores](platform.md#argo-cd-and-restores).
+[Sync policy](argocd.md#sync-policy).
 
 Protected PVC:
 
@@ -37,7 +46,7 @@ group-writable.
 
 Vaultwarden is deployed by Argo CD from the `charts/vaultwarden` chart, with
 persistent Longhorn storage. Self-heal is off for it; see
-[Argo CD and restores](platform.md#argo-cd-and-restores).
+[Sync policy](argocd.md#sync-policy).
 
 Protected PVC:
 
@@ -65,7 +74,7 @@ Image upgrades are recorded in the [changelog](CHANGELOG.md).
 
 The `charts/website` Helm chart runs the `jeffriffle` Deployment in the
 `website` namespace. Argo CD deploys it (the `website` application, see
-[Argo CD](platform.md#argo-cd)) and takes the domain from
+[Argo CD](argocd.md)) and takes the domain from
 `website/values.yaml` in the private configuration repository. The site is
 served from the private `HomeLabJunkie/jeffriffle.com` repo at that domain,
 and `www.` redirects there. The chart also holds the route for `/fb-search`,

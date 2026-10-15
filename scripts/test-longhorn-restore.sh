@@ -37,11 +37,12 @@ done <"$APPS_FILE"
 [[ -n "$selected" ]] || { echo "ERROR: no protected Longhorn volume found" >&2; exit 1; }
 IFS='|' read -r app ns pvc volume <<<"$selected"
 backup="$(kubectl -n "$LONGHORN_NS" get backupvolumes.longhorn.io -o json | python3 -c '
-import json,sys
+import json,re,sys
 vol=sys.argv[1]; xs=[]
+own=re.compile(re.escape(vol)+r"-[0-9a-f]{8}$")  # not APP-restore-test-b for APP-restore-test
 for x in json.load(sys.stdin).get("items",[]):
  s=x.get("status",{}); n=x.get("metadata",{}).get("name","")
- if (n.startswith(vol+"-") or s.get("volumeName")==vol) and s.get("lastBackupName"): xs.append((s.get("lastBackupAt", ""),s["lastBackupName"]))
+ if (own.match(n) or s.get("volumeName")==vol) and s.get("lastBackupName"): xs.append((s.get("lastBackupAt", ""),s["lastBackupName"]))
 if not xs: raise SystemExit(1)
 print(max(xs)[1])
 ' "$volume")"

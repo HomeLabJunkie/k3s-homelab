@@ -31,7 +31,7 @@ Core platform:
 | TLS | cert-manager + Let's Encrypt |
 | External access | Cloudflare Tunnel |
 | Persistent storage | Longhorn |
-| Cluster management | Rancher |
+| Cluster UI | Headlamp, behind Authelia |
 | Metrics | kube-prometheus-stack |
 | Dashboards | Grafana |
 | Logging | Loki + Grafana Alloy |
@@ -39,7 +39,7 @@ Core platform:
 | GitOps | Argo CD deploys everything from git except the cluster itself and Longhorn, which `deploy.sh` builds |
 | Policy | Kyverno (enforced in the application namespaces, audit elsewhere) |
 | Backup storage | Garage S3 on Unraid plus NFS and SMB on a separate NAS |
-| DR | Dedicated K3s DR host + automated rehearsal tooling |
+| DR | Recovery bundle, tested rebuild and restore, rehearsals on a separate server |
 
 Environment-specific addresses, domains, email addresses, backup exports, and VIP ranges belong in `config/cluster.env` and local inventory/secrets rather than in this README.
 
@@ -59,71 +59,50 @@ Traefik --> Authelia (admin UIs)
 Kubernetes Services / Pods
 ```
 
-## Everyday commands
+## Start here
 
-Run everything from `~/Work/k3s-homelab`. Each command that changes the cluster
-has a read-only check to run first.
+Run everything from `~/Work/k3s-homelab`. Every command that changes the
+cluster has a read-only check to run first.
 
-| I want to... | Run | Changes the cluster? |
-| --- | --- | --- |
-| Check overall health | `./repo-doctor.sh` (`--quick` skips preflight, manifests and DR) | No |
-| Check a deployment would be safe | `./deploy.sh --preflight-only` | No |
-| Validate manifests before applying | `./scripts/validate-manifests.sh` | No |
-| Deploy or converge the cluster | `./deploy.sh` | Yes |
-| Check one node | `./maintain-node.sh <NODE_IP>` | No |
-| Reconcile one node | `./maintain-node.sh <NODE_IP> --apply` | Yes |
-| Check all nodes, one at a time | `./maintain-cluster.sh` | No |
-| Reconcile all nodes, one at a time | `./maintain-cluster.sh --apply` | Yes |
-| Preview OS package updates | `./update-os.sh` | No |
-| Apply OS package updates | `./update-os.sh --apply` | Yes, reboots nodes |
-| Create a cluster recovery bundle | `./backup/backup.sh` | No |
-| Verify the latest backup | `./backup/verify-backup.sh` | No |
-| Check DR readiness | `./dr-status.sh` | No |
-| Plan a DR rehearsal | `./recovery/dr-rehearsal.sh` | No |
-| Run a full DR rehearsal | `./recovery/dr-rehearsal.sh --execute` | DR host only |
-| Validate a new operator laptop | `./workstation-readiness.sh` | No |
+```bash
+./repo-doctor.sh           # health of the laptop, repository and cluster
+argocd app list            # every application Synced and Healthy
+./dr-status.sh             # backups fresh, DR ready
+```
 
-Plain `./deploy.sh` reconciles the **existing** cluster. Building a new cluster
-is always explicit: `./deploy.sh --bootstrap`. Never use bootstrap mode on an
-established cluster.
+Argo CD deploys everything from this repository's `main` branch except K3s,
+Cilium, kube-vip, MetalLB and Longhorn, so most changes are a merged pull
+request; see [How to](docs/how-to.md). Plain `./deploy.sh` reconciles the
+**existing** cluster; building a new one is always explicit:
+`./deploy.sh --bootstrap`.
 
 ## Documentation
 
 | Topic | Read |
 | --- | --- |
 | Plain-English tour of the cluster | [How Our Home Cluster Works](docs/CLUSTER-STORY.md) |
-| How deployment and maintenance work, preflight checks, toolchain | [Deployment and maintenance](docs/deployment.md) |
-| Step-by-step maintenance and OS updates | [Maintenance cheat sheet](cheat-sheet.md) |
+| Everyday tasks: add an app, change a setting or secret, upgrade, undo | [How to](docs/how-to.md) |
+| Node maintenance, OS updates, deploy.sh, preflight checks | [Maintenance](docs/maintenance.md) |
+| How Argo CD deploys everything, sync policy, chart updates | [Argo CD](docs/argocd.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
-| Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
+| Headlamp, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
 | Prometheus, Grafana, alerts, Loki | [Monitoring and logging](docs/observability.md) |
-| What is protected, backup layers, DR rehearsal | [Backup and disaster recovery](docs/backup-and-dr.md) |
-| Backup commands, schedules, troubleshooting | [Backup procedures](backup-procedures.md) |
-| Velero and Garage | [Velero backup procedures](velero-backup-procedures.md) |
-| Full recovery procedure | [DR runbook](recovery/DR-RUNBOOK.md) |
+| What is backed up, checking backups, restoring one app | [Backups](docs/backups.md) |
+| Rebuilding the cluster or a laptop, DR rehearsals | [Disaster recovery](docs/disaster-recovery.md) |
 | `cluster.env`, `.secrets.enc`, expected secret values | [Configuration and secrets](docs/configuration.md) |
-| Setting up a new operator laptop | [Operator laptop setup](operator-laptop-setup.md) |
+| Setting up another laptop | [Laptop setup](docs/laptop-setup.md) |
 | Where files live | [Repository layout](docs/repository-layout.md) |
 | What changed and when | [Changelog](docs/CHANGELOG.md) |
 
 ## Safety rules
 
-This repository contains infrastructure automation with cluster-admin impact.
-
-Before committing changes:
-
-- never commit live tokens, passwords, private keys, or decrypted SOPS data
-- keep real inventory and local environment files ignored
-- run `./deploy.sh --preflight-only` before normal production deployment
-- use plain `./deploy.sh` only for existing-cluster reconciliation
-- require explicit `--bootstrap` for initial cluster provisioning
-- never bypass `KUBE_VIP` validation or rendered-control-plane assertions
-- keep control-plane and agent reconciliation serial
-- review generated restore manifests before applying them
-- preserve the DR safety gates
-- avoid granting blanket passwordless sudo
-- keep privileged DR helpers root-owned on the DR host
+- Never commit tokens, passwords, private keys or decrypted SOPS data; real
+  inventory and environment files stay ignored.
+- Run the read-only check before anything that changes the cluster.
+- Never use `--bootstrap` on an existing cluster.
+- Nodes are changed one at a time; never two control-plane nodes at once.
+- Keep the DR safety gates and the `KUBE_VIP` and control-plane checks.
 
 ## Project Origins
 

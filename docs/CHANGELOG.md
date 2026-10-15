@@ -6,6 +6,80 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: Rancher removed
+
+Rancher, deployed by Argo CD but unused since Headlamp arrived, is gone from
+git and from the cluster. `scripts/remove-rancher.sh` removed what Rancher
+had installed by itself: Fleet, Turtles and Cluster API, its webhook, the
+system upgrade controller (no upgrade plans used it), 99 CRDs with their
+objects, 17 namespaces and 69 ClusterRoles and bindings. Rancher's own
+rancher-cleanup script was not used, because it also deletes the
+`monitoring-*` ClusterRoles and every Prometheus Operator object and CRD,
+which here belong to kube-prometheus-stack. `deploy.sh` no longer sets a
+Rancher password, and Traefik no longer skips certificate checks on HTTPS
+backends, a setting added for Rancher that no route needs.
+
+## 2026-10-15: Headlamp added as the cluster UI
+
+Headlamp (chart 0.45.0) is a new Argo CD application, at
+`headlamp.<domain>` behind Authelia, to replace Rancher as the web UI for
+looking at the cluster and doing common fixes. It has no login of its own and
+acts as cluster-admin, so a network policy admits only Traefik. Rancher is
+still installed; removing it is a separate change.
+
+## 2026-10-15: Data restored onto a rebuilt cluster
+
+A rebuild could bring back every application but not its data:
+`recovery/restore.sh` found backups only by the live volume's name, and a
+rebuilt cluster's volumes are new. Longhorn records the claim on each nightly
+backup, so `restore.sh` now falls back to the newest backup of the volume that
+held the same claim before, `--list-backups` shows the backups by volume
+(including old volumes whose hand-made or system backups record no claim),
+and `--from-volume` picks one.
+
+Proven on the test cluster with `dr-test-cluster.sh destroy-nodes` (new): the
+six nodes were deleted and rebuilt with `deploy.sh --bootstrap` three times
+while the stand-in NAS kept the backups. Trilium and Vaultwarden came back
+with the same Trilium document ID and 577 notes, the same Vaultwarden signing
+key and a marker file written before the backup, checked by salted hash. Both
+ways were tried: the automatic fallback, and `--from-volume` after the
+nightly job had already backed up the new, empty volume. The third bootstrap
+stopped at the Longhorn wait because the laptop slept for seven hours during
+it; a second `deploy.sh` finished it.
+
+The test found that a kept promotion was not safe to live with, now fixed:
+
+- A Deployment's promotion pointed it at `APP-restore-test` and left Argo CD
+  paused for good, so later backups recorded that claim while the checks
+  watched the empty original. Deployments now promote like StatefulSets: the
+  restored volume takes over the live claim's name, with its Argo CD tracking,
+  and Argo CD resumes. A promotion recorded the old way still rolls back.
+- The next restore would have reused the live volume's name. Restore volumes
+  now alternate between `APP-restore-test` and `APP-restore-test-b`, the PV a
+  promotion makes is named like its volume, `--cleanup-test` never deletes a
+  bound PV, and backup volumes are matched by exact name in `restore.sh`,
+  `dr-status.sh`, the DR monitor and the Longhorn canary.
+- A promotion after a rollback without cleanup could not bind; it can now.
+- `--accept-app` closes a kept promotion, and the DR monitor no longer warns
+  about a restore volume that is in use.
+
+## 2026-10-14: Prometheus and Loki promotion proven on production
+
+`recovery/restore.sh` restored each app's 09:20 backup into a test volume
+(Prometheus 23 minutes for about 24 GB, Loki 3 minutes), promoted it, and
+rolled back. Promoted, Prometheus held history up to 09:18 and Loki logs up to
+the backup; rolled back, both had their full last 24 hours again, with no
+gaps and new data arriving. Argo CD was paused only during each swap, and all
+26 applications ended Synced and Healthy. Promotion took 30 seconds for
+Prometheus and 97 for Loki; rollback 74 and 65.
+
+The Prometheus run found two faults in StatefulSet promotion, now fixed. Its
+replica count changes through the operator, so the StatefulSet still showed
+zero for a moment and `rollout status` reported success with no pod running;
+the script now waits for the new count first, in promotion and rollback.
+Promotion also skipped the health check its plan lists; it now runs it, as
+rollback did.
+
 ## 2026-10-13: Cilium agent metrics on; Grafana dashboards for Velero and Cilium
 
 The Cilium agents now serve Prometheus metrics (`cilium_agent_metrics`,
@@ -206,7 +280,7 @@ the Secret Argo CD renders was compared with the live one first and matched.
 `renovate.json` was added so that Renovate opens a pull request when a
 chart in an Argo CD Application file has a newer version (eleven charts and
 the snapshot controller). Nothing merges by itself. See
-[Chart updates](platform.md#chart-updates).
+[Chart updates](argocd.md#chart-updates).
 
 The Helm release records of the ten releases Argo CD now owns were deleted
 from production the same day (82 records), so `helm list` shows only what

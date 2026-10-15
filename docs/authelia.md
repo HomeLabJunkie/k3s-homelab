@@ -3,7 +3,7 @@
 [Back to the README](../README.md)
 
 Authelia (the `charts/authelia` chart, namespace `authelia`, deployed by
-[Argo CD](platform.md#argo-cd)) is the login portal at
+[Argo CD](argocd.md)) is the login portal at
 `auth.${BASE_DOMAIN}` in front of the admin UIs: the Traefik dashboard,
 Longhorn, Prometheus, Grafana, Trilium and Argo CD. Their routes use the
 shared `admin-ui-auth` Traefik middleware (`traefik-admin-ui-auth@kubernetescrd`
@@ -71,5 +71,5 @@ too, set up the same way; a hostname without one is reachable only from the
 LAN. The Authelia-protected hostnames are not in a
   Cloudflare Access application and do not enforce Access JWT validation on
   their tunnel routes; either one would put a second login in front of
-  Authelia, or return 403. Rancher and `${BASE_DOMAIN}/admin` still use
-  Cloudflare Access.
+  Authelia, or return 403. `${BASE_DOMAIN}/admin` still uses Cloudflare
+  Access.

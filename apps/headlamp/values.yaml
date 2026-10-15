@@ -1,0 +1,41 @@
+# Headlamp: a web UI for the cluster, to look at anything and do the common
+# fixes (logs, restarts, scaling, cordoning a node). It replaces Rancher.
+#
+# Argo CD installs the chart with this file; the chart version is in
+# apps/argocd/applications/templates/headlamp.yaml. The route, its
+# certificate and the Authelia login are in charts/routes.
+
+config:
+  inCluster: true
+  # No Headlamp login: everyone who reaches it acts as its service account,
+  # which is cluster-admin. That is safe only because Authelia (two-factor,
+  # admins group) is in front of the route, and the network policy in
+  # apps/network-policies/headlamp.yaml lets nothing but Traefik connect.
+  unsafeUseServiceAccountToken: true
+
+clusterRoleBinding:
+  create: true
+  clusterRoleName: cluster-admin
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# The chart adds a writable /tmp when the root filesystem is read-only.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 100
+  runAsGroup: 101
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
