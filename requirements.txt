@@ -51,9 +51,9 @@ jinja2==3.1.6
     #   molecule
 jmespath==1.1.0
     # via -r requirements.in
-jsonpatch==1.33
+jsonpatch==1.35
     # via -r requirements.in
-jsonpointer==3.0.0
+jsonpointer==3.2.1
     # via jsonpatch
 jsonschema==4.26.0
     # via
