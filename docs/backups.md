@@ -29,19 +29,20 @@ new volume joins automatically. Velero covers the namespaces listed in
 `recovery/apps.conf` lists the applications whose data the checks and
 `recovery/restore.sh` care about:
 
-| App | Namespace | Volume | Swapped in on production |
-| --- | --- | --- | --- |
-| Trilium | `trilium` | `trilium-data` | 2026-10-13 |
-| Vaultwarden | `vaultwarden` | `vaultwarden-data` | not yet |
-| Authelia | `authelia` | `authelia-data` | not yet |
-| Grafana | `monitoring` | `monitoring-grafana` | not yet |
-| Prometheus | `monitoring` | StatefulSet volume | 2026-10-14 |
-| Alertmanager | `monitoring` | StatefulSet volume | 2026-10-13 |
-| Loki | `logging` | `storage-loki-0` | 2026-10-14 |
+| App | Namespace | Volume |
+| --- | --- | --- |
+| Trilium | `trilium` | `trilium-data` |
+| Vaultwarden | `vaultwarden` | `vaultwarden-data` |
+| Authelia | `authelia` | `authelia-data` |
+| Grafana | `monitoring` | `monitoring-grafana` |
+| Prometheus | `monitoring` | StatefulSet volume |
+| Alertmanager | `monitoring` | StatefulSet volume |
+| Loki | `logging` | `storage-loki-0` |
 
-All seven were restored and read back on the DR host in the full rehearsal
-of 2026-08-21. "Swapped in" means `restore.sh --promote-app` and
-`--rollback-app` ran against the live app.
+The swap into the live app (`--promote-app`) has been run on production for
+Prometheus, Alertmanager and Loki. Trilium, Vaultwarden, Authelia and Grafana
+now swap the same way, which so far has run only on the test cluster. The [changelog](CHANGELOG.md) records every
+test and its result.
 
 Loki is not in the Velero schedule: its snapshot copy failed now and then
 (September and October 2026, cause unknown) and marked every nightly backup
@@ -142,8 +143,8 @@ recovery/restore.sh --accept-app trilium --confirm          # keep it
 recovery/restore.sh --cleanup-test trilium                  # remove what is no longer used
 ```
 
-- `--restore-app` takes a few minutes for a small volume; Prometheus's 24 GB
-  took 23 minutes.
+- `--restore-app` takes a few minutes for a small volume and about 25
+  minutes for Prometheus's 24 GB.
 - `--promote-app` stops the app, makes the restored volume take over the
   live claim's name, starts the app and runs a health check. Argo CD is
   paused only during the swap. The volume the app used before is kept

@@ -136,7 +136,7 @@ Replication (Step 5) protects against a failed computer. Backups protect against
 2. **A cluster recovery bundle:** a copy of the cluster's records (an etcd snapshot), its settings, and the project's Git repository. Created with `./backup/backup.sh`.
 3. **Velero to Garage:** a second, independent backup that runs nightly and is stored in a different place (an S3-style storage service called Garage on a separate machine). Two different tools in two different locations mean a single mistake can't remove both.
 
-**Proving that recovery works:** a separate spare computer, **k3s-dr**, exists to rehearse a disaster. Copies of all the protected apps were rebuilt on it from the backups, started, and checked to confirm the real data was readable, not just that files existed. The full automated rehearsal passed (20 checks passed, 0 failed).
+**Proving that recovery works:** a separate spare computer, **k3s-dr**, exists to rehearse a disaster. Copies of all the protected apps were rebuilt on it from the backups, started, and checked to confirm the real data was readable, not just that files existed. The full automated rehearsal passes.
 
 Timers keep this honest: nightly backups, checks that backups are recent, weekly **restore tests**, and a test email to confirm alerts still reach you. Secrets such as passwords and keys are stored encrypted (**SOPS + age**), never in plain text.
 
