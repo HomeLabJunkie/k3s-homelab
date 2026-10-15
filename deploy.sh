@@ -701,7 +701,7 @@ kubectl create secret generic repo-k3s-homelab-config \
 # Some applications place objects in namespaces that Longhorn's install and
 # other applications create. Argo CD checks a whole application before
 # applying any of it, so a missing namespace would hold back the rest.
-for platform_namespace in traefik longhorn-system monitoring logging cattle-system; do
+for platform_namespace in traefik longhorn-system monitoring logging cattle-system headlamp; do
   ensure_namespace "$platform_namespace"
 done
 
