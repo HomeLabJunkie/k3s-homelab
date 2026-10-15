@@ -376,7 +376,7 @@ repository. `deploy.sh` passes other values when these are set in
 
 The test cluster's Argo CD has its own age key, so it cannot decrypt
 production's Secrets, and production's cannot decrypt the test ones. See
-[Testing a full rebuild](backup-and-dr.md#testing-a-full-rebuild).
+[Rehearse a rebuild on the test cluster](disaster-recovery.md#rehearse-a-rebuild-on-the-test-cluster).
 
 ### Secrets
 

@@ -48,7 +48,6 @@
 ├── systemd/                        # k3s-dr backup/verify/monitor/Velero+Longhorn canaries
 ├── tests/                          # Shell safety tests run by repo-safety.yml
 ├── recovery/
-│   ├── DR-RUNBOOK.md
 │   ├── apps.conf
 │   ├── dr-preflight.sh
 │   ├── dr-find-backups.sh

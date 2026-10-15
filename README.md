@@ -99,10 +99,8 @@ established cluster.
 | Login portal, two-factor, Grafana single sign-on | [Authelia](docs/authelia.md) |
 | Rancher, Trilium, Vaultwarden, the website | [Applications](docs/applications.md) |
 | Prometheus, Grafana, alerts, Loki | [Monitoring and logging](docs/observability.md) |
-| What is protected, backup layers, DR rehearsal | [Backup and disaster recovery](docs/backup-and-dr.md) |
-| Backup commands, schedules, troubleshooting | [Backup procedures](backup-procedures.md) |
-| Velero and Garage | [Velero backup procedures](velero-backup-procedures.md) |
-| Full recovery procedure | [DR runbook](recovery/DR-RUNBOOK.md) |
+| What is backed up, checking backups, restoring one app | [Backups](docs/backups.md) |
+| Rebuilding the cluster or a laptop, DR rehearsals | [Disaster recovery](docs/disaster-recovery.md) |
 | `cluster.env`, `.secrets.enc`, expected secret values | [Configuration and secrets](docs/configuration.md) |
 | Setting up a new operator laptop | [Operator laptop setup](operator-laptop-setup.md) |
 | Where files live | [Repository layout](docs/repository-layout.md) |

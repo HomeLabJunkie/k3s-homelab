@@ -68,7 +68,7 @@ extra_args: >-
   --node-ip={{ k3s_node_ip }}
 
 # change these to your liking, the only required are: --disable servicelb, --tls-san {{ apiserver_endpoint }}
-# --secrets-encryption keeps Secrets encrypted in etcd and in etcd snapshots; see docs/backup-and-dr.md
+# --secrets-encryption keeps Secrets encrypted in etcd and in etcd snapshots; see docs/backups.md
 # the contents of the if block is also required if using calico or cilium
 extra_server_args: >-
   {{ extra_args }}
