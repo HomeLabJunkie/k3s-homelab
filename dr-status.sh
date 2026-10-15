@@ -296,7 +296,9 @@ print(n*mul)
           [
             .items[]
             | select(
-                ((.metadata.name | startswith($v + "-")))
+                # The volume name, "-" and eight hex digits: not APP-restore-test-b
+                # for APP-restore-test. Volume names hold no regex characters.
+                ((.metadata.name | test("^" + $v + "-[0-9a-f]{8}$")))
                 or ((.status.volumeName // "") == $v)
             )
             | select((.status.lastBackupName // "") != "")
