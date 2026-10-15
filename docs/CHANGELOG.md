@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: Fewer, more useful policy reports
+
+Kyverno's audit had 1,221 failures, most of them pods that need root or the
+host by design. 24 old ReplicaSets from before the app namespaces were
+hardened were deleted; Trivy, Grafana, Alloy and the Velero server now meet
+the restricted rules (the Velero server keeps a writable root filesystem,
+which its repository maintenance jobs need); and `kube-system`,
+`longhorn-system` and `metallb-system` are left out of the Pod Security and
+read-only-root rules, so their failures no longer appear as PolicyViolation
+events in Headlamp. The image rules still cover every namespace.
 ## 2026-10-15: Restore swap proven on production for every app
 
 The swap that takes over the live claim's name, used since the rebuild work

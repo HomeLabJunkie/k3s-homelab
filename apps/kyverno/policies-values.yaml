@@ -7,3 +7,15 @@ validationFailureAction: Audit
 
 # If a policy cannot be evaluated, admit the request.
 failurePolicy: Ignore
+
+# Leave out the namespaces whose pods need root or the host by design: K3s's
+# own components, Cilium, kube-vip and CoreDNS (kube-system), Longhorn and
+# MetalLB. They can never pass these rules, and their reports and
+# PolicyViolation events only hid the failures worth acting on. Keep in step
+# with require-ro-rootfs.yaml. Image rules (restrict-image-registries,
+# disallow-latest-tag) still cover them.
+vpolExclude:
+  excludeNamespaces:
+    - kube-system
+    - longhorn-system
+    - metallb-system
