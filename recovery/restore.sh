@@ -1324,6 +1324,11 @@ EOF
   wait_pv_phase "$original_pv" "Released"
 
   echo "==> Creating restored PV $promoted_pv..."
+  # Left from an earlier promotion that was rolled back but not cleaned up,
+  # it still names the claim that was deleted then, and nothing could bind.
+  if kubectl get pv "$promoted_pv" >/dev/null 2>&1; then
+    kubectl patch pv "$promoted_pv" --type=json -p='[{"op":"remove","path":"/spec/claimRef"}]' 2>/dev/null || true
+  fi
   create_longhorn_pv "$promoted_pv" "$cap" "$restore_vol" "$lh_replicas" "$sc"
 
   echo "==> Recreating PVC $pvc bound to restored PV..."
