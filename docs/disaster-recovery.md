@@ -27,7 +27,7 @@ came back with their notes and keys.
 ### 1. What you need
 
 - A laptop with `kubectl`, `helm`, `sops`, `age` and the repository's Python
-  environment (see [Operator laptop setup](../operator-laptop-setup.md)).
+  environment (see [Laptop setup](laptop-setup.md)).
 - The laptop age key, in `~/.config/sops/age/keys.txt`. The copy is in
   Bitwarden, record "SOPS AGE KEY".
 - Both repositories cloned side by side: this one and `k3s-homelab-config`.
@@ -116,7 +116,7 @@ volumes' data would still come from the Longhorn backups.
 
 ## Set up a laptop from nothing
 
-1. Install the tools: [Operator laptop setup](../operator-laptop-setup.md).
+1. Install the tools: [Laptop setup](laptop-setup.md).
    The dotfiles repository installs the cluster tools.
 2. Put the age key from Bitwarden in `~/.config/sops/age/keys.txt` (mode
    600).
