@@ -28,6 +28,13 @@ HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-180}"
 
 MODE="${1:---preflight}"
 APP_NAME="${2:-}"
+FROM_VOLUME=""
+if [[ "${3:-}" == "--from-volume" ]]; then
+  case "$MODE" in
+    --restore-app|--plan) FROM_VOLUME="${4:?--from-volume needs a volume name}" ;;
+    *) echo "ERROR: --from-volume goes with --restore-app or --plan" >&2; exit 2 ;;
+  esac
+fi
 
 MOUNTED_BY_SCRIPT=0
 
@@ -55,18 +62,21 @@ Usage:
   restore.sh --show-manifest
   restore.sh --list-apps
   restore.sh --inspect-app APP
-  restore.sh --restore-app APP
+  restore.sh --list-backups APP
+  restore.sh --restore-app APP [--from-volume VOLUME]
   restore.sh --cleanup-test APP
   restore.sh --promote-app APP --confirm
   restore.sh --rollback-app APP --confirm
   restore.sh --promotion-status APP
-  restore.sh --plan APP
+  restore.sh --plan APP [--from-volume VOLUME]
   restore.sh --health-check APP
   restore.sh --archive-state APP
 
 --restore-app is non-destructive:
   * finds the live PVC and Longhorn volume
-  * finds the latest completed Longhorn backup for that volume
+  * finds the latest completed Longhorn backup for that volume; if it has
+    none (a rebuilt cluster), the latest of the volume that held the same
+    claim before; --from-volume picks the volume (see --list-backups)
   * restores it into APP-restore-test
   * creates a temporary PV/PVC
   * mounts it read-only in APP-restore-inspect
@@ -224,6 +234,78 @@ print(f"{lb} {lat} {name}")
 ' "$volume"
 }
 
+# Every volume with completed backups of the claim NS/PVC, newest first, one
+# per line: "volume newest-backup newest-time count". Longhorn records the
+# claim on each backup, and reads it back from the backup store on a new
+# cluster, so this finds the old cluster's backups after a rebuild, when the
+# claim is bound to a new, empty volume with another name.
+claim_backup_volumes() {
+  local ns="$1" pvc="$2"
+
+  kubectl -n longhorn-system get backups.longhorn.io -o json |
+  python3 -c '
+import json,sys
+ns,pvc=sys.argv[1],sys.argv[2]
+vols={}
+for item in json.load(sys.stdin).get("items",[]):
+    st=item.get("status",{})
+    if st.get("state")!="Completed":
+        continue
+    try:
+        k8s=json.loads(st.get("labels",{}).get("KubernetesStatus") or "{}")
+    except ValueError:
+        continue
+    if k8s.get("namespace")!=ns or k8s.get("pvcName")!=pvc:
+        continue
+    at=st.get("backupCreatedAt","")
+    v=vols.setdefault(st.get("volumeName",""),[ "", "", 0])
+    v[2]+=1
+    if at>v[1]:
+        v[0],v[1]=item["metadata"]["name"],at
+for vol,(name,at,count) in sorted(vols.items(),key=lambda kv:kv[1][1],reverse=True):
+    if vol:
+        print(vol,name,at,count)
+' "$ns" "$pvc"
+}
+
+list_backups() {
+  local app="$1" ns pvc live
+  app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; return 1; }
+  ns="$(app_field "$app" 2)"
+  pvc="$(app_field "$app" 3)"
+  live="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)"
+
+  echo "==> Backups of $ns/$pvc, by volume (newest first)"
+  printf '%-45s %-21s %-6s %s\n' VOLUME NEWEST BACKUPS ""
+  claim_backup_volumes "$ns" "$pvc" | while read -r vol _ at count; do
+    printf '%-45s %-21s %-6s %s\n' "$vol" "$at" "$count" "$([[ "$vol" == "$live" ]] && echo "(live volume)")"
+  done
+  echo
+  echo "Restore the newest backup of one: $0 --restore-app $app --from-volume VOLUME"
+}
+
+# The backup --restore-app uses, as "backup time backup-volume", and where it
+# came from on stderr. With FROM, the newest backup of that volume. Otherwise
+# the newest of the live volume; if it has none (a rebuilt cluster), the
+# newest of any volume that held the same claim.
+resolve_backup() {
+  local ns="$1" pvc="$2" live="$3" from="${4:-}" line other
+
+  if [[ -n "$from" ]]; then
+    latest_backup_for_volume "$from" || return 1
+    echo "    (from volume $from, as asked)" >&2
+    return 0
+  fi
+  if line="$(latest_backup_for_volume "$live" 2>/dev/null)"; then
+    printf '%s\n' "$line"
+    return 0
+  fi
+  other="$(claim_backup_volumes "$ns" "$pvc" | awk -v live="$live" '$1 != live {print $1; exit}')"
+  [[ -n "$other" ]] || return 1
+  latest_backup_for_volume "$other" || return 1
+  echo "    (the live volume has no backups; using volume $other, which held the same claim before)" >&2
+}
+
 
 plan_app() {
   local app="$1"
@@ -237,7 +319,7 @@ plan_app() {
   service="$(app_field "$app" 6)"
   ingress="$(app_field "$app" 7)"
   volume="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}')"
-  backup_line="$(latest_backup_for_volume "$volume" 2>/dev/null || true)"
+  backup_line="$(resolve_backup "$ns" "$pvc" "$volume" "${FROM_VOLUME:-}" 2>/dev/null || true)"
 
   echo "==> DR PLAN: $app"
   echo "    namespace:      $ns"
@@ -466,7 +548,7 @@ wait_restore_complete() {
 
 restore_app() {
   local app="$1"
-  local ns pvc volume backup_line backup backup_url restore_vol pv pod cap size_bytes replicas frontend access_mode run_uid run_gid
+  local ns pvc volume backup_line backup backup_url backup_size restore_vol pv pod cap size_bytes replicas frontend access_mode run_uid run_gid
   local existing_source
 
   app_line "$app" >/dev/null || { echo "ERROR: unknown app: $app"; exit 1; }
@@ -475,13 +557,15 @@ restore_app() {
   pvc="$(app_field "$app" 3)"
   volume="$(kubectl -n "$ns" get pvc "$pvc" -o jsonpath='{.spec.volumeName}')"
 
-  backup_line="$(latest_backup_for_volume "$volume")" || {
-    echo "ERROR: no completed Longhorn backup found for $ns/$pvc ($volume)"
+  backup_line="$(resolve_backup "$ns" "$pvc" "$volume" "${FROM_VOLUME:-}")" || {
+    echo "ERROR: no completed Longhorn backup found for $ns/$pvc (${FROM_VOLUME:-$volume})"
+    echo "See what there is: $0 --list-backups $app"
     exit 1
   }
 
   backup="$(awk '{print $1}' <<<"$backup_line")"
   backup_url="$(kubectl -n longhorn-system get backup "$backup" -o jsonpath='{.status.url}')"
+  backup_size="$(kubectl -n longhorn-system get backup "$backup" -o jsonpath='{.status.volumeSize}')"
 
   restore_vol="${app}-restore-test"
   pv="${restore_vol}-pv"
@@ -500,6 +584,10 @@ restore_app() {
     echo "ERROR: Longhorn volume size is not a byte integer: $size_bytes"
     exit 1
   }
+  # A backup of an older, larger volume needs a restore volume its own size.
+  if [[ "$backup_size" =~ ^[0-9]+$ ]] && (( backup_size > size_bytes )); then
+    size_bytes="$backup_size"
+  fi
 
   [[ "$replicas" =~ ^[0-9]+$ ]] || replicas=3
 
@@ -513,12 +601,12 @@ restore_app() {
   echo "    frontend: $frontend"
   echo "    access:   $access_mode"
 
-  # Only resume a restore of the latest backup; an older one must not be
+  # Only resume a restore of the backup chosen now; another one must not be
   # reported as current and then promoted.
   if kubectl -n longhorn-system get volume "$restore_vol" >/dev/null 2>&1; then
     existing_source="$(kubectl -n longhorn-system get volume "$restore_vol" -o jsonpath='{.spec.fromBackup}')"
     if [[ "$existing_source" != "$backup_url" ]]; then
-      echo "ERROR: $restore_vol was restored from a different backup than the latest."
+      echo "ERROR: $restore_vol was restored from a different backup than the one chosen now."
       echo "  existing: ${existing_source:-unknown}"
       echo "  latest:   $backup_url"
       echo "Inspect or promote the existing restore as-is, or discard it first: $0 --cleanup-test $app"
@@ -1480,6 +1568,10 @@ case "$MODE" in
   --inspect-app)
     [[ -n "$APP_NAME" ]] || { usage; exit 2; }
     inspect_app "$APP_NAME"
+    ;;
+  --list-backups)
+    [[ -n "$APP_NAME" ]] || { usage; exit 2; }
+    list_backups "$APP_NAME"
     ;;
   --restore-app)
     [[ -n "$APP_NAME" ]] || { usage; exit 2; }
