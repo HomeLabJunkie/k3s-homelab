@@ -21,6 +21,27 @@ trivy:
   # Keep the server's database on the node's disk instead of a Longhorn
   # volume. It is only a cache and is downloaded again if the pod moves.
   storageClassEnabled: false
+  # The server already runs as nobody (the chart's default); these add what
+  # the restricted Pod Security rules also ask for. Helm merges them into the
+  # chart's own settings.
+  server:
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+# The operator's image already runs as user 10000; the chart leaves the pod
+# settings empty, so say so, and use the runtime's default seccomp profile.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10000
+  runAsGroup: 10000
+  seccompProfile:
+    type: RuntimeDefault
 
 # Prometheus picks the monitor up without extra labels; the findings become
 # trivy_* metrics (counts per workload and severity).
