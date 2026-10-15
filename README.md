@@ -92,6 +92,7 @@ established cluster.
 | Topic | Read |
 | --- | --- |
 | Plain-English tour of the cluster | [How Our Home Cluster Works](docs/CLUSTER-STORY.md) |
+| Everyday tasks: add an app, change a setting or secret, upgrade, undo | [How to](docs/how-to.md) |
 | How deployment and maintenance work, preflight checks, toolchain | [Deployment and maintenance](docs/deployment.md) |
 | Step-by-step maintenance and OS updates | [Maintenance cheat sheet](cheat-sheet.md) |
 | Networking, Traefik, certificates, Cloudflare, Longhorn | [Platform components](docs/platform.md) |
