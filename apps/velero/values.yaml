@@ -18,6 +18,34 @@ initContainers:
     volumeMounts:
       - mountPath: /target
         name: plugins
+    # The image's own user is 65532; it only copies the plugin into /target.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+
+# The server already runs as the image's cnb user (uid 1002, gid 1000, seen
+# on the node). The image names the user rather than numbering it, so the
+# numbers are given here for runAsNonRoot to check. The root filesystem stays
+# writable: the repository maintenance jobs copy these settings, and kopia
+# writes a cache there.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1002
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 configuration:
   backupStorageLocation:
