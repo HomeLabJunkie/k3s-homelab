@@ -39,9 +39,8 @@ new volume joins automatically. Velero covers the namespaces listed in
 | Alertmanager | `monitoring` | StatefulSet volume |
 | Loki | `logging` | `storage-loki-0` |
 
-The swap into the live app (`--promote-app`) has been run on production for
-Prometheus, Alertmanager and Loki. Trilium, Vaultwarden, Authelia and Grafana
-now swap the same way, which so far has run only on the test cluster. The [changelog](CHANGELOG.md) records every
+The swap into the live app (`--promote-app`) and back (`--rollback-app`)
+has been run on production for all seven. The [changelog](CHANGELOG.md) records every
 test and its result.
 
 Loki is not in the Velero schedule: its snapshot copy failed now and then

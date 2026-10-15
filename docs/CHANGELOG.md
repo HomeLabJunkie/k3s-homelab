@@ -6,6 +6,20 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: Restore swap proven on production for every app
+
+The swap that takes over the live claim's name, used since the rebuild work
+for Trilium, Vaultwarden, Authelia and Grafana, was run on production for
+each: `--restore-app` from the latest backup, `--promote-app`, check,
+`--rollback-app`, check, `--cleanup-test`. A marker file written to the live
+volume after the backup proved which copy was serving: absent while the
+restored copy was live, back after rollback. Trilium kept its document ID and
+578 notes and Vaultwarden its signing key (salted hashes) throughout; each
+app passed its health check and Argo CD ended Synced, Healthy and not paused
+after every step. Each swap took about a minute of downtime. The original
+volumes are left on Retain. All seven protected apps have now been swapped
+on production and back.
+
 ## 2026-10-15: Rancher removed
 
 Rancher, deployed by Argo CD but unused since Headlamp arrived, is gone from
