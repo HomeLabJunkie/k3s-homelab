@@ -1058,24 +1058,25 @@ raise SystemExit(2)
 ' "$pvc"
 }
 
+# A claim bound to the volume PV. With FROM (a saved copy of the claim it
+# replaces), it keeps that claim's labels and annotations, such as Argo CD's
+# tracking-id, so Argo CD sees the same claim. It is created rather than
+# applied: an applied claim records volumeName as "last applied", and Argo CD
+# would then report it out of sync.
 create_prebound_pvc() {
-  local ns="$1" pvc="$2" pv="$3" cap="$4" sc="$5"
-  cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ${pvc}
-  namespace: ${ns}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: ${cap}
-  storageClassName: ${sc}
-  volumeMode: Filesystem
-  volumeName: ${pv}
-EOF
+  local ns="$1" pvc="$2" pv="$3" cap="$4" sc="$5" from="${6:-}" meta='{}'
+  if [[ -n "$from" && -s "$from" ]]; then
+    meta="$(kubectl create --dry-run=client -o json -f "$from" | jq -c '.metadata | {
+      labels: (.labels // {}),
+      annotations: ((.annotations // {}) | with_entries(select(.key |
+        test("^(kubectl\\.kubernetes\\.io/last-applied-configuration|pv\\.kubernetes\\.io/|volume\\.(beta\\.)?kubernetes\\.io/)") | not)))}')"
+  fi
+  jq -n --arg ns "$ns" --arg pvc "$pvc" --arg pv "$pv" --arg cap "$cap" --arg sc "$sc" --argjson meta "$meta" '{
+    apiVersion: "v1", kind: "PersistentVolumeClaim",
+    metadata: ({name: $pvc, namespace: $ns} + $meta),
+    spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: $cap}},
+      storageClassName: $sc, volumeMode: "Filesystem", volumeName: $pv}}' |
+    kubectl create -f -
 }
 
 create_longhorn_pv() {
@@ -1326,7 +1327,7 @@ EOF
   create_longhorn_pv "$promoted_pv" "$cap" "$restore_vol" "$lh_replicas" "$sc"
 
   echo "==> Recreating PVC $pvc bound to restored PV..."
-  create_prebound_pvc "$ns" "$pvc" "$promoted_pv" "$cap" "$sc"
+  create_prebound_pvc "$ns" "$pvc" "$promoted_pv" "$cap" "$sc" "$state_dir/live-pvc-before.yaml"
   wait_pvc_bound_to_pv "$ns" "$pvc" "$promoted_pv"
 
   sed -i 's/^STATUS=.*/STATUS=bound_restored/' "$state_dir/state.env"
@@ -1398,7 +1399,7 @@ rollback_stateful_app() {
   kubectl patch pv "$ORIGINAL_PV" --type=json -p='[{"op":"remove","path":"/spec/claimRef"}]' || true
 
   echo "==> Recreating original PVC binding..."
-  create_prebound_pvc "$NAMESPACE" "$PVC" "$ORIGINAL_PV" "$CAPACITY" "$STORAGE_CLASS"
+  create_prebound_pvc "$NAMESPACE" "$PVC" "$ORIGINAL_PV" "$CAPACITY" "$STORAGE_CLASS" "$dir/live-pvc-before.yaml"
   wait_pvc_bound_to_pv "$NAMESPACE" "$PVC" "$ORIGINAL_PV"
 
   scale_workload "$APP" "$NAMESPACE" "$KIND" "$WORKLOAD" "$ORIGINAL_REPLICAS"
