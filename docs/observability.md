@@ -65,6 +65,37 @@ unreachable nodes, pods on the network, traffic forwarded and packets dropped
 by reason and by node, how many pods a network policy covers, how full
 Cilium's kernel tables are, and each agent's errors and memory.
 
+The "Homelab - Policy (Kyverno)" dashboard
+(`charts/monitoring-extras/dashboards/kyverno.json`) shows requests Kyverno
+blocked, policy failures at admission and in background scans, failures by
+policy and by namespace, which Deny policies refused requests, how long
+Kyverno adds to each request, and its controllers' work, memory and restarts.
+Every policy here is a CEL `ValidatingPolicy`, so the results come from
+`kyverno_validating_policy_results_total`; the older
+`kyverno_policy_results_total` covers only `ClusterPolicy` and stays empty.
+
+The "Homelab - Logging Pipeline (Loki & Alloy)" dashboard
+(`charts/monitoring-extras/dashboards/logging.json`) shows whether logs are
+still arriving: lines sent by Alloy against lines received by Loki, lines
+Loki rejected and Alloy dropped by reason (the `drop_stale` stage is shown
+separately as a deliberate drop), push and search times, loki-canary's
+end-to-end check, how full Loki's volume is, and Alloy's component health. A
+stopped pipeline otherwise only shows as quiet log panels.
+
+The "Homelab - Load Balancing (MetalLB & kube-vip)" dashboard
+(`charts/monitoring-extras/dashboards/load-balancing.json`) shows which
+server node holds the Kubernetes API address and when it moved, which node
+answers for each LoadBalancer address, address announcements (each burst is
+an address moving), ARP lookups, pool usage, and whether MetalLB's
+configuration loaded.
+
+The "Homelab - Cloudflare Tunnel" dashboard
+(`charts/monitoring-extras/dashboards/cloudflared.json`) shows the tunnel's
+connections to Cloudflare (four per replica, eight in all), requests by
+status, server errors, requests that could not reach Traefik, reconnects,
+the Cloudflare locations in use, and each replica's memory and restarts. The
+tunnel runs over HTTP/2, so cloudflared's QUIC metrics are not used.
+
 Certificate alerts (`homelab.certificate.rules` in
 `charts/monitoring-extras/manifests/monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
 days left, a critical under 7 days, a warning when one stays not Ready for an

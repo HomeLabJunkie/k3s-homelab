@@ -53,3 +53,43 @@ metadata:
     grafana_dashboard: "1"
 data:
   jeffriffle-website.json: {{ .Files.Get "dashboards/jeffriffle-website.json" | replace "${CLOUDFLARE_ACCOUNT_ID}" (required "cloudflareAccountId is required" .Values.cloudflareAccountId) | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-kyverno
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  kyverno.json: {{ .Files.Get "dashboards/kyverno.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-logging
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  logging.json: {{ .Files.Get "dashboards/logging.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-load-balancing
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  load-balancing.json: {{ .Files.Get "dashboards/load-balancing.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-cloudflared
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  cloudflared.json: {{ .Files.Get "dashboards/cloudflared.json" | toJson }}
