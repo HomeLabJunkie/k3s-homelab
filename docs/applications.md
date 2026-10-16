@@ -80,9 +80,11 @@ served from the private `HomeLabJunkie/jeffriffle.com` repo at that domain,
 and `www.` redirects there. The chart also holds the route for `/fb-search`,
 because it is a path on the same host.
 
-In that repo, the text lives in content files that can be edited online at
-`/admin/` (Sveltia CMS). Each save commits to `main`, and a GitHub Action builds
-the site onto the `deploy` branch. Each pod runs
+In that repo, the text lives in content files (`content/*.json`) that can be
+edited online at `/admin/` (Sveltia CMS). Each save commits to `main`, and a
+GitHub Action builds the site (Vite and TypeScript), runs its tests, and only
+then pushes it onto the `deploy` branch. The terminal-style site it replaced on
+2026-10-15 is kept in that repo as the tags `site-v1` and `site-v1-deploy`. Each pod runs
 [git-sync](https://github.com/kubernetes/git-sync) as a sidecar. It checks
 `deploy` every 60 seconds with a read-only deploy key, so edits go live without
 a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout. The

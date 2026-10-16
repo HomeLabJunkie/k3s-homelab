@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-15: New website design
+
+jeffriffle.com was replaced with a light, single-page design (Vite and
+TypeScript, with an optional data center illustration). Its text moved into
+`content/*.json` so `/admin/` (Sveltia CMS, same pinned version, still behind
+Cloudflare Access) edits all of it, and the publish Action now runs the site's
+tests before it updates the `deploy` branch. Nothing changed in the cluster:
+the `website` chart serves the new build the same way. The old site is kept
+as the tags `site-v1` (source) and `site-v1-deploy` (built) and the branch
+`archive/site-v1`; pointing `deploy` back at `site-v1-deploy` restores it
+within a minute.
+
 ## 2026-10-15: Fewer, more useful policy reports
 
 Kyverno's audit had 1,221 failures, most of them pods that need root or the
