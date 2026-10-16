@@ -24,6 +24,22 @@ providers:
 # Current Traefik chart uses "log", not "logs".
 log:
   level: INFO
+  # Plain text in Grafana's log panels instead of ANSI color codes.
+  noColor: true
+
+# One line per request on stdout, which Alloy ships to Loki for the
+# Grafana Traefik dashboard's logs panel. Without this Traefik only logs
+# startup and errors, so the panel is empty for most time ranges.
+accessLog:
+  enabled: true
+  format: json
+  fields:
+    headers:
+      # The chart default; request headers can carry cookies and tokens.
+      defaultMode: drop
+    queryParameters:
+      # Query strings can carry OIDC codes and tokens (Authelia callbacks).
+      defaultMode: drop
 
 ports:
   web:
