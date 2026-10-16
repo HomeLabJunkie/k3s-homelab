@@ -93,3 +93,13 @@ metadata:
     grafana_dashboard: "1"
 data:
   cloudflared.json: {{ .Files.Get "dashboards/cloudflared.json" | toJson }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-disaster-recovery
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  disaster-recovery.json: {{ .Files.Get "dashboards/disaster-recovery.json" | toJson }}

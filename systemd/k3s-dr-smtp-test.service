@@ -9,4 +9,7 @@ Environment=HOME=%h
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
 WorkingDirectory=%h/Work/k3s-homelab
 ExecStart=%h/Work/k3s-homelab/scripts/test-smtp-notification.sh
+# Push this run's result for the Grafana DR dashboard. The leading - keeps a
+# failed push from failing the job.
+ExecStopPost=-%h/Work/k3s-homelab/monitoring/dr-metrics.sh unit %n
 TimeoutStartSec=5min

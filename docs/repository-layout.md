@@ -44,7 +44,7 @@
 ├── templates/                      # envsubst sources rendered to rendered/
 ├── manifests/backup/              # Longhorn snapshot class, recurring + Velero schedules
 ├── backup/                         # backup.sh, remote-storage.sh, verify-*.sh
-├── monitoring/                     # dr-monitor.sh, dr-notify.sh
+├── monitoring/                     # dr-monitor.sh, dr-notify.sh, dr-metrics.sh
 ├── systemd/                        # k3s-dr backup/verify/monitor/Velero+Longhorn canaries
 ├── tests/                          # Shell safety tests run by repo-safety.yml
 ├── recovery/

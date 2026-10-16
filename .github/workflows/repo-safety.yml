@@ -37,6 +37,7 @@ jobs:
           python3 tests/test-update-os.py
           ./tests/test-workstation-readiness.sh
           ./tests/test-dr-monitor-bundle-age.sh
+          ./tests/test-dr-metrics.sh
           ./tests/test-alertmanager-config.sh
           ./tests/test-backup-latest-symlink.sh
           ./tests/test-backup-bundle-permissions.sh

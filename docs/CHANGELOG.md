@@ -6,6 +6,19 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-16: A Grafana dashboard for disaster recovery
+
+"Homelab - Disaster Recovery" shows all three backup layers and the laptop's
+DR jobs on one page. Velero and Longhorn already reported from inside the
+cluster; the laptop's timers now push their results to a new Pushgateway
+(`apps/pushgateway`, chart 3.9.0, Pushgateway 1.11.3) through the Kubernetes
+API's service proxy, with no route or port opened. Each job's systemd unit
+pushes when it ends (`ExecStopPost`, which can never fail the job), and the
+05:30 monitor pushes its findings and every job's result again.
+`verify-backup.sh` also prints the bundle's creation time for the monitor to
+pass on. `tests/test-dr-metrics.sh` covers the pushes. The installed units
+need `./install-dr-timers.sh` once on `dev` to pick up the change.
+
 ## 2026-10-16: Grafana dashboards for Kyverno, logging, load balancing and the tunnel
 
 Four components were already scraped by Prometheus but had no dashboard.

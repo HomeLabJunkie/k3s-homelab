@@ -73,6 +73,8 @@ NOW="$(date +%s)"
 CREATED_EPOCH="$(date -d "$CREATED_AT" +%s)"
 AGE_HOURS=$(( (NOW - CREATED_EPOCH) / 3600 ))
 echo "==> Backup age: ${AGE_HOURS}h (max ${MAX_BACKUP_AGE_HOURS}h)"
+# Read by monitoring/dr-monitor.sh for the Grafana DR dashboard.
+echo "==> Backup created: ${CREATED_EPOCH}"
 (( AGE_HOURS <= MAX_BACKUP_AGE_HOURS )) || {
     echo "ERROR: latest cluster backup is too old."
     exit 1

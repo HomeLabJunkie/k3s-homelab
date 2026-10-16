@@ -96,6 +96,30 @@ status, server errors, requests that could not reach Traefik, reconnects,
 the Cloudflare locations in use, and each replica's memory and restarts. The
 tunnel runs over HTTP/2, so cloudflared's QUIC metrics are not used.
 
+The "Homelab - Disaster Recovery" dashboard
+(`charts/monitoring-extras/dashboards/disaster-recovery.json`) puts the three
+backup layers on one page: the DR monitor's verdict, the recovery bundle's
+age, Velero's last good backup, the oldest Longhorn backup among the
+protected apps (and each app's), the Sunday restore tests, free space on the
+NAS, the laptop's timers, and a table of each scheduled job's last run,
+result and duration.
+
+Velero and Longhorn report from inside the cluster
+(`longhorn_volume_last_backup_at` is per volume claim; the dashboard's list
+of claims mirrors `recovery/apps.conf`). The DR timers run on the laptop,
+which Prometheus cannot scrape, so they push instead: each job's systemd
+unit runs `monitoring/dr-metrics.sh unit %n` when it ends, and the 05:30
+monitor pushes its findings and every job's result again. The pushes go to
+the Pushgateway in the `monitoring` namespace (`apps/pushgateway`) through the
+Kubernetes API's service proxy, using the laptop's kubeconfig, so no route or
+port is open. The Pushgateway keeps results in memory; after a restart the
+dashboard reads "No report" until the next morning's monitor run. The
+metrics are `k3s_dr_*`, labelled with the systemd unit that pushed them:
+
+```bash
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:pushgateway:9091/proxy/metrics | grep '^k3s_dr'
+```
+
 Certificate alerts (`homelab.certificate.rules` in
 `charts/monitoring-extras/manifests/monitoring-longhorn-v2.yaml`) email a warning when a certificate has under 14
 days left, a critical under 7 days, a warning when one stays not Ready for an
