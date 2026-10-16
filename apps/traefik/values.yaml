@@ -3,6 +3,12 @@
 #
 # Logging uses the chart's "log:" key; older charts called it "logs:".
 
+# Pinned ahead of the chart for v3.7.15's security fixes; chart 41.7.1 ships
+# v3.7.14. Remove this once a chart bump brings v3.7.15 or later, or the pin
+# would hold Traefik back (Renovate only updates the chart version).
+image:
+  tag: v3.7.15
+
 deployment:
   replicas: 2
 

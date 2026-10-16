@@ -6,6 +6,26 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-16: Traefik v3.7.15
+
+Traefik moved from `v3.7.14` to `v3.7.15` by pinning `image.tag` in
+`apps/traefik/values.yaml`, because no chart release ships it yet (chart
+41.7.1 stays). The release fixes three security advisories
+([GHSA-p8wx-ph99-xgcr](https://github.com/traefik/traefik/security/advisories/GHSA-p8wx-ph99-xgcr),
+[GHSA-ww7c-q3mv-xx22](https://github.com/traefik/traefik/security/advisories/GHSA-ww7c-q3mv-xx22),
+[GHSA-28hp-c82p-8vqj](https://github.com/traefik/traefik/security/advisories/GHSA-28hp-c82p-8vqj)).
+Its two [migration notes](https://doc.traefik.io/traefik/v3.7/migrate/v3/#v3715)
+do not apply here: `CONNECT` requests over HTTP/2 and HTTP/3 are now
+rejected (nothing here tunnels through Traefik), and the Gateway API
+provider, which is not enabled, no longer picks HTTPS from a port's name or
+number. Drop the pin when a chart bump brings `v3.7.15` or later.
+
+## 2026-10-16: Traefik access logs
+
+Traefik now writes one JSON access-log line per request, so the Traefik
+dashboard's logs panel has data; before, Traefik only logged startup and
+errors. Request headers and query strings are dropped from the lines.
+
 ## 2026-10-16: A Grafana dashboard for disaster recovery
 
 "Homelab - Disaster Recovery" shows all three backup layers and the laptop's
