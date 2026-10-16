@@ -70,6 +70,14 @@ systemctl --user list-timers 'k3s-dr-*'      # on dev
 ./install-dr-timers.sh                       # installs or repairs all six
 ```
 
+Each job pushes its result to the Pushgateway in the cluster when it ends,
+and the 05:30 monitor pushes its findings and everything again. The
+"Homelab - Disaster Recovery" Grafana dashboard shows them beside Velero's
+and Longhorn's own backup ages (see [Monitoring](observability.md)). A
+failed push only prints a warning; it never fails the job. After pulling a
+change to `systemd/`, run `./install-dr-timers.sh` again so the installed
+units match.
+
 ## Check the backups
 
 ```bash

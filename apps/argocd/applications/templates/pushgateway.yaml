@@ -1,0 +1,45 @@
+{{- if not (has "pushgateway" .Values.disabled) }}
+# Prometheus Pushgateway, for results pushed from outside the cluster (the
+# disaster-recovery timers on the laptop). See apps/pushgateway/values.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pushgateway
+  namespace: argocd
+spec:
+  project: homelab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  sources:
+    # The chart, at a pinned version...
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: prometheus-pushgateway
+      targetRevision: 3.9.0
+      helm:
+        releaseName: pushgateway
+        valueFiles:
+          - $values/apps/pushgateway/values.yaml
+    # ...and its values, from this repository.
+    - repoURL: https://github.com/HomeLabJunkie/k3s-homelab.git
+      targetRevision: {{ .Values.revision }}
+      ref: values
+  syncPolicy:
+    # Apply changes from git by itself and undo manual edits to what it
+    # manages. It also deletes: something removed from git is removed from
+    # the cluster. The Pushgateway keeps nothing on disk and its chart has no
+    # CRDs, so a leftover is the greater risk.
+    automated:
+      selfHeal: true
+      prune: true
+    # Keep trying if a sync fails because something it needs is not there
+    # yet, such as the ServiceMonitor CRD from kube-prometheus-stack.
+    retry:
+      limit: 30
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

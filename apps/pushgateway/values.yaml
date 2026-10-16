@@ -1,0 +1,45 @@
+# Prometheus Pushgateway: holds results that jobs outside the cluster push to
+# it, for Prometheus to scrape. The disaster-recovery timers run on the
+# laptop, which Prometheus cannot reach and which is not always on, so
+# monitoring/dr-metrics.sh pushes their results here through the Kubernetes
+# API (kubectl create --raw on the service proxy). No route or port is opened.
+#
+# Results are kept in memory only. A restart empties it until the next push;
+# the daily DR monitor pushes everything again, so the gap is at most a day.
+#
+# Argo CD installs the chart with this file; the chart version is in
+# apps/argocd/applications/templates/pushgateway.yaml.
+fullnameOverride: pushgateway
+
+# It needs nothing from the Kubernetes API.
+automountServiceAccountToken: false
+
+# The chart already runs it as nobody; these add what the restricted Pod
+# Security rules also ask for.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  runAsGroup: 65534
+  fsGroup: 65534
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
+
+# honorLabels keeps the job and unit labels the pushes carry instead of
+# replacing them with the Pushgateway's own.
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  honorLabels: true

@@ -8,6 +8,7 @@ DETAIL_FILE="$STATE_DIR/last-details.txt"
 NOTIFY="${NOTIFY:-$ROOT/monitoring/dr-notify.sh}"
 BACKUP_VERIFY="${BACKUP_VERIFY:-$ROOT/backup/verify-backup.sh}"
 VELERO_VERIFY="${VELERO_VERIFY:-$ROOT/backup/verify-velero.sh}"
+METRICS="${METRICS:-$ROOT/monitoring/dr-metrics.sh}"
 
 WARN_BACKUP_AGE_HOURS="${WARN_BACKUP_AGE_HOURS:-24}"
 CRIT_BACKUP_AGE_HOURS="${CRIT_BACKUP_AGE_HOURS:-30}"
@@ -19,8 +20,10 @@ CRIT_VELERO_BACKUP_AGE_HOURS="${CRIT_VELERO_BACKUP_AGE_HOURS:-30}"
 mkdir -p "$STATE_DIR"
 severity=0
 messages=()
-warn(){ (( severity < 1 )) && severity=1; messages+=("WARNING: $*"); }
-crit(){ severity=2; messages+=("CRITICAL: $*"); }
+warnings=0
+criticals=0
+warn(){ (( severity < 1 )) && severity=1; warnings=$(( warnings + 1 )); messages+=("WARNING: $*"); }
+crit(){ severity=2; criticals=$(( criticals + 1 )); messages+=("CRITICAL: $*"); }
 now="$(date +%s)"
 
 if ! kubectl get --raw=/readyz >/dev/null 2>&1; then crit "Kubernetes API /readyz failed"; fi
@@ -58,7 +61,9 @@ else
 fi
 
 backup_output=""
+bundle_verified=0
 if backup_output="$("$BACKUP_VERIFY" 2>&1)"; then
+  bundle_verified=1
   bundle_age="$(sed -n 's/^==> Backup age: \([0-9][0-9]*\)h.*/\1/p' <<<"$backup_output" | head -1)"
   if [[ "$bundle_age" =~ ^[0-9]+$ ]]; then
     if (( bundle_age >= CRIT_BACKUP_AGE_HOURS )); then
@@ -78,11 +83,16 @@ else
   fi
 fi
 
+timers_enabled=()
+timers_active=()
 for unit in k3s-dr-backup.timer k3s-dr-verify.timer k3s-dr-monitor.timer \
             k3s-dr-restore-canary.timer k3s-dr-longhorn-restore-canary.timer \
             k3s-dr-smtp-test.timer; do
-  [[ "$(systemctl --user is-enabled "$unit" 2>/dev/null || true)" == "enabled" ]] || warn "$unit is not enabled"
-  [[ "$(systemctl --user is-active "$unit" 2>/dev/null || true)" == "active" ]] || crit "$unit is not active"
+  enabled=1 active=1
+  [[ "$(systemctl --user is-enabled "$unit" 2>/dev/null || true)" == "enabled" ]] || { enabled=0; warn "$unit is not enabled"; }
+  [[ "$(systemctl --user is-active "$unit" 2>/dev/null || true)" == "active" ]] || { active=0; crit "$unit is not active"; }
+  timers_enabled+=("k3s_dr_timer_enabled{timer=\"$unit\"} $enabled")
+  timers_active+=("k3s_dr_timer_active{timer=\"$unit\"} $active")
 done
 
 for unit in k3s-dr-backup.service k3s-dr-verify.service \
@@ -135,6 +145,40 @@ else
 fi
 
 case "$severity" in 0) current="OK";; 1) current="WARNING";; 2) current="CRITICAL";; esac
+
+# Results for the Grafana DR dashboard. Pushing never changes the outcome.
+bundle_created="$(sed -n 's/^==> Backup created: \([0-9][0-9]*\)$/\1/p' <<<"$backup_output" | head -1)"
+read -r free_gib free_percent < <(sed -n 's/^==> Backup storage free: \([0-9][0-9]*\) GiB (\([0-9][0-9]*\)%)$/\1 \2/p' <<<"$backup_output" | head -1) || true
+{
+  echo "# TYPE k3s_dr_status gauge"
+  echo "k3s_dr_status $severity"
+  echo "# TYPE k3s_dr_problems gauge"
+  echo "k3s_dr_problems{severity=\"warning\"} $warnings"
+  echo "k3s_dr_problems{severity=\"critical\"} $criticals"
+  echo "# TYPE k3s_dr_monitor_last_run_timestamp_seconds gauge"
+  echo "k3s_dr_monitor_last_run_timestamp_seconds $now"
+  echo "# TYPE k3s_dr_bundle_verified gauge"
+  echo "k3s_dr_bundle_verified $bundle_verified"
+  if [[ -n "$bundle_created" ]]; then
+    echo "# TYPE k3s_dr_bundle_created_timestamp_seconds gauge"
+    echo "k3s_dr_bundle_created_timestamp_seconds $bundle_created"
+  fi
+  if [[ -n "${free_gib:-}" && -n "${free_percent:-}" ]]; then
+    echo "# TYPE k3s_dr_backup_storage_free_bytes gauge"
+    echo "k3s_dr_backup_storage_free_bytes $(( free_gib * 1024 * 1024 * 1024 ))"
+    echo "# TYPE k3s_dr_backup_storage_free_ratio gauge"
+    echo "k3s_dr_backup_storage_free_ratio $(awk -v p="$free_percent" 'BEGIN { printf "%.2f", p / 100 }')"
+  fi
+  echo "# TYPE k3s_dr_longhorn_backup_target_available gauge"
+  echo "k3s_dr_longhorn_backup_target_available $([[ "$lh" == "true" ]] && echo 1 || echo 0)"
+  echo "# TYPE k3s_dr_timer_enabled gauge"
+  printf '%s\n' "${timers_enabled[@]}"
+  echo "# TYPE k3s_dr_timer_active gauge"
+  printf '%s\n' "${timers_active[@]}"
+} | "$METRICS" push k3s-dr-monitor.service || true
+"$METRICS" unit k3s-dr-backup.service k3s-dr-verify.service \
+  k3s-dr-restore-canary.service k3s-dr-longhorn-restore-canary.service \
+  k3s-dr-smtp-test.service || true
 previous="$(cat "$STATUS_FILE" 2>/dev/null || echo UNKNOWN)"
 
 {
