@@ -137,9 +137,10 @@ Then:
 ./update-os.sh --apply     # type: UPDATE OS
 ```
 
-Each run ends with a summary listing each node's available updates (current
--> new version), packages kept back, pending reboots and whether a new Ubuntu
-release is offered. The plain preview uses each node's existing package lists,
+Each run ends with a summary: a table of every node's update count, pending
+reboot and status, then each available update (current -> new version),
+packages waiting on Ubuntu's phased rollout or kept back, which packages asked
+for a pending reboot, and whether a new Ubuntu release is offered. The plain preview uses each node's existing package lists,
 so it can miss recent updates; `--refresh` and `--apply` refresh them first.
 Nodes need `python3-apt`. Add `--ask-become-pass` if sudo needs a password on
 the nodes.

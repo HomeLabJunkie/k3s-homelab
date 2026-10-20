@@ -85,10 +85,17 @@
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: os_pending_reboot
+    - name: Read which packages requested the pending reboot
+      ansible.builtin.slurp:
+        src: /var/run/reboot-required.pkgs
+      register: os_reboot_pkgs
+      failed_when: false
+      when: os_pending_reboot.stat.exists
     - name: Save maintenance assessment
       ansible.builtin.copy:
         content: >-
           {{ {'plan': os_plan.stdout, 'reboot_required': os_pending_reboot.stat.exists,
+              'reboot_packages': (os_reboot_pkgs.content | default('') | b64decode).split(),
               'indexes_refreshed': os_refresh_cache | bool} | to_nice_json }}
         dest: "{{ os_report_dir }}/pending.json"
         mode: '0600'
