@@ -132,16 +132,20 @@ Then:
 `maintain-*` reconciles K3s; it does not update packages. `update-os.sh` does:
 
 ```bash
-./update-os.sh            # preview, changes nothing
-./update-os.sh --apply    # type: UPDATE OS
+./update-os.sh             # preview, changes nothing
+./update-os.sh --refresh   # preview after apt-get update on each node; installs nothing
+./update-os.sh --apply     # type: UPDATE OS
 ```
 
-The preview uses each node's existing package lists. Apply refreshes them
-first, so it may find more. Nodes need `python3-apt`. Add `--ask-become-pass`
-if sudo needs a password on the nodes.
+Each run ends with a summary listing each node's available updates (current
+-> new version), packages kept back, pending reboots and whether a new Ubuntu
+release is offered. The plain preview uses each node's existing package lists,
+so it can miss recent updates; `--refresh` and `--apply` refresh them first.
+Nodes need `python3-apt`. Add `--ask-become-pass` if sudo needs a password on
+the nodes.
 
 Apply goes workers first, one node at a time. A node with no updates and no
-pending reboot is reported `UP-TO-DATE` and left alone. For each other node it
+pending reboot is reported up to date and left alone. For each other node it
 checks backups are fresh, drains it, installs the updates (never removing a
 package), reboots only if `/var/run/reboot-required` exists, waits for K3s,
 the nodes, Cilium and kube-vip, uncordons it, and waits for Longhorn and the

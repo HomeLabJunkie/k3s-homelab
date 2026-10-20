@@ -152,12 +152,23 @@ def package_report(directory):
 
 def playbook(record, directory, args, apply=False):
     extra = dict(target=record['target'], os_report_dir=str(directory), os_apply=apply,
-                 os_refresh_cache=args.apply and not apply)
+                 os_refresh_cache=(args.apply or args.refresh) and not apply)
     command = ['ansible-playbook', '-i', args.inventory, ROOT / 'maintenance/update-os.yml',
                '--limit', record['target'], '-e', json.dumps(extra)]
     if args.ask_become_pass:
         command.append('--ask-become-pass')
     run(command)
+
+
+def planned_upgrades(plan):
+    # apt-get --simulate lines: "Inst name [current] (new release [arch])"; new packages lack [current].
+    return [dict(package=m[1], before=m[2], after=m[3])
+            for m in re.finditer(r'^Inst (\S+) (?:\[(\S+)\] )?\((\S+)', plan, re.MULTILINE)]
+
+
+def kept_back_packages(plan):
+    match = re.search(r'^The following packages have been kept back:\n((?:[ \t]+\S.*\n?)+)', plan, re.MULTILINE)
+    return match.group(1).split() if match else []
 
 
 def maintenance_assessment(directory):
@@ -170,7 +181,9 @@ def maintenance_assessment(directory):
     package_work = any(int(n) for n in counts.groups()[:3]) or bool(
         re.search(r'^(Inst|Conf|Remv) ', assessment['plan'], re.MULTILINE))
     return dict(package_work=package_work, reboot_required=assessment['reboot_required'],
-                kept_back=int(counts.group(4)), indexes_refreshed=assessment['indexes_refreshed'])
+                kept_back=int(counts.group(4)), indexes_refreshed=assessment['indexes_refreshed'],
+                upgrades=planned_upgrades(assessment['plan']),
+                kept_back_packages=kept_back_packages(assessment['plan']))
 
 
 def execute(records, directory, args):
@@ -181,7 +194,8 @@ def execute(records, directory, args):
         record['status'] = 'FAIL'
         cordoned = False
         try:
-            print(f'\nSTART: {record["target"]} ({record["role"]})', flush=True)
+            print(f'\n==> {record["target"]} ({record["role"]}): '
+                  f'{"updating" if args.apply else "checking for updates"}', flush=True)
             health(records)
             playbook(record, report_dir, args)
             assessment = maintenance_assessment(report_dir)
@@ -189,7 +203,7 @@ def execute(records, directory, args):
             if not assessment['package_work'] and not assessment['reboot_required']:
                 record['status'] = 'UP-TO-DATE' if args.apply else 'PLAN'
                 record['no_maintenance_needed'] = True
-                print(f"{record['target']}: no actionable package updates or pending reboot; skipping maintenance.", flush=True)
+                print(f"{record['target']}: up to date, no reboot pending; nothing to do.", flush=True)
                 continue
             if args.apply:
                 # Verify backup freshness again before each node is changed.
@@ -250,40 +264,108 @@ def release_report(directory):
     return result
 
 
-def summary(records, directory):
+def plural(count, word):
+    return f'{count} {word}{"" if count == 1 else "s"}'
+
+
+def package_lines(changes):
+    width = max(len(c['package']) for c in changes)
+    return [f'      {c["package"]:<{width}}  {c["before"] or "(new)"} -> {c["after"] or "(removed)"}'
+            for c in changes]
+
+
+def node_state(r):
+    assessment = r.get('assessment') or {}
+    pending = ', reboot pending' if assessment.get('reboot_required') else ''
+    if r['status'] == 'SKIP':
+        return 'not checked'
+    if r['status'] == 'FAIL':
+        return 'FAILED'
+    if r.get('no_maintenance_needed'):
+        return 'up to date'
+    if r['status'] == 'PASS':
+        rebooted = ', rebooted' if r.get('rebooted') else ''
+        return f'updated: {plural(len(r.get("changes") or []), "package change")}{rebooted}'
+    if r['status'] == 'PLAN':
+        upgrades = assessment.get('upgrades') or []
+        return (f'{plural(len(upgrades), "update")} available' if upgrades else 'package work pending') + pending
+    return r['status']
+
+
+def node_details(r):
+    lines = []
+    assessment = r.get('assessment') or {}
+    if r.get('error'):
+        lines.append(f'      Error: {r["error"]}')
+    if r.get('left_cordoned'):
+        lines.append(f'      LEFT CORDONED: fix the node and check the cluster, then kubectl uncordon {r["node"]}')
+    if r.get('changes'):
+        lines.extend(package_lines(r['changes']))
+        if r.get('kernel_before') != r.get('kernel_after'):
+            lines.append(f'      Running kernel: {r["kernel_before"]} -> {r["kernel_after"]}')
+        if r.get('k3s_after') and r.get('k3s_before') != r.get('k3s_after'):
+            lines.append(f'      K3s: {r["k3s_before"]} -> {r["k3s_after"]}')
+    elif r['status'] in ('PLAN', 'FAIL') and assessment.get('upgrades'):
+        lines.extend(package_lines(assessment['upgrades']))
+    if assessment.get('kept_back'):
+        names = ', '.join(assessment.get('kept_back_packages') or []) or plural(assessment['kept_back'], 'package')
+        lines.append(f'      Kept back (not installed): {names}')
+    if r.get('held'):
+        lines.append(f'      Held: {", ".join(r["held"])}')
+    return lines
+
+
+def release_text(release):
+    current = release.get('current', 'unknown distro')
+    status = release['status']
+    if status == 'AVAILABLE':
+        return f'{current}, new release {release.get("target") or "(unknown version)"} available (not installed by this script)'
+    if status == 'NONE':
+        return f'{current}, no new release available'
+    if status == 'DISABLED':
+        return f'{current}, release upgrade notifications disabled'
+    if status == 'UNSUPPORTED':
+        return f'{current}, release check not supported'
+    return f'{current}, release check failed: {" ".join(release["detail"].split())}'
+
+
+def summary(records, directory, result=None):
     for record in records:
         if record.get('report_dir'):
             record['distro_upgrade'] = release_report(Path(record['report_dir']))
     (directory / 'summary.json').write_text(json.dumps(records, indent=2) + '\n')
-    lines = ['ROLLING OS UPDATE SUMMARY']
+    lines = ['', '=' * 60, 'OS UPDATE SUMMARY', '=' * 60]
+    width = max((len(f'{r["target"]} ({r["role"]})') for r in records), default=0)
     for r in records:
-        lines.append(f'{r["status"]}: {r["target"]} ({r["role"]}, {r["node"]})')
-        release = r.get('distro_upgrade')
-        if release:
-            current = release.get('current', 'unknown distro')
-            target = f" -> {release['target']}" if release.get('target') else ''
-            lines.append(f"  Distro upgrade: {release['status']} ({current}{target})")
-            lines.append(f"    {' '.join(release['detail'].split())}")
-        if r.get('error'):
-            lines.append(f'  Error: {r["error"]}')
-        if r.get('left_cordoned'):
-            lines.append('  LEFT CORDONED: repair and verify health before manually uncordoning.')
-        if r.get('changes') is not None:
-            lines.append(f'  {len(r["changes"])} package changes; rebooted={r["rebooted"]}; '
-                         f'kernel {r["kernel_before"]} -> {r["kernel_after"]}')
-            if r.get('k3s_after'):
-                lines.append(f'  K3s: {r["k3s_before"]!r} -> {r["k3s_after"]!r}')
-            for change in r['changes']:
-                lines.append(f'    {change["package"]}: {change["before"] or "(absent)"} -> {change["after"] or "(removed)"}')
-            lines.append(f'  Held packages: {", ".join(r["held"]) or "none"}')
-        elif r.get('no_maintenance_needed'):
-            qualifier = 'refreshed' if r['assessment']['indexes_refreshed'] else 'cached'
-            lines.append(f'  No actionable package updates ({qualifier} indexes); no pending reboot. Maintenance skipped.')
-            if r['assessment']['kept_back']:
-                lines.append(f"  Packages kept back: {r['assessment']['kept_back']}")
-        elif r['status'] != 'SKIP':
-            lines.append('  Actual changes not recorded; see node plan and run log.')
+        lines.append(f'  {r["target"] + " (" + r["role"] + ")":<{width}}  {node_state(r)}')
+        lines.extend(node_details(r))
+
+    releases = {}
+    for r in records:
+        if r.get('distro_upgrade'):
+            releases.setdefault(release_text(r['distro_upgrade']), []).append(r['target'])
+    if releases:
+        lines.append('')
+        lines.append('Release upgrades:')
+        for text, targets in releases.items():
+            who = 'all nodes' if len(targets) == len(records) else ', '.join(targets)
+            lines.append(f'  {who}: {text}')
+
+    checked = [r for r in records if r.get('assessment')]
+    planned = [r for r in records if r['status'] == 'PLAN' and not r.get('no_maintenance_needed')]
+    lines.append('')
+    if planned:
+        total = sum(len((r.get('assessment') or {}).get('upgrades') or []) for r in planned)
+        verb = 'needs' if len(planned) == 1 else 'need'
+        lines.append(f'{plural(len(planned), "node")} {verb} maintenance ({plural(total, "package update")}).')
+        lines.append('Install with: ./update-os.sh --apply (one node at a time, drains and reboots as needed)')
+    elif checked and all(r.get('no_maintenance_needed') for r in records):
+        lines.append('All nodes are up to date; nothing was changed.')
+    if any(not r['assessment']['indexes_refreshed'] for r in checked):
+        lines.append("Note: preview used each node's cached package lists; add --refresh for a current check.")
     lines.append(f'Reports: {directory}')
+    if result:
+        lines.append(result)
     output = '\n'.join(lines) + '\n'
     (directory / 'summary.txt').write_text(output)
     print(output, flush=True)
@@ -292,6 +374,8 @@ def summary(records, directory):
 def main():
     parser = argparse.ArgumentParser(description='Workers-first rolling Debian/Ubuntu OS package updates. Default: read-only remote plan using existing APT indexes.')
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--refresh', action='store_true',
+                        help='Preview only: run apt-get update on each node first so the preview is current (installs nothing)')
     parser.add_argument('--yes', action='store_true', help='Explicit unattended apply')
     parser.add_argument('--ask-become-pass', action='store_true', help='Prompt for sudo password for each Ansible invocation')
     parser.add_argument('--inventory', default=str(ROOT / 'inventory/k3s-ansible/hosts.ini'))
@@ -299,6 +383,8 @@ def main():
     args = parser.parse_args()
     if args.yes and not args.apply:
         parser.error('--yes requires --apply')
+    if args.refresh and args.apply:
+        parser.error('--refresh is for previews; --apply already refreshes package lists')
     if args.health_timeout <= 0:
         parser.error('--health-timeout must be positive')
     os.chdir(ROOT)
@@ -312,8 +398,15 @@ def main():
         os.dup2(tee.stdin.fileno(), 1)
         os.dup2(tee.stdin.fileno(), 2)
         records = []
+        result = None
         try:
-            print(f'OS update {"APPLY" if args.apply else "PLAN"}; log: {log.name}', flush=True)
+            if args.apply:
+                mode = 'APPLY: installing updates'
+            elif args.refresh:
+                mode = 'PREVIEW: refreshing package lists, then checking for updates (installs nothing)'
+            else:
+                mode = 'PREVIEW: checking for updates, changing nothing'
+            print(f'OS update {mode}\nLog: {log.name}', flush=True)
             run([ROOT / 'scripts/check-ansible-toolchain.sh'])
             inventory = json.loads(run(['ansible-inventory', '-i', args.inventory, '--list'], capture=True))
             nodes = json.loads(kube('get', 'nodes', '-o', 'json'))['items']
@@ -325,15 +418,13 @@ def main():
                 if input('Type UPDATE OS to continue: ') != 'UPDATE OS':
                     raise RuntimeError('Confirmation did not match; no nodes changed')
             execute(records, directory, args)
-            if records and all(r.get('no_maintenance_needed') for r in records):
-                print('No nodes require package updates or a reboot; no nodes were cordoned.', flush=True)
-            print(f'ROLLING OS UPDATE: {"PASS" if args.apply else "PLAN COMPLETE"}', flush=True)
+            result = f'RESULT: {"PASS" if args.apply else "PREVIEW COMPLETE"}'
             return 0
         except (Exception, KeyboardInterrupt) as exc:
-            print(f'ROLLING OS UPDATE: FAIL: {exc}', flush=True)
+            result = f'RESULT: FAIL: {exc}'
             return 1
         finally:
-            summary(records, directory)
+            summary(records, directory, result)
             sys.stdout.flush()
             sys.stderr.flush()
             os.dup2(saved[0], 1)

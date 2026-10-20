@@ -241,10 +241,54 @@ class UpdateTests(unittest.TestCase):
             for status in ('PLAN', 'PASS', 'FAIL'):
                 recs = [dict(records()[0], status=status, report_dir=tmp)]
                 os_update.summary(recs, directory)
-                self.assertIn('Distro upgrade: AVAILABLE (Ubuntu 26.04 -> 26.10)',
+                self.assertIn('all nodes: Ubuntu 26.04, new release 26.10 available',
                               (directory / 'summary.txt').read_text())
                 saved = json.loads((directory / 'summary.json').read_text())
                 self.assertEqual(saved[0]['distro_upgrade']['target'], '26.10')
+
+    def test_plan_summary_lists_available_upgrades(self):
+        plan = ('The following packages have been kept back:\n  linux-generic linux-image-generic\n'
+                'The following packages will be upgraded:\n  openssl\n'
+                'Inst openssl [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])\n'
+                'Inst linux-modules-6.8.0-90 (6.8.0-90.91 Ubuntu:24.04/noble-updates [amd64])\n'
+                'Conf openssl (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])\n'
+                '1 upgraded, 1 newly installed, 0 to remove and 2 not upgraded.\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / 'pending.json').write_text(json.dumps(dict(
+                plan=plan, reboot_required=True, indexes_refreshed=False)))
+            assessment = os_update.maintenance_assessment(directory)
+            self.assertEqual(assessment['upgrades'], [
+                dict(package='openssl', before='3.0.13-0ubuntu3.4', after='3.0.13-0ubuntu3.5'),
+                dict(package='linux-modules-6.8.0-90', before=None, after='6.8.0-90.91')])
+            self.assertEqual(assessment['kept_back_packages'], ['linux-generic', 'linux-image-generic'])
+            recs = records()
+            recs[0].update(status='PLAN', assessment=assessment)
+            recs[1].update(status='PLAN', no_maintenance_needed=True, assessment=dict(
+                assessment, upgrades=[], kept_back=0, reboot_required=False))
+            os_update.summary(recs, directory, 'RESULT: PREVIEW COMPLETE')
+            text = (directory / 'summary.txt').read_text()
+        self.assertRegex(text, r'worker1 \(worker\) +2 updates available, reboot pending')
+        self.assertRegex(text, r'openssl +3\.0\.13-0ubuntu3\.4 -> 3\.0\.13-0ubuntu3\.5')
+        self.assertRegex(text, r'linux-modules-6\.8\.0-90 +\(new\) -> 6\.8\.0-90\.91')
+        self.assertIn('Kept back (not installed): linux-generic, linux-image-generic', text)
+        self.assertRegex(text, r'worker2 \(worker\) +up to date')
+        self.assertIn('1 node needs maintenance (2 package updates).', text)
+        self.assertIn("cached package lists", text)
+        self.assertTrue(text.rstrip().endswith('RESULT: PREVIEW COMPLETE'))
+
+    def test_refresh_only_refreshes_indexes_during_assessment(self):
+        def extra_vars(apply_mode, refresh, apply=False):
+            args = SimpleNamespace(apply=apply_mode, refresh=refresh, ask_become_pass=False, inventory='hosts.ini')
+            with patch.object(os_update, 'run') as run:
+                os_update.playbook(records()[0], Path('/tmp/report'), args, apply=apply)
+            command = run.call_args.args[0]
+            return json.loads(command[command.index('-e') + 1])
+        self.assertFalse(extra_vars(False, False)['os_refresh_cache'])
+        self.assertTrue(extra_vars(False, True)['os_refresh_cache'])
+        self.assertFalse(extra_vars(False, True)['os_apply'])
+        self.assertTrue(extra_vars(True, False)['os_refresh_cache'])
+        self.assertFalse(extra_vars(True, False, apply=True)['os_refresh_cache'])
 
     def test_package_add_remove_upgrade(self):
         with tempfile.TemporaryDirectory() as tmp:

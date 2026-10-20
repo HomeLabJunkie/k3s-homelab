@@ -101,9 +101,6 @@
         mode: '0600'
       delegate_to: localhost
       become: false
-    - name: Display package plan
-      ansible.builtin.debug:
-        var: os_plan.stdout_lines
     - name: Apply OS maintenance
       when: os_apply | bool
       block:
