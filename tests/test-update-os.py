@@ -289,6 +289,18 @@ class UpdateTests(unittest.TestCase):
         self.assertNotIn('package work pending', text)
         self.assertTrue(text.rstrip().endswith('RESULT: PREVIEW COMPLETE'))
 
+    def test_apply_summary_shows_kernel_and_reboot_reason_without_package_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            recs = [dict(records()[0], status='PASS', changes=[], rebooted=True, held=[],
+                         kernel_before='7.0.0-34-generic', kernel_after='7.0.0-38-generic',
+                         assessment=dict(upgrades=[], reboot_required=True, indexes_refreshed=True,
+                                         reboot_packages=['linux-image-7.0.0-38-generic', 'linux-base']))]
+            os_update.summary(recs, Path(tmp), 'RESULT: PASS', apply=True)
+            text = (Path(tmp) / 'summary.txt').read_text()
+        self.assertRegex(text, r'worker1 +worker +none +done +updated')
+        self.assertIn('  worker1\n    Running kernel: 7.0.0-34-generic -> 7.0.0-38-generic\n'
+                      '    Rebooted for:\n      linux-image-7.0.0-38-generic, linux-base', text)
+
     def test_release_lts_has_nothing_newer(self):
         result = self.release_check(1, 'Checking for a new Ubuntu release\nThere is no development version of '
                                        'an LTS available.\nTo upgrade to the latest non-LTS development release\n'

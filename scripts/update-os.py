@@ -199,8 +199,8 @@ def execute(records, directory, args):
         record['status'] = 'FAIL'
         cordoned = False
         try:
-            print(f'\n==> {record["target"]} ({record["role"]}): '
-                  f'{"updating" if args.apply else "checking for updates"}', flush=True)
+            print(f'\n{"-" * 60}\nNODE {index + 1}/{len(records)}: {record["target"]} ({record["role"]}): '
+                  f'{"updating" if args.apply else "checking for updates"}\n{"-" * 60}', flush=True)
             health(records)
             playbook(record, report_dir, args)
             assessment = maintenance_assessment(report_dir)
@@ -309,12 +309,15 @@ def package_details(r):
     assessment = r.get('assessment') or {}
     if r.get('changes'):
         lines.extend(package_lines(r['changes']))
-        if r.get('kernel_before') != r.get('kernel_after'):
-            lines.append(f'    Running kernel: {r["kernel_before"]} -> {r["kernel_after"]}')
-        if r.get('k3s_after') and r.get('k3s_before') != r.get('k3s_after'):
-            lines.append(f'    K3s: {r["k3s_before"]} -> {r["k3s_after"]}')
     elif r['status'] in ('PLAN', 'FAIL') and assessment.get('upgrades'):
         lines.extend(package_lines(assessment['upgrades']))
+    # A reboot can change the running kernel even when this run installed no packages.
+    if r.get('kernel_before') != r.get('kernel_after'):
+        lines.append(f'    Running kernel: {r["kernel_before"]} -> {r["kernel_after"]}')
+    if r.get('k3s_after') and r.get('k3s_before') != r.get('k3s_after'):
+        lines.append(f'    K3s: {r["k3s_before"]} -> {r["k3s_after"]}')
+    if r.get('rebooted') and assessment.get('reboot_packages'):
+        lines.append(wrapped('Rebooted for', assessment['reboot_packages']))
     if assessment.get('phased'):
         lines.append(wrapped("Waiting on Ubuntu's phased rollout (a later run installs them)", assessment['phased']))
     if assessment.get('kept_back_packages'):
@@ -364,7 +367,7 @@ def summary(records, directory, result=None, apply=False):
     details = [(r, package_details(r)) for r in records]
     details = [(r, d) for r, d in details if d]
     lines.append('')
-    lines.append('Updates installed:' if apply else 'Updates available:')
+    lines.append('Changes made:' if apply else 'Updates available:')
     if not details:
         lines.append('  none')
     for r, detail in details:
