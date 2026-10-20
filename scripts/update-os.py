@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import textwrap
 import time
 from datetime import datetime
 
@@ -166,8 +167,9 @@ def planned_upgrades(plan):
             for m in re.finditer(r'^Inst (\S+) (?:\[(\S+)\] )?\((\S+)', plan, re.MULTILINE)]
 
 
-def kept_back_packages(plan):
-    match = re.search(r'^The following packages have been kept back:\n((?:[ \t]+\S.*\n?)+)', plan, re.MULTILINE)
+def plan_section(plan, header):
+    # Package names listed on indented lines under an apt-get header line.
+    match = re.search(rf'^{re.escape(header)}\n((?:[ \t]+\S.*\n?)+)', plan, re.MULTILINE)
     return match.group(1).split() if match else []
 
 
@@ -183,7 +185,10 @@ def maintenance_assessment(directory):
     return dict(package_work=package_work, reboot_required=assessment['reboot_required'],
                 kept_back=int(counts.group(4)), indexes_refreshed=assessment['indexes_refreshed'],
                 upgrades=planned_upgrades(assessment['plan']),
-                kept_back_packages=kept_back_packages(assessment['plan']))
+                kept_back_packages=plan_section(assessment['plan'], 'The following packages have been kept back:'),
+                # Ubuntu releases these gradually; a later run installs them once this node's turn comes.
+                phased=plan_section(assessment['plan'], 'The following upgrades have been deferred due to phasing:'),
+                reboot_packages=list(dict.fromkeys(assessment.get('reboot_packages') or [])))
 
 
 def execute(records, directory, args):
@@ -261,6 +266,9 @@ def release_report(directory):
         result.update(status='DISABLED', detail='Release notifications disabled by the node release-upgrade policy.')
     elif check['rc'] == 1 and 'No new release found' in output:
         result.update(status='NONE', detail='No new release offered by the configured upgrade policy.')
+    elif check['rc'] == 1 and 'no development version of an LTS available' in output:
+        # On an LTS with Prompt=lts this is the checker's normal "nothing newer" answer.
+        result.update(status='NONE', detail='No newer LTS release available.')
     return result
 
 
@@ -268,60 +276,67 @@ def plural(count, word):
     return f'{count} {word}{"" if count == 1 else "s"}'
 
 
+def wrapped(label, names):
+    names = textwrap.fill(', '.join(names), 78, initial_indent='      ', subsequent_indent='      ',
+                          break_on_hyphens=False, break_long_words=False)
+    return f'    {label}:\n{names}'
+
+
 def package_lines(changes):
     width = max(len(c['package']) for c in changes)
-    return [f'      {c["package"]:<{width}}  {c["before"] or "(new)"} -> {c["after"] or "(removed)"}'
+    return [f'    {c["package"]:<{width}}  {c["before"] or "(new)"} -> {c["after"] or "(removed)"}'
             for c in changes]
 
 
-def node_state(r):
+def table_row(r):
     assessment = r.get('assessment') or {}
-    pending = ', reboot pending' if assessment.get('reboot_required') else ''
-    if r['status'] == 'SKIP':
-        return 'not checked'
-    if r['status'] == 'FAIL':
-        return 'FAILED'
+    if r.get('changes') is not None:
+        updates = str(len(r['changes'])) if r['changes'] else 'none'
+        reboot = 'done' if r.get('rebooted') else 'no'
+    elif assessment:
+        updates = str(len(assessment['upgrades'])) if assessment.get('upgrades') else 'none'
+        reboot = 'pending' if assessment.get('reboot_required') else 'no'
+    else:
+        updates = reboot = '-'
+    status = {'SKIP': 'not checked', 'FAIL': 'FAILED', 'PASS': 'updated'}.get(r['status'], 'maintenance needed')
     if r.get('no_maintenance_needed'):
-        return 'up to date'
-    if r['status'] == 'PASS':
-        rebooted = ', rebooted' if r.get('rebooted') else ''
-        return f'updated: {plural(len(r.get("changes") or []), "package change")}{rebooted}'
-    if r['status'] == 'PLAN':
-        upgrades = assessment.get('upgrades') or []
-        return (f'{plural(len(upgrades), "update")} available' if upgrades else 'package work pending') + pending
-    return r['status']
+        status = 'up to date'
+    return r['target'], r['role'], updates, reboot, status
 
 
-def node_details(r):
+def package_details(r):
     lines = []
     assessment = r.get('assessment') or {}
-    if r.get('error'):
-        lines.append(f'      Error: {r["error"]}')
-    if r.get('left_cordoned'):
-        lines.append(f'      LEFT CORDONED: fix the node and check the cluster, then kubectl uncordon {r["node"]}')
     if r.get('changes'):
         lines.extend(package_lines(r['changes']))
         if r.get('kernel_before') != r.get('kernel_after'):
-            lines.append(f'      Running kernel: {r["kernel_before"]} -> {r["kernel_after"]}')
+            lines.append(f'    Running kernel: {r["kernel_before"]} -> {r["kernel_after"]}')
         if r.get('k3s_after') and r.get('k3s_before') != r.get('k3s_after'):
-            lines.append(f'      K3s: {r["k3s_before"]} -> {r["k3s_after"]}')
+            lines.append(f'    K3s: {r["k3s_before"]} -> {r["k3s_after"]}')
     elif r['status'] in ('PLAN', 'FAIL') and assessment.get('upgrades'):
         lines.extend(package_lines(assessment['upgrades']))
-    if assessment.get('kept_back'):
-        names = ', '.join(assessment.get('kept_back_packages') or []) or plural(assessment['kept_back'], 'package')
-        lines.append(f'      Kept back (not installed): {names}')
+    if assessment.get('phased'):
+        lines.append(wrapped("Waiting on Ubuntu's phased rollout (a later run installs them)", assessment['phased']))
+    if assessment.get('kept_back_packages'):
+        lines.append(wrapped('Kept back by apt (needs a manual decision)', assessment['kept_back_packages']))
     if r.get('held'):
-        lines.append(f'      Held: {", ".join(r["held"])}')
+        lines.append(wrapped('Held', r['held']))
     return lines
+
+
+def node_names(targets, records):
+    if len(targets) == len(records) and len(records) > 1:
+        return f'all {len(records)} nodes'
+    return ', '.join(targets)
 
 
 def release_text(release):
     current = release.get('current', 'unknown distro')
     status = release['status']
     if status == 'AVAILABLE':
-        return f'{current}, new release {release.get("target") or "(unknown version)"} available (not installed by this script)'
+        return f'{current}, new release {release.get("target") or "(unknown version)"} available (this script does not install it)'
     if status == 'NONE':
-        return f'{current}, no new release available'
+        return f'{current}, {release["detail"][0].lower()}{release["detail"][1:].rstrip(".")}'
     if status == 'DISABLED':
         return f'{current}, release upgrade notifications disabled'
     if status == 'UNSUPPORTED':
@@ -329,16 +344,52 @@ def release_text(release):
     return f'{current}, release check failed: {" ".join(release["detail"].split())}'
 
 
-def summary(records, directory, result=None):
+def summary(records, directory, result=None, apply=False):
     for record in records:
         if record.get('report_dir'):
             record['distro_upgrade'] = release_report(Path(record['report_dir']))
     (directory / 'summary.json').write_text(json.dumps(records, indent=2) + '\n')
-    lines = ['', '=' * 60, 'OS UPDATE SUMMARY', '=' * 60]
-    width = max((len(f'{r["target"]} ({r["role"]})') for r in records), default=0)
-    for r in records:
-        lines.append(f'  {r["target"] + " (" + r["role"] + ")":<{width}}  {node_state(r)}')
-        lines.extend(node_details(r))
+    checked = [r for r in records if r.get('assessment')]
+    refreshed = bool(checked) and all(r['assessment']['indexes_refreshed'] for r in checked)
+    title = 'OS UPDATE RESULTS' if apply else 'OS UPDATE PREVIEW'
+    if checked:
+        title += ' (package lists refreshed)' if refreshed else " (using the nodes' cached package lists)"
+    lines = ['', '=' * 60, title, '=' * 60, '']
+
+    rows = [('NODE', 'ROLE', 'UPDATES', 'REBOOT', 'STATUS')] + [table_row(r) for r in records]
+    widths = [max(len(row[i]) for row in rows) for i in range(4)]
+    lines.extend('  ' + '  '.join(f'{cell:<{width}}' for cell, width in zip(row, widths)) + '  ' + row[4]
+                 for row in rows)
+
+    details = [(r, package_details(r)) for r in records]
+    details = [(r, d) for r, d in details if d]
+    lines.append('')
+    lines.append('Updates installed:' if apply else 'Updates available:')
+    if not details:
+        lines.append('  none')
+    for r, detail in details:
+        lines.append(f'  {r["target"]}')
+        lines.extend(detail)
+
+    pending = [r for r in records if r['status'] == 'PLAN' and (r.get('assessment') or {}).get('reboot_required')]
+    if pending:
+        lines.append('')
+        lines.append('Reboots pending (updates already installed on the node, e.g. by unattended-upgrades):')
+        reasons = {}
+        for r in pending:
+            reasons.setdefault(tuple(r['assessment'].get('reboot_packages') or []), []).append(r['target'])
+        for packages_, targets in reasons.items():
+            lines.append(f'  {node_names(targets, records)}')
+            lines.append(wrapped('Requested by', packages_) if packages_ else '    Requested by: (not recorded)')
+
+    errors = [r for r in records if r.get('error')]
+    if errors:
+        lines.append('')
+        lines.append('Errors:')
+        for r in errors:
+            lines.append(f'  {r["target"]}: {r["error"]}')
+            if r.get('left_cordoned'):
+                lines.append(f'    LEFT CORDONED: fix the node and check the cluster, then kubectl uncordon {r["node"]}')
 
     releases = {}
     for r in records:
@@ -346,23 +397,27 @@ def summary(records, directory, result=None):
             releases.setdefault(release_text(r['distro_upgrade']), []).append(r['target'])
     if releases:
         lines.append('')
-        lines.append('Release upgrades:')
+        lines.append('Ubuntu release upgrade:')
         for text, targets in releases.items():
-            who = 'all nodes' if len(targets) == len(records) else ', '.join(targets)
-            lines.append(f'  {who}: {text}')
+            lines.append(f'  {node_names(targets, records)}: {text}')
 
-    checked = [r for r in records if r.get('assessment')]
-    planned = [r for r in records if r['status'] == 'PLAN' and not r.get('no_maintenance_needed')]
     lines.append('')
+    planned = [r for r in records if r['status'] == 'PLAN' and r.get('assessment') and not r.get('no_maintenance_needed')]
     if planned:
-        total = sum(len((r.get('assessment') or {}).get('upgrades') or []) for r in planned)
-        verb = 'needs' if len(planned) == 1 else 'need'
-        lines.append(f'{plural(len(planned), "node")} {verb} maintenance ({plural(total, "package update")}).')
-        lines.append('Install with: ./update-os.sh --apply (one node at a time, drains and reboots as needed)')
+        to_update = [r for r in planned if r['assessment'].get('upgrades')]
+        to_reboot = [r for r in planned if r['assessment'].get('reboot_required')]
+        steps = []
+        if to_update:
+            total = sum(len(r['assessment']['upgrades']) for r in to_update)
+            steps.append(f'install {plural(total, "update")} on {node_names([r["target"] for r in to_update], records)}')
+        if to_reboot:
+            steps.append(f'reboot {node_names([r["target"] for r in to_reboot], records)}')
+        lines.append(f'Next: ./update-os.sh --apply will {" and ".join(steps)},')
+        lines.append('      one node at a time, draining each node first.')
     elif checked and all(r.get('no_maintenance_needed') for r in records):
-        lines.append('All nodes are up to date; nothing was changed.')
-    if any(not r['assessment']['indexes_refreshed'] for r in checked):
-        lines.append("Note: preview used each node's cached package lists; add --refresh for a current check.")
+        lines.append('Nothing to do: every node is up to date with no reboot pending.')
+    if checked and not refreshed and not apply:
+        lines.append('Package lists were not refreshed; run ./update-os.sh --refresh for a current check.')
     lines.append(f'Reports: {directory}')
     if result:
         lines.append(result)
@@ -424,7 +479,7 @@ def main():
             result = f'RESULT: FAIL: {exc}'
             return 1
         finally:
-            summary(records, directory, result)
+            summary(records, directory, result, args.apply)
             sys.stdout.flush()
             sys.stderr.flush()
             os.dup2(saved[0], 1)

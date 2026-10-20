@@ -241,41 +241,60 @@ class UpdateTests(unittest.TestCase):
             for status in ('PLAN', 'PASS', 'FAIL'):
                 recs = [dict(records()[0], status=status, report_dir=tmp)]
                 os_update.summary(recs, directory)
-                self.assertIn('all nodes: Ubuntu 26.04, new release 26.10 available',
+                self.assertIn('worker1: Ubuntu 26.04, new release 26.10 available',
                               (directory / 'summary.txt').read_text())
                 saved = json.loads((directory / 'summary.json').read_text())
                 self.assertEqual(saved[0]['distro_upgrade']['target'], '26.10')
 
     def test_plan_summary_lists_available_upgrades(self):
-        plan = ('The following packages have been kept back:\n  linux-generic linux-image-generic\n'
+        plan = ('The following upgrades have been deferred due to phasing:\n  libsystemd0 systemd\n'
+                'The following packages have been kept back:\n  linux-generic linux-image-generic\n'
                 'The following packages will be upgraded:\n  openssl\n'
                 'Inst openssl [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])\n'
                 'Inst linux-modules-6.8.0-90 (6.8.0-90.91 Ubuntu:24.04/noble-updates [amd64])\n'
                 'Conf openssl (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates [amd64])\n'
-                '1 upgraded, 1 newly installed, 0 to remove and 2 not upgraded.\n')
+                '1 upgraded, 1 newly installed, 0 to remove and 4 not upgraded.\n')
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             (directory / 'pending.json').write_text(json.dumps(dict(
-                plan=plan, reboot_required=True, indexes_refreshed=False)))
+                plan=plan, reboot_required=True, indexes_refreshed=False,
+                reboot_packages=['linux-image-6.8.0-90-generic', 'linux-image-6.8.0-90-generic'])))
             assessment = os_update.maintenance_assessment(directory)
             self.assertEqual(assessment['upgrades'], [
                 dict(package='openssl', before='3.0.13-0ubuntu3.4', after='3.0.13-0ubuntu3.5'),
                 dict(package='linux-modules-6.8.0-90', before=None, after='6.8.0-90.91')])
             self.assertEqual(assessment['kept_back_packages'], ['linux-generic', 'linux-image-generic'])
+            self.assertEqual(assessment['phased'], ['libsystemd0', 'systemd'])
+            self.assertEqual(assessment['reboot_packages'], ['linux-image-6.8.0-90-generic'])
             recs = records()
             recs[0].update(status='PLAN', assessment=assessment)
-            recs[1].update(status='PLAN', no_maintenance_needed=True, assessment=dict(
-                assessment, upgrades=[], kept_back=0, reboot_required=False))
+            # A node with no package updates but a pending reboot still needs maintenance.
+            recs[1].update(status='PLAN', assessment=dict(
+                assessment, upgrades=[], kept_back=0, kept_back_packages=[], phased=[]))
+            recs[2].update(status='PLAN', no_maintenance_needed=True, assessment=dict(
+                assessment, upgrades=[], kept_back=0, kept_back_packages=[], phased=[], reboot_required=False))
             os_update.summary(recs, directory, 'RESULT: PREVIEW COMPLETE')
             text = (directory / 'summary.txt').read_text()
-        self.assertRegex(text, r'worker1 \(worker\) +2 updates available, reboot pending')
+        self.assertIn("OS UPDATE PREVIEW (using the nodes' cached package lists)", text)
+        self.assertRegex(text, r'worker1 +worker +2 +pending +maintenance needed')
+        self.assertRegex(text, r'worker2 +worker +none +pending +maintenance needed')
+        self.assertRegex(text, r'master1 +control-plane +none +no +up to date')
         self.assertRegex(text, r'openssl +3\.0\.13-0ubuntu3\.4 -> 3\.0\.13-0ubuntu3\.5')
         self.assertRegex(text, r'linux-modules-6\.8\.0-90 +\(new\) -> 6\.8\.0-90\.91')
-        self.assertIn('Kept back (not installed): linux-generic, linux-image-generic', text)
-        self.assertRegex(text, r'worker2 \(worker\) +up to date')
-        self.assertIn('1 node needs maintenance (2 package updates).', text)
-        self.assertIn("cached package lists", text)
+        self.assertIn("phased rollout (a later run installs them):\n      libsystemd0, systemd", text)
+        self.assertIn('Kept back by apt (needs a manual decision):\n      linux-generic, linux-image-generic', text)
+        self.assertIn('  worker1, worker2\n    Requested by:\n      linux-image-6.8.0-90-generic', text)
+        self.assertIn('install 2 updates on worker1 and reboot worker1, worker2', text)
+        self.assertIn('./update-os.sh --refresh', text)
+        self.assertNotIn('package work pending', text)
         self.assertTrue(text.rstrip().endswith('RESULT: PREVIEW COMPLETE'))
+
+    def test_release_lts_has_nothing_newer(self):
+        result = self.release_check(1, 'Checking for a new Ubuntu release\nThere is no development version of '
+                                       'an LTS available.\nTo upgrade to the latest non-LTS development release\n'
+                                       'set Prompt=normal in /etc/update-manager/release-upgrades.')
+        self.assertEqual(result['status'], 'NONE')
+        self.assertEqual(os_update.release_text(result), 'Ubuntu 26.04, no newer LTS release available')
 
     def test_refresh_only_refreshes_indexes_during_assessment(self):
         def extra_vars(apply_mode, refresh, apply=False):
