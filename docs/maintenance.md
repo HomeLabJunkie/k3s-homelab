@@ -256,6 +256,14 @@ against the `k3s-dr` SSH alias. It never passes `--apply`, `--bootstrap` or
 `--execute`, and needs no local sudo: the backup check reaches the NAS
 through a control-plane node. Logs go to `logs/readiness/`.
 
+The DR server is off between rehearsals. If `k3s-dr` does not answer on SSH,
+the check powers the server on with `recovery/dr-host-power.sh on` (which
+waits for SSH, up to 10 minutes), runs the two DR stages, and powers it off
+again, also when a stage fails or the run is interrupted with Ctrl-C. A server
+that was already on is left on. The power steps appear in the summary; a
+failed power-off is a warning that names the command to run. `--no-dr-power`
+turns this off.
+
 Retire nothing unless it ends with `RESULT: WORKSTATION READY`. `--no-maintenance`,
 `--no-backup` and `--no-dr` skip a stage for troubleshooting, but a report
 with skips is not approval.

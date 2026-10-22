@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-22: Workstation readiness powers the DR server for its DR checks
+
+`./workstation-readiness.sh` failed its plan-only DR rehearsal on both
+laptops because the on-demand DR server was off. When `k3s-dr` does not
+answer on SSH, it now powers the server on with `recovery/dr-host-power.sh`,
+runs the DR stages, and powers it off again, including after a failed stage
+or Ctrl-C. A server that was already on is left on. `--no-dr-power` keeps the
+old behaviour. `tests/test-workstation-readiness.sh` covers the power cycle,
+a failed stage, a failed power-off and an interrupted run.
+
 ## 2026-10-16: Traefik v3.7.15
 
 Traefik moved from `v3.7.14` to `v3.7.15` by pinning `image.tag` in
