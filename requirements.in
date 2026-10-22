@@ -1,6 +1,6 @@
 ansible-core>=2.21.5,<2.22
 jmespath>=1.0.1
-jsonpatch>=1.35
+jsonpatch>=1.36
 kubernetes>=29.0.0
 molecule-plugins[vagrant]
 molecule>=26.10.0
