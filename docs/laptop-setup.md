@@ -10,6 +10,29 @@ instead: it takes the private files from the recovery bundle.
 There are two laptops: `dev` is always on and runs the scheduled backup and
 DR jobs; any other laptop runs none of them.
 
+## The quick way
+
+`scripts/setup-laptop.sh` does the steps below in order, copying the keys
+from the other laptop over one SSH connection (its password is asked once):
+
+```bash
+git clone https://github.com/HomeLabJunkie/k3s-homelab.git ~/Work/k3s-homelab
+~/Work/k3s-homelab/scripts/setup-laptop.sh --from dev
+```
+
+Each step is skipped when it is already done, so it is safe to run again.
+When a step needs you (installing the basic tools, a GitHub key, a key `dev`
+does not have, the cluster not answering), it prints `NEEDS YOU` with what to
+do and waits; press Enter to check again, or `q` to stop and carry on later.
+It offers to run `gh auth login`, the dotfiles' `bootstrap.sh --packages` and,
+at the end, `./workstation-readiness.sh`. It never replaces a file already on
+the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
+`~/.ssh/config`. `--no-copy` waits for you to put the keys in place instead,
+for when no other laptop is left (see
+[Set up a laptop from nothing](disaster-recovery.md#set-up-a-laptop-from-nothing)).
+
+The sections below are what it does, for doing a step by hand.
+
 ## 1. Tools
 
 The dotfiles repository lists every tool and installs them with the rest of

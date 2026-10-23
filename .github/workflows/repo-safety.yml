@@ -39,6 +39,7 @@ jobs:
           ./tests/test-dr-monitor-bundle-age.sh
           ./tests/test-dr-metrics.sh
           ./tests/test-dr-validate-backup-wait.sh
+          ./tests/test-setup-laptop.sh
           ./tests/test-alertmanager-config.sh
           ./tests/test-backup-latest-symlink.sh
           ./tests/test-backup-bundle-permissions.sh

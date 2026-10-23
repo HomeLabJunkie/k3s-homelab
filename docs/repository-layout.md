@@ -37,6 +37,7 @@
 │   ├── check-requirements-toolchain-sync.sh # CI: requirements.in ↔ toolchain.env
 │   ├── ensure-ansible-collections.sh
 │   ├── render-config.sh / prepare-env.sh / run-deploy.sh
+│   ├── setup-laptop.sh                     # set up a new laptop end to end
 │   ├── scan-secrets.sh                     # CI secret/config scan
 │   ├── validate-manifests.sh               # kubeconform against the cluster's CRDs
 ├── apps/                           # Helm values and manifests per application; argocd/ holds the Argo CD Applications
