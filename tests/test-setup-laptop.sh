@@ -10,6 +10,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T="$(mktemp -d)"
 trap 'rm -rf -- "$T"' EXIT
 
+# Where the script looks for the age key; the machine's own (a CI runner sets
+# XDG_CONFIG_HOME) would point it outside the test's home.
+unset XDG_CONFIG_HOME SOPS_AGE_KEY_FILE
 export HOME="$T/home" SOURCE_HOME="$T/source-home" REPO="$T/work/k3s-homelab" STATE="$T/state"
 export WORK_DIR="$T/work" DOTFILES="$T/no-dotfiles" SETUP_REPO_DIR="$REPO" SETUP_ALLOW_ROOT=1
 export BIN="$T/bin"
