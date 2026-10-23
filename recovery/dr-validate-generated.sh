@@ -5,6 +5,8 @@ set -o pipefail
 KUBECTL="${KUBECTL:-kubectl}"
 LONGHORN_NS="${LONGHORN_NS:-longhorn-system}"
 DR_NODE="${DR_NODE:-$(hostname -s)}"
+BACKUP_WAIT_SECONDS="${BACKUP_WAIT_SECONDS:-900}"
+BACKUP_WAIT_INTERVAL="${BACKUP_WAIT_INTERVAL:-30}"
 
 PASS=0
 WARN=0
@@ -24,6 +26,10 @@ Environment overrides:
   KUBECTL      Kubernetes CLI command. Default: kubectl
   LONGHORN_NS  Longhorn namespace. Default: longhorn-system
   DR_NODE      DR Longhorn node. Default: this host's short hostname
+  BACKUP_WAIT_SECONDS   How long to wait for the DR cluster to list every
+                        referenced backup, for a DR host that has just
+                        booted. Default: 900
+  BACKUP_WAIT_INTERVAL  Seconds between checks. Default: 30
 
 Resume-aware collision behavior:
   - Existing matching completed restore volume: PASS / SKIP-COMPLETE
@@ -321,14 +327,18 @@ echo "============================================================"
 
 BACKUPS_JSON="$TMPDIR/backups.json"
 
-if $KUBECTL -n "$LONGHORN_NS" get backups.longhorn.io -o json > "$BACKUPS_JSON" 2>/dev/null; then
-    backup_fail=0
-
+# The DR cluster learns of new backups by reading the backup target, every
+# poll interval and once Longhorn has started. Straight after the DR host
+# boots it may not list last night's backups yet, so wait for them before
+# calling them missing.
+missing_backups=()
+check_backups() {
+    local url backup_name state
+    missing_backups=()
+    $KUBECTL -n "$LONGHORN_NS" get backups.longhorn.io -o json > "$BACKUPS_JSON" 2>/dev/null ||
+        return 2
     for url in "${URLS[@]}"; do
-        backup_name="$(
-            sed -n 's/.*[?&]backup=\([^&]*\).*/\1/p' <<< "$url"
-        )"
-
+        backup_name="$(sed -n 's/.*[?&]backup=\([^&]*\).*/\1/p' <<< "$url")"
         state="$(
             jq -r --arg B "$backup_name" '
               [
@@ -338,22 +348,45 @@ if $KUBECTL -n "$LONGHORN_NS" get backups.longhorn.io -o json > "$BACKUPS_JSON" 
               ][0] // ""
             ' "$BACKUPS_JSON"
         )"
-
-        if [[ "$state" == "Completed" ]]; then
-            echo "Backup $backup_name: Completed"
-        else
-            echo "Backup $backup_name: ${state:-NOT FOUND}"
-            backup_fail=$((backup_fail + 1))
-        fi
+        [[ "$state" == "Completed" ]] || missing_backups+=("$backup_name: ${state:-NOT FOUND}")
     done
+    (( ${#missing_backups[@]} == 0 ))
+}
 
-    if (( backup_fail == 0 )); then
-        pass "All referenced backups exist and are Completed"
+waited=0
+while true; do
+    check_backups
+    rc=$?
+    (( rc == 0 )) && break
+    (( waited >= BACKUP_WAIT_SECONDS )) && break
+    if (( rc == 2 )); then
+        echo "Waiting for the DR cluster's Longhorn to answer (${waited}s of ${BACKUP_WAIT_SECONDS}s)..."
     else
-        fail "$backup_fail referenced backup(s) are missing or incomplete"
+        echo "Waiting for the DR cluster to list ${#missing_backups[@]} backup(s) (${waited}s of ${BACKUP_WAIT_SECONDS}s)..."
     fi
-else
+    sleep "$BACKUP_WAIT_INTERVAL"
+    waited=$((waited + BACKUP_WAIT_INTERVAL))
+done
+
+if (( rc == 2 )); then
     fail "Unable to retrieve Longhorn Backup objects"
+elif (( rc == 0 )); then
+    for url in "${URLS[@]}"; do
+        echo "Backup $(sed -n 's/.*[?&]backup=\([^&]*\).*/\1/p' <<< "$url"): Completed"
+    done
+    (( waited > 0 )) && echo "The DR cluster listed every referenced backup after ${waited}s."
+    pass "All referenced backups exist and are Completed"
+else
+    for entry in "${missing_backups[@]}"; do
+        echo "Backup $entry"
+    done
+    # Tells a DR cluster that is still catching up from one that cannot see
+    # the backups at all.
+    listed="$(jq '.items | length' "$BACKUPS_JSON" 2>/dev/null || echo unknown)"
+    newest="$(jq -r '[.items[].status.snapshotCreatedAt // empty] | max // "none"' "$BACKUPS_JSON" 2>/dev/null || echo unknown)"
+    synced="$($KUBECTL -n "$LONGHORN_NS" get backuptarget default -o jsonpath='{.status.lastSyncedAt}' 2>/dev/null || true)"
+    echo "The DR cluster lists $listed backup(s); newest snapshot: $newest; backup target last synced: ${synced:-unknown}"
+    fail "${#missing_backups[@]} referenced backup(s) are missing or incomplete after waiting ${waited}s"
 fi
 
 echo
