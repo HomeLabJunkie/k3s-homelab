@@ -400,6 +400,47 @@ private repository's GUIDE.md if it reports a problem." \
   private_files_present
 ok ".secrets.enc and config/cluster.env are here"
 
+# Step 2 leaves an age key that was already here alone, so check it is the
+# one .secrets.enc is encrypted for. Otherwise every script that reads a
+# secret fails later (deploy preflight, maintenance, the DR power-on).
+AGE_KEY="${SOPS_AGE_KEY_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/sops/age/keys.txt}"
+secrets_decrypt() { sops --decrypt "$REPO_DIR/.secrets.enc" >/dev/null 2>&1; }
+key_mismatch_help() {
+  local wanted have
+  wanted="$(grep -oE 'age1[0-9a-z]{58}' "$REPO_DIR/.secrets.enc" "$REPO_DIR/.sops.yaml" 2>/dev/null |
+    sed 's/.*://' | sort -u | tr '\n' ' ' || true)"
+  have="$(age-keygen -y "$AGE_KEY" 2>/dev/null | tr '\n' ' ' || true)"
+  echo "sops cannot decrypt .secrets.enc with $AGE_KEY."
+  echo "  .secrets.enc is for: ${wanted:-unknown}"
+  echo "  this laptop has:     ${have:-no key}"
+}
+decrypts_or_explains() { secrets_decrypt || { key_mismatch_help; return 1; }; }
+source_connected() {
+  ssh -o ControlPath="$SSH_CONTROL" -O check "$FROM" >/dev/null 2>&1 || connect_source
+}
+if ! secrets_decrypt; then
+  key_mismatch_help
+  if [[ "$COPY_KEYS" == true ]] &&
+     yes_no "Replace $AGE_KEY with $FROM's age key? The current one is kept as $AGE_KEY.bak."; then
+    if source_connected &&
+       scp -q -o ControlPath="$SSH_CONTROL" "$FROM:.config/sops/age/keys.txt" "$TMP/age-key" 2>/dev/null; then
+      mkdir -p "$(dirname "$AGE_KEY")"
+      [[ -e "$AGE_KEY" ]] && cp -p "$AGE_KEY" "$AGE_KEY.bak"
+      install -m 600 "$TMP/age-key" "$AGE_KEY"
+      rm -f "$TMP/age-key"
+      ok "replaced the age key with $FROM's (old one in $AGE_KEY.bak)"
+    else
+      echo "WARNING: could not copy the age key from $FROM"
+    fi
+  fi
+fi
+need "give this laptop the age key .secrets.enc is encrypted for" \
+  "Copy it from $FROM or Bitwarden (\"SOPS AGE KEY\") to $AGE_KEY, mode 600,
+keeping the old one if you need it. Check with: age-keygen -y $AGE_KEY
+and: sops --decrypt $REPO_DIR/.secrets.enc >/dev/null" \
+  decrypts_or_explains
+ok "sops decrypts .secrets.enc with this laptop's age key"
+
 # --- 8. ------------------------------------------------------------------
 step "Inventory"
 ./scripts/prepare-env.sh

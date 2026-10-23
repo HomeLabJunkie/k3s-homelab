@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup checks the age key opens the secrets
+
+The Vostro's first readiness check failed four stages (deploy preflight,
+maintenance check mode, the DR power-on and the rehearsal) for one reason:
+it already had an age key, which `scripts/setup-laptop.sh` leaves alone,
+and it was not the one `.secrets.enc` is encrypted for. The setup now
+checks that `sops` can decrypt `.secrets.enc` after the private files
+arrive, shows the key the file needs next to the laptop's, and offers to
+replace the laptop's key with `dev`'s, keeping the old one.
+
 ## 2026-10-23: Laptop setup turns on the dotfiles-sync timer
 
 After the Vostro was set up, `ssh omarchy-vostro` from `dev` asked for a

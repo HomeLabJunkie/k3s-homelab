@@ -10,6 +10,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T="$(mktemp -d)"
 trap 'rm -rf -- "$T"' EXIT
 
+# Where the script looks for the age key; the machine's own (a CI runner sets
+# XDG_CONFIG_HOME) would point it outside the test's home.
+unset XDG_CONFIG_HOME SOPS_AGE_KEY_FILE
 export HOME="$T/home" SOURCE_HOME="$T/source-home" REPO="$T/work/k3s-homelab" STATE="$T/state"
 export WORK_DIR="$T/work" DOTFILES="$T/no-dotfiles" SETUP_REPO_DIR="$REPO" SETUP_ALLOW_ROOT=1
 export BIN="$T/bin"
@@ -70,7 +73,7 @@ done
 # be found once a stub is removed, or the script runs it for real.
 SYSBIN="$T/sysbin"
 mkdir -p "$SYSBIN"
-STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl systemctl "
+STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl systemctl age-keygen "
 for dir in /usr/local/bin /usr/bin /bin; do
   for f in "$dir"/*; do
     name="${f##*/}"
@@ -226,5 +229,27 @@ stub cilium-cli 'exit 0'
 run '' "$T/cilium-cli.out" --no-readiness || fail "setup failed with cilium-cli"
 if grep -q 'NOTE: no cilium' "$T/cilium-cli.out"; then fail "cilium-cli was not accepted"; fi
 echo "PASS: the cilium CLI is optional, under either name"
+
+# 10. The laptop already had an age key, but not the one .secrets.enc is for.
+# Step 2 leaves it alone; step 7 notices, and on y replaces it with dev's,
+# keeping the old one.
+stub sops '[[ "$1" == --decrypt ]] && grep -qx AGE-SECRET-KEY-TEST "$HOME/.config/sops/age/keys.txt"'
+stub age-keygen 'grep -q AGE-SECRET-KEY-TEST "$2" && echo age1good || echo age1wrong'
+echo AGE-SECRET-KEY-OLD >"$HOME/.config/sops/age/keys.txt"
+run 'y\n' "$T/age.out" --no-readiness || fail "setup with the wrong age key exited non-zero"
+[[ "$(cat "$HOME/.config/sops/age/keys.txt")" == AGE-SECRET-KEY-TEST ]] || fail "age key not replaced with dev's"
+[[ "$(cat "$HOME/.config/sops/age/keys.txt.bak")" == AGE-SECRET-KEY-OLD ]] || fail "old age key not kept"
+[[ "$(mode "$HOME/.config/sops/age/keys.txt")" == 600 ]] || fail "replaced age key is not mode 600"
+grep -qF 'this laptop has:     age1wrong' "$T/age.out" || fail "did not show the laptop's age key"
+grep -qF 'sops decrypts .secrets.enc' "$T/age.out" || fail "did not confirm decryption"
+
+# With --no-copy and nobody answering, it stops at step 7 and says why.
+echo AGE-SECRET-KEY-OLD >"$HOME/.config/sops/age/keys.txt"
+run '' "$T/age-stop.out" --no-copy --no-readiness && fail "carried on with the wrong age key"
+grep -qF 'NEEDS YOU: give this laptop the age key .secrets.enc is encrypted for' "$T/age-stop.out" ||
+  fail "no NEEDS YOU for the wrong age key"
+grep -qF 'Stopped at step 7' "$T/age-stop.out" || fail "did not stop at step 7"
+cp "$SOURCE_HOME/.config/sops/age/keys.txt" "$HOME/.config/sops/age/keys.txt"
+echo "PASS: checks the age key opens .secrets.enc"
 
 echo 'PASS: laptop setup'
