@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup does not wait for the Cilium CLI
+
+On the first real new laptop, `scripts/setup-laptop.sh` kept waiting at
+"install the cluster tools" with `Missing: cilium`, although the dotfiles
+had installed `cilium-cli`. No laptop script needs the Cilium CLI (the
+Ansible role installs and runs it on the nodes), so it is now a note
+rather than a wait, and a command named either `cilium` or `cilium-cli`
+counts.
+
 ## 2026-10-23: Laptop setup gives a new laptop its own dotfiles machine folder
 
 `dev` and `omarchy-t480` each have `machines/<hostname>/local-only.txt` in
