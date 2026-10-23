@@ -169,7 +169,15 @@ The DR host is a VM (8 vCPUs, 32 GB, 500 GB) with K3s, Cilium and Longhorn
 pointed at production's backup target. `recovery/dr-host-build.sh` builds or
 converges it, matching production's versions, and installs the helpers it
 runs under `/usr/local/libexec/k3s-dr/`, the only commands it may run with
-passwordless sudo.
+passwordless sudo. A change to one of those helpers in git reaches the DR host
+only when `recovery/dr-host-build.sh` runs again.
+
+The DR cluster learns of new backups by reading the backup target every five
+minutes, and only once Longhorn has started. Straight after the DR host boots
+it may not list last night's backups yet, so the rehearsal's restore
+validation waits up to 15 minutes (`BACKUP_WAIT_SECONDS`) for every backup it
+will restore before calling one missing. If one never appears, it says how
+many backups the DR cluster lists and when its backup target last synced.
 
 `ubuntu-hp` also keeps a copy of the NAS backup share in `tank/backup/k3s`,
 refreshed each time it boots (`recovery/k3s-backup-replicate.sh`), so it is
