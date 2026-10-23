@@ -336,6 +336,23 @@ if [[ "$NEW_MACHINE_DIR" == true ]]; then
     echo "WARNING: could not publish $MACHINE_DIR/local-only.txt; run: dotfiles-sync push $MACHINE_DIR/local-only.txt"
   fi
 fi
+
+# bootstrap.sh links the dotfiles-sync timer but leaves it off. It keeps the
+# dotfiles pulled and runs laptop-ssh, which is what lets the other laptops
+# log in here with their keys; without it they are asked for a password.
+SYNC_TIMER="$HOME/.config/systemd/user/dotfiles-sync.timer"
+if [[ -e "$SYNC_TIMER" ]]; then
+  if systemctl --user is-enabled --quiet dotfiles-sync.timer 2>/dev/null; then
+    ok "the dotfiles-sync timer is already on"
+  elif systemctl --user daemon-reload &&
+       systemctl --user enable --now dotfiles-sync.timer; then
+    # One sync now, so the other laptops' SSH keys are trusted straight away.
+    systemctl --user start dotfiles-sync.service || true
+    ok "turned on the dotfiles-sync timer (pulls the dotfiles every 15 minutes)"
+  else
+    echo "WARNING: could not turn on the dotfiles-sync timer; run: systemctl --user enable --now dotfiles-sync.timer"
+  fi
+fi
 need "install the cluster tools" \
   "The dotfiles install them:
   git clone git@github.com:$GITHUB_OWNER/dotfiles.git $DOTFILES
