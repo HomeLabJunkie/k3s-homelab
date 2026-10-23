@@ -57,6 +57,7 @@ fi
 case "$*" in
   *"remote get-url origin") cat "$STATE/origin" ;;
   *"remote set-url origin "*) echo "${@: -1}" >"$STATE/origin"; echo "set-url ${@: -1}" >>"$STATE/calls" ;;
+  "-C "*" add "*|"-C "*" commit "*|"-C "*" push"*) echo "git ${*:3}" >>"$STATE/calls" ;;
 esac'
 stub python3 'mkdir -p .venv/bin; printf "#!/usr/bin/env bash\necho \"pip \$*\" >>\"\$STATE/calls\"\n" >.venv/bin/python; chmod +x .venv/bin/python'
 # Fails until $STATE/cluster-up exists, so a test can make you wait.
@@ -69,7 +70,7 @@ done
 # be found once a stub is removed, or the script runs it for real.
 SYSBIN="$T/sysbin"
 mkdir -p "$SYSBIN"
-STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow "
+STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl "
 for dir in /usr/local/bin /usr/bin /bin; do
   for f in "$dir"/*; do
     name="${f##*/}"
@@ -78,6 +79,7 @@ for dir in /usr/local/bin /usr/bin /bin; do
   done
 done
 export PATH="$BIN:$SYSBIN"
+stub hostnamectl 'echo newlaptop'
 
 run() {
   local input="$1" out="$2"
@@ -162,13 +164,37 @@ if [[ "$1" == clone && "$3" == "$DOTFILES" ]]; then
   mkdir -p "$3"; echo "clone $2" >>"$STATE/calls"
   printf "#!/usr/bin/env bash\necho \"bootstrap \$*\" >>\"\$STATE/calls\"\nprintf \"#!/usr/bin/env bash\\\\nexit 0\\\\n\" >\"\$BIN/helm\"; chmod +x \"\$BIN/helm\"\n" >"$3/bootstrap.sh"
   chmod +x "$3/bootstrap.sh"
+  mkdir -p "$3/machines/dev" && printf ".config/hypr/monitors.lua\n.config/omarchy/shell.json\n" >"$3/machines/dev/local-only.txt"
   exit 0
 fi
 exec "$BIN/git-base" "$@"'
-run 'y\ny\n' "$T/dotfiles.out" --no-readiness || fail "setup without dotfiles exited non-zero"
+# Answers: clone the dotfiles, create this laptop's local-only.txt, run bootstrap.
+run 'y\ny\ny\n' "$T/dotfiles.out" --no-readiness || fail "setup without dotfiles exited non-zero"
 grep -qx 'clone git@github.com:HomeLabJunkie/dotfiles.git' "$STATE/calls" || fail "dotfiles not cloned"
 grep -qx 'bootstrap --packages' "$STATE/calls" || fail "dotfiles bootstrap not run"
 if grep -q 'NEEDS YOU' "$T/dotfiles.out"; then fail "waited although the dotfiles install the tools"; fi
 echo "PASS: clones the dotfiles when tools are missing"
+
+# 6. That run also gave this laptop its machines/<hostname>/local-only.txt,
+# before bootstrap linked anything, and published it after.
+cmp -s "$DOTFILES/machines/dev/local-only.txt" "$DOTFILES/machines/newlaptop/local-only.txt" ||
+  fail "machines/newlaptop/local-only.txt not copied from dev"
+expected="git add machines/newlaptop/local-only.txt
+git commit -q -m machines/newlaptop: keep the per-laptop files local, like dev
+git push -q"
+[[ "$(grep '^git ' "$STATE/calls")" == "$expected" ]] || fail "local-only.txt not committed and pushed"
+[[ "$(grep -nE '^bootstrap|^git add' "$STATE/calls" | cut -d: -f2 | cut -c1-9)" == "bootstrap
+git add m" ]] || fail "expected bootstrap before the commit (git needs the linked config)"
+created_at="$(grep -nF 'created machines/newlaptop/local-only.txt' "$T/dotfiles.out" | cut -d: -f1)"
+bootstrap_at="$(grep -nF 'bootstrap.sh --packages now?' "$T/dotfiles.out" | cut -d: -f1)"
+if [[ -z "$created_at" || -z "$bootstrap_at" ]] || (( created_at > bootstrap_at )); then
+  fail "local-only.txt must exist before bootstrap.sh links anything"
+fi
+: >"$STATE/calls"
+run '' "$T/dotfiles-again.out" --no-readiness || fail "re-run with dotfiles exited non-zero"
+grep -qF 'the dotfiles already have machines/newlaptop/local-only.txt' "$T/dotfiles-again.out" ||
+  fail "re-run did not see the existing local-only.txt"
+if grep -q '^git ' "$STATE/calls"; then fail "re-run committed again"; fi
+echo "PASS: gives a new laptop its own local-only.txt in the dotfiles"
 
 echo 'PASS: laptop setup'

@@ -26,7 +26,12 @@ does not have, the cluster not answering), it prints `NEEDS YOU` with what to
 do and waits; press Enter to check again, or `q` to stop and carry on later.
 It offers to install `gh` with pacman and run `gh auth login` (the dotfiles
 are private, so GitHub access comes first), to clone the dotfiles and run
-their `bootstrap.sh --packages`, and, at the end, `./workstation-readiness.sh`. It never replaces a file already on
+their `bootstrap.sh --packages`, and, at the end, `./workstation-readiness.sh`.
+Before `bootstrap.sh` runs it offers to give the laptop its own
+`machines/<hostname>/local-only.txt` in the dotfiles, copied from `dev`'s, so
+the Hyprland and Omarchy files atmos rewrites per laptop are not linked into
+the shared repository; it commits and pushes that file once bootstrap has
+linked the git config. It never replaces a file already on
 the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
 `~/.ssh/config`. `--no-copy` waits for you to put the keys in place instead,
 for when no other laptop is left (see

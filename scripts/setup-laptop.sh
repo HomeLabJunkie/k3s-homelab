@@ -282,10 +282,46 @@ if ! missing_tools >/dev/null && [[ ! -e "$DOTFILES" ]]; then
     git clone "git@github.com:$GITHUB_OWNER/dotfiles.git" "$DOTFILES"
   fi
 fi
+
+# The dotfiles keep a machines/<hostname>/ folder per laptop. Its
+# local-only.txt lists the files atmos rewrites with each laptop's own
+# settings; without it, bootstrap.sh would link them into the shared repo and
+# atmos would then edit every laptop's copy. It must exist before bootstrap.sh
+# runs, so create it here, and publish it once bootstrap has linked the git
+# config that a commit needs.
+HOST="$(hostnamectl --static 2>/dev/null || uname -n)"
+MACHINE_DIR="machines/$HOST"
+NEW_MACHINE_DIR=false
+if [[ -d "$DOTFILES/machines" && ! -e "$DOTFILES/$MACHINE_DIR/local-only.txt" ]]; then
+  template="$DOTFILES/machines/dev/local-only.txt"
+  [[ -f "$template" ]] || template="$(find "$DOTFILES/machines" -name local-only.txt -print -quit)"
+  if [[ -f "$template" ]] &&
+     yes_no "Your dotfiles have no $MACHINE_DIR/local-only.txt. Create it from ${template#"$DOTFILES/"}, so this laptop's own display and input settings stay out of the shared repo?"; then
+    mkdir -p "$DOTFILES/$MACHINE_DIR"
+    cp "$template" "$DOTFILES/$MACHINE_DIR/local-only.txt"
+    NEW_MACHINE_DIR=true
+    ok "created $MACHINE_DIR/local-only.txt in the dotfiles"
+  else
+    echo "WARNING: without $MACHINE_DIR/local-only.txt, bootstrap.sh links the per-laptop Hyprland and Omarchy files into the shared dotfiles"
+  fi
+elif [[ -e "$DOTFILES/$MACHINE_DIR/local-only.txt" ]]; then
+  ok "the dotfiles already have $MACHINE_DIR/local-only.txt"
+fi
+
 if ! missing_tools >/dev/null && [[ -x "$DOTFILES/bootstrap.sh" ]]; then
   if yes_no "Some cluster tools are missing. Run $DOTFILES/bootstrap.sh --packages now?"; then
     "$DOTFILES/bootstrap.sh" --packages || true
     hash -r
+  fi
+fi
+
+if [[ "$NEW_MACHINE_DIR" == true ]]; then
+  if git -C "$DOTFILES" add "$MACHINE_DIR/local-only.txt" &&
+     git -C "$DOTFILES" commit -q -m "$MACHINE_DIR: keep the per-laptop files local, like dev" &&
+     git -C "$DOTFILES" push -q; then
+    ok "published $MACHINE_DIR/local-only.txt to the dotfiles repository"
+  else
+    echo "WARNING: could not publish $MACHINE_DIR/local-only.txt; run: dotfiles-sync push $MACHINE_DIR/local-only.txt"
   fi
 fi
 need "install the cluster tools" \
