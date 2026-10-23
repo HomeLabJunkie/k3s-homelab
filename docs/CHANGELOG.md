@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: One script to set up a new laptop
+
+`scripts/setup-laptop.sh --from dev` runs the laptop setup end to end:
+basic tools, the keys copied from `dev` over one SSH connection, GitHub
+access, the repositories, the cluster tools, `.venv` and the Ansible
+collections, the private files, the inventory, a cluster check and,
+optionally, the readiness check. It skips what is already done, never
+replaces a file already on the laptop, and waits with `NEEDS YOU` whenever
+a step needs a person. `tests/test-setup-laptop.sh` covers a fresh laptop,
+a re-run and a stop when nobody answers.
+
 ## 2026-10-23: DR restore validation waits for a freshly booted DR host
 
 With the DR server powered on for it, the readiness check's plan-only
