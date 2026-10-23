@@ -44,13 +44,17 @@ private files arrive it checks that `sops` can decrypt `.secrets.enc`; if the
 laptop already had a different age key, it shows which key the file needs and
 offers to replace this laptop's with `dev`'s, keeping the old one as
 `keys.txt.bak`. It never replaces a file already on
-the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
-`~/.ssh/config`, and the host keys `dev` trusts (the nodes, `k3s-dr`,
+the laptop. Every host in `dev`'s `~/.ssh/config` that this laptop does not
+define yet goes in `~/.ssh/config.k3s-homelab`, included from `~/.ssh/config`,
+with the key it logs in with (such as `~/.ssh/ubuntu_hp_ed25519`), so the
+laptop can `ssh` to every machine `dev` can. `dev`'s `Host *` and `Match`
+defaults and its own `~/.ssh/id_*` key are not copied. The host keys `dev` trusts (the nodes, `k3s-dr`,
 `ubuntu-hp`) are added to `~/.ssh/known_hosts` without changing the lines
 already there. The scripts log in to those hosts with `BatchMode`, which
 refuses a host it has never seen, so without them the deploy preflight, the
 maintenance check and the DR power-on fail. On a laptop set up before, a
-re-run fetches them without a password if `dev` lets it in by key. `--no-copy` waits for you to put the keys in place instead,
+re-run fetches them, and any host added on `dev` since, without a password if
+`dev` lets it in by key; run it again after adding a host on `dev`. `--no-copy` waits for you to put the keys in place instead,
 for when no other laptop is left (see
 [Set up a laptop from nothing](disaster-recovery.md#set-up-a-laptop-from-nothing)).
 
@@ -82,7 +86,8 @@ chat, email or git. Directories are mode `700`, files `600`.
 | --- | --- |
 | `~/.config/sops/age/keys.txt` | Opens `.secrets.enc` and the config repo's Secrets. Also in Bitwarden ("SOPS AGE KEY"). |
 | `~/.ssh/k3s_homelab_ed25519` | SSH to the six nodes and the DR host |
-| `~/.ssh/config` entries | The six node addresses, `k3s-dr`, `ubuntu-hp` |
+| `~/.ssh/config` entries | The six node addresses, `k3s-dr`, `ubuntu-hp` and every other host `dev` has |
+| `~/.ssh/ubuntu_hp_ed25519` | SSH to `ubuntu-hp`, the DR server |
 | A GitHub SSH key | Clone and push the three repositories; then `gh auth login` |
 | `~/.kube/config` | Cluster access through the kube-vip address |
 

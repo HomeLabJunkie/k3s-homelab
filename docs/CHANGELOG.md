@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup copies every SSH host dev has
+
+The Vostro still could not power on the DR server: `ubuntu-hp` was not in its
+SSH config, and DNS sends that name to `ubuntu-hp.riffle.net`, a Cloudflare
+address. `scripts/setup-laptop.sh` copied `dev`'s SSH config only when the
+laptop had no `k3s-dr` entry, and never copied `~/.ssh/ubuntu_hp_ed25519`.
+It now goes through `dev`'s config host by host: each host the laptop does not
+define yet is added to `~/.ssh/config.k3s-homelab`, with the key it logs in
+with, on every run, so a host added on `dev` later reaches the other laptops
+too. `dev`'s `Host *` and `Match` defaults and its own `id_*` key are not
+copied, and setup now checks that both `k3s-dr` and `ubuntu-hp` are defined.
+
 ## 2026-10-23: Laptop setup trusts the host keys dev trusts
 
 On the Vostro the readiness check's DR power-on waited for `k3s-dr` to
