@@ -201,15 +201,24 @@ has_cluster_ssh_config() {
   done
 }
 
-# Include must come before any Host block to apply everywhere.
+# Include must come before any Host or Match line: after one, it would apply
+# only to that block's hosts.
 include_local_ssh() {
-  local conf="$HOME/.ssh/config"
-  grep -qsxE '[[:space:]]*Include[[:space:]]+config\.k3s-homelab[[:space:]]*' "$conf" && return 0
-  if [[ -f "$conf" ]]; then
-    { echo "Include config.k3s-homelab"; echo; cat "$conf"; } >"$TMP/merged"
-  else
-    printf 'Include config.k3s-homelab\n' >"$TMP/merged"
+  local conf="$HOME/.ssh/config" inc first
+  local pattern='[[:space:]]*Include[[:space:]]+config\.k3s-homelab[[:space:]]*'
+  inc="$(grep -nxE "$pattern" "$conf" 2>/dev/null | head -n 1 | cut -d: -f1 || true)"
+  first="$(grep -niE '^[[:space:]]*(host|match)[[:space:]]' "$conf" 2>/dev/null | head -n 1 | cut -d: -f1 || true)"
+  if [[ -n "$inc" ]] && { [[ -z "$first" ]] || (( inc < first )); }; then
+    return 0
   fi
+  {
+    echo "Include config.k3s-homelab"
+    if [[ -s "$conf" ]]; then
+      echo
+      grep -vxE "$pattern" "$conf" || true
+    fi
+  } >"$TMP/merged"
+  [[ -s "$conf" ]] && cp -p "$conf" "$conf.bak"
   install -m 600 "$TMP/merged" "$conf"
 }
 
@@ -227,14 +236,6 @@ identity_rel() {
   return 0
 }
 
-# Every host $FROM reaches by name, so this laptop reaches it too: the six
-# nodes, k3s-dr, ubuntu-hp, the other machines. A host this laptop already
-# defines is left as it is; each other one is added to
-# ~/.ssh/config.k3s-homelab, with the key it logs in with, after keeping the
-# file as it was in config.k3s-homelab.bak. Wildcard blocks (Host *) and
-# Match blocks are $FROM's own defaults, and the laptops' entries belong to
-# the dotfiles; neither is copied.
-# It runs on every setup, so a host added on $FROM later arrives here too.
 # The laptops: $FROM, this one and each one in the dotfiles' machines/. Their
 # entries come from the dotfiles' config.laptops; a copy of $FROM's would be
 # read first and win over it.
@@ -247,8 +248,41 @@ laptop_names() {
   return 0
 }
 
+# "k3s-dr changed, newbox added", from the old and the new
+# config.k3s-homelab.
+ssh_host_changes() {
+  awk -v old="$1" '
+    { f = FILENAME == old ? 1 : 2 }
+    /^[[:space:]]*$/ { next }
+    tolower($1) == "host" { k = $2; if (!(k in seen)) { seen[k]; order[++n] = k } }
+    k != "" { body[f, k] = body[f, k] $0 "\n" }
+    END {
+      for (i = 1; i <= n; i++) {
+        k = order[i]
+        if (!((1, k) in body)) out = out sep k " added"
+        else if (!((2, k) in body)) out = out sep k " removed"
+        else if (body[1, k] != body[2, k]) out = out sep k " changed"
+        else continue
+        sep = ", "
+      }
+      print out
+    }
+  ' "$1" "$2"
+}
+
+# Every host $FROM reaches by name, so this laptop reaches it the same way:
+# the six nodes, k3s-dr, ubuntu-hp and the other machines. $FROM is the
+# source of truth. ~/.ssh/config.k3s-homelab is rewritten to hold exactly its
+# entries, and the keys they log in with are copied. That file is read before
+# the rest of ~/.ssh/config, so an older entry for the same host on this
+# laptop (an old address for k3s-dr, say) no longer applies. The previous file
+# is kept as config.k3s-homelab.bak. Not copied: wildcard (Host *) and Match
+# blocks, which are $FROM's own defaults; github.com, as each laptop has its
+# own GitHub login; and the laptops, whose entries come from the dotfiles.
+# It runs on every setup, so a host added or changed on $FROM reaches this
+# laptop on its next run.
 merge_ssh_hosts() {
-  local block names name rel added=0 keys=0 local_hosts laptops copy_it
+  local block names name rel laptops old="$LOCAL_SSH"
   fetch_from_source .ssh/config "$TMP/ssh-config" || return 1
   rm -rf "$TMP/ssh-hosts"
   mkdir -p "$HOME/.ssh" "$TMP/ssh-hosts"
@@ -259,31 +293,22 @@ merge_ssh_hosts() {
     tolower($1) == "include" { next }
     n && keep { print > sprintf("%s/%04d", dir, n) }
   ' "$TMP/ssh-config"
-  local_hosts="$(local_ssh_hosts)"
   laptops="$(laptop_names)"
+  : >"$TMP/ssh-new"
   for block in "$TMP/ssh-hosts"/*; do
     [[ -f "$block" ]] || continue
     read -r _ names <"$block"
     [[ "$names" == *[*?!]* ]] && continue
-    copy_it=true
     for name in $names; do
-      if [[ "$name" == *.local ]] || grep -qxF "$name" <<<"$laptops"; then
+      if [[ "$name" == *.local || "$name" == github.com ]] || grep -qxF "$name" <<<"$laptops"; then
         continue 2
       fi
-      grep -qxF "$name" <<<"$local_hosts" && copy_it=false
     done
-    if [[ "$copy_it" == true ]]; then
-      # One backup per run, of the file as it was before this run added to it.
-      (( added == 0 )) && [[ -s "$LOCAL_SSH" ]] && cp -p "$LOCAL_SSH" "$LOCAL_SSH.bak"
-      [[ -s "$LOCAL_SSH" ]] && echo >>"$LOCAL_SSH"
-      cat "$block" >>"$LOCAL_SSH"
-      chmod 600 "$LOCAL_SSH"
-      added=$((added + 1))
-    fi
+    [[ -s "$TMP/ssh-new" ]] && echo >>"$TMP/ssh-new"
+    cat "$block" >>"$TMP/ssh-new"
     while read -r rel; do
       [[ -n "$rel" && ! -e "$HOME/$rel" ]] || continue
       if copy_from_source "$rel" 600; then
-        keys=$((keys + 1))
         copy_from_source "$rel.pub" 644 || true
       else
         echo "WARNING: could not copy ~/$rel, the key for $names, from $FROM"
@@ -291,13 +316,17 @@ merge_ssh_hosts() {
     done < <(awk 'tolower($1) == "identityfile" { print $2 }' "$block" |
       while read -r path; do identity_rel "$path"; done)
   done
-  if (( added > 0 )); then
-    include_local_ssh
-    ok "added $added SSH host(s) from $FROM to ~/.ssh/config.k3s-homelab (included from ~/.ssh/config)"
+  if [[ -f "$LOCAL_SSH" ]] && cmp -s "$TMP/ssh-new" "$LOCAL_SSH"; then
+    ok "~/.ssh/config.k3s-homelab matches the hosts in $FROM's ~/.ssh/config"
   else
-    ok "~/.ssh/config already has every host $FROM has"
+    [[ -f "$LOCAL_SSH" ]] || old=/dev/null
+    ok "updated ~/.ssh/config.k3s-homelab from $FROM: $(ssh_host_changes "$old" "$TMP/ssh-new")"
+    [[ -s "$LOCAL_SSH" ]] && cp -p "$LOCAL_SSH" "$LOCAL_SSH.bak" &&
+      echo "    the previous one is in ~/.ssh/config.k3s-homelab.bak"
+    install -m 600 "$TMP/ssh-new" "$LOCAL_SSH"
   fi
-  rm -rf "$TMP/ssh-config" "$TMP/ssh-hosts"
+  include_local_ssh
+  rm -rf "$TMP/ssh-config" "$TMP/ssh-hosts" "$TMP/ssh-new"
 }
 
 # This laptop's own key, added to $FROM's authorized_keys so it can log in

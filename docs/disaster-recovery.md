@@ -147,7 +147,9 @@ switched on only for them:
 
 The script powers the server through its iLO, with the login in
 `~/.config/ilo-ubuntu-hp` (or `DR_ILO_USERNAME`/`DR_ILO_PASSWORD` in
-`.secrets.enc`).
+`.secrets.enc`). When the server is already on but `k3s-dr` does not answer,
+`on` says why (ssh's own error) and starts the DR host's VM: `DR_VM_NAME`
+from `config/cluster.env`, or else every stopped autostart VM.
 
 ### Rehearse a restore on the DR host
 
