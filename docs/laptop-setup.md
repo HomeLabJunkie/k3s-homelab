@@ -24,8 +24,9 @@ Each step is skipped when it is already done, so it is safe to run again.
 When a step needs you (installing the basic tools, a GitHub key, a key `dev`
 does not have, the cluster not answering), it prints `NEEDS YOU` with what to
 do and waits; press Enter to check again, or `q` to stop and carry on later.
-It offers to run `gh auth login`, the dotfiles' `bootstrap.sh --packages` and,
-at the end, `./workstation-readiness.sh`. It never replaces a file already on
+It offers to install `gh` with pacman and run `gh auth login` (the dotfiles
+are private, so GitHub access comes first), to clone the dotfiles and run
+their `bootstrap.sh --packages`, and, at the end, `./workstation-readiness.sh`. It never replaces a file already on
 the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
 `~/.ssh/config`. `--no-copy` waits for you to put the keys in place instead,
 for when no other laptop is left (see

@@ -228,6 +228,14 @@ github_ssh_ok() {
     git@github.com 2>&1 || true)"
   grep -q 'successfully authenticated' <<<"$out"
 }
+# A new laptop has no gh yet: the dotfiles that install it are private,
+# behind this very step.
+if ! github_ssh_ok && ! command -v gh >/dev/null 2>&1 && command -v pacman >/dev/null 2>&1; then
+  if yes_no "The GitHub CLI (gh) is not installed. Install it with pacman now?"; then
+    sudo pacman -S --needed github-cli || true
+    hash -r
+  fi
+fi
 if ! github_ssh_ok && command -v gh >/dev/null 2>&1; then
   if yes_no "This laptop cannot push to GitHub yet. Run 'gh auth login' now? It can create and upload an SSH key."; then
     gh auth login --git-protocol ssh --web || true
@@ -269,6 +277,11 @@ missing_tools() {
   echo "Missing: ${missing[*]}"
   return 1
 }
+if ! missing_tools >/dev/null && [[ ! -e "$DOTFILES" ]]; then
+  if yes_no "Some cluster tools are missing and $DOTFILES is not here. Clone the dotfiles now?"; then
+    git clone "git@github.com:$GITHUB_OWNER/dotfiles.git" "$DOTFILES"
+  fi
+fi
 if ! missing_tools >/dev/null && [[ -x "$DOTFILES/bootstrap.sh" ]]; then
   if yes_no "Some cluster tools are missing. Run $DOTFILES/bootstrap.sh --packages now?"; then
     "$DOTFILES/bootstrap.sh" --packages || true
@@ -276,9 +289,10 @@ if ! missing_tools >/dev/null && [[ -x "$DOTFILES/bootstrap.sh" ]]; then
   fi
 fi
 need "install the cluster tools" \
-  "The dotfiles install them: cd ~/dotfiles && ./bootstrap.sh --packages
-(clone the dotfiles first if this laptop has none). Open a new shell
-afterwards if a tool still is not found." \
+  "The dotfiles install them:
+  git clone git@github.com:$GITHUB_OWNER/dotfiles.git $DOTFILES
+  cd $DOTFILES && ./bootstrap.sh --packages
+Open a new shell afterwards if a tool still is not found." \
   missing_tools
 ok "all cluster tools are installed"
 
