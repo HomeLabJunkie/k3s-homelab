@@ -6,6 +6,18 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup lets the laptops log in to each other
+
+A new laptop could not SSH to `dev` or `omarchy-t480`: nothing put its key in
+their `authorized_keys`. `scripts/setup-laptop.sh` now gives the laptop its
+own `~/.ssh/id_ed25519` if it has none, adds it to `dev`'s `authorized_keys`
+over the connection it already opens, offers to start `sshd`, and runs the
+dotfiles' new `laptop-ssh`. That publishes the laptop's user and host public
+keys as `machines/<hostname>/ssh/` and lets the other laptops' keys in. Every
+laptop's `dotfiles-sync` runs it again every 15 minutes, so all of them let a
+new laptop in once its keys are pushed, and each sends a notification naming
+the laptop that gained access.
+
 ## 2026-10-23: Laptop setup checks the age key opens the secrets
 
 The Vostro's first readiness check failed four stages (deploy preflight,

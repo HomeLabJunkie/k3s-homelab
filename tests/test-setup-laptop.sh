@@ -43,6 +43,7 @@ case "$*" in
   *"-T"*git@github.com*) [[ -e "$STATE/github-key" ]] && echo "Hi! You have successfully authenticated" >&2; exit 1 ;;
   *-O\ exit*) exit 0 ;;
   *-fN*) echo "ssh-master $*" >>"$STATE/calls"; exit 0 ;;
+  *authorized_keys*) cat >>"$STATE/source-authorized-keys"; exit 0 ;;
 esac
 exit 0'
 # scp -q -o ControlPath=... HOST:REL DEST
@@ -60,7 +61,9 @@ fi
 case "$*" in
   *"remote get-url origin") cat "$STATE/origin" ;;
   *"remote set-url origin "*) echo "${@: -1}" >"$STATE/origin"; echo "set-url ${@: -1}" >>"$STATE/calls" ;;
-  "-C "*" add "*|"-C "*" commit "*|"-C "*" push"*) echo "git ${*:3}" >>"$STATE/calls" ;;
+  "-C "*" status --porcelain"*) cat "$STATE/dotfiles-status" 2>/dev/null ;;
+  "-C "*" add "*|"-C "*" commit "*|"-C "*" push"*) echo "git ${*:3}" >>"$STATE/calls"
+    if [[ "$3" == commit ]]; then rm -f "$STATE/dotfiles-status"; fi ;;
 esac'
 stub python3 'mkdir -p .venv/bin; printf "#!/usr/bin/env bash\necho \"pip \$*\" >>\"\$STATE/calls\"\n" >.venv/bin/python; chmod +x .venv/bin/python'
 # Fails until $STATE/cluster-up exists, so a test can make you wait.
@@ -73,16 +76,20 @@ done
 # be found once a stub is removed, or the script runs it for real.
 SYSBIN="$T/sysbin"
 mkdir -p "$SYSBIN"
-STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl systemctl age-keygen "
+STUBBED=" gh git ssh scp ssh-keygen systemctl python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl age-keygen "
 for dir in /usr/local/bin /usr/bin /bin; do
   for f in "$dir"/*; do
     name="${f##*/}"
-    [[ "$STUBBED" == *" $name "* || -e "$SYSBIN/$name" ]] && continue
+    [[ "$STUBBED" == *" $name "* || -e "$SYSBIN/$name" || -L "$SYSBIN/$name" ]] && continue
     ln -s "$f" "$SYSBIN/$name"
   done
 done
 export PATH="$BIN:$SYSBIN"
 stub hostnamectl 'echo newlaptop'
+# Writes a key pair where -f says, as ssh-keygen -q -t ed25519 -N "" would.
+stub ssh-keygen 'f=""; c=""; while (( $# )); do case "$1" in -f) f="$2"; shift ;; -C) c="$2"; shift ;; esac; shift; done
+[[ -n "$f" ]] || exit 1
+umask 077; echo PRIVATE-KEY >"$f"; echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITEST $c" >"$f.pub"'
 # Records calls; the dotfiles-sync timer counts as enabled once enabled.
 stub systemctl '
 echo "systemctl $*" >>"$STATE/calls"
@@ -115,6 +122,8 @@ grep -qx 'RESULT: LAPTOP SET UP' "$T/fresh.out" || fail "fresh setup did not fin
 grep -qx 'Host personal' "$HOME/.ssh/config" || fail "this laptop's own SSH config was lost"
 grep -qx 'Host k3s-dr' "$HOME/.ssh/config.k3s-homelab" || fail "cluster hosts not copied"
 grep -qF 'SKIP: dev has no ~/.config/ilo-ubuntu-hp' "$T/fresh.out" || fail "optional iLO file not reported"
+[[ "$(mode "$HOME/.ssh/id_ed25519")" == 600 ]] || fail "this laptop's own SSH key not created"
+cmp -s "$HOME/.ssh/id_ed25519.pub" "$STATE/source-authorized-keys" || fail "this laptop's key not added to dev's authorized_keys"
 [[ "$(grep -c '^ssh-master' "$STATE/calls")" == 1 ]] || fail "expected one SSH connection to dev"
 grep -qx 'gh-login' "$STATE/calls" || fail "gh auth login not run"
 grep -qx 'clone git@github.com:HomeLabJunkie/k3s-homelab-private.git' "$STATE/calls" || fail "private repo not cloned"
@@ -229,6 +238,31 @@ stub cilium-cli 'exit 0'
 run '' "$T/cilium-cli.out" --no-readiness || fail "setup failed with cilium-cli"
 if grep -q 'NOTE: no cilium' "$T/cilium-cli.out"; then fail "cilium-cli was not accepted"; fi
 echo "PASS: the cilium CLI is optional, under either name"
+
+# 8. The dotfiles have laptop-ssh: offer to start sshd, run laptop-ssh, and
+# publish the keys it wrote. Once they are pushed, a re-run changes nothing.
+mkdir -p "$DOTFILES/shell/.local/bin"
+printf '#!/usr/bin/env bash\necho laptop-ssh >>"$STATE/calls"\n[[ -e "$STATE/keys-written" ]] || { touch "$STATE/keys-written"; echo "?? machines/newlaptop/ssh/" >"$STATE/dotfiles-status"; }\n' \
+  >"$DOTFILES/shell/.local/bin/laptop-ssh"
+chmod +x "$DOTFILES/shell/.local/bin/laptop-ssh"
+stub systemctl 'echo "systemctl $*" >>"$STATE/calls"
+[[ "$1" == is-enabled ]] && { [[ -e "$STATE/sshd-on" ]]; exit; }
+[[ "$*" == "enable --now sshd" ]] && touch "$STATE/sshd-on"
+exit 0'
+: >"$STATE/calls"
+run 'y\n' "$T/laptop-ssh.out" --no-readiness || fail "setup with laptop-ssh exited non-zero"
+grep -qx 'systemctl enable --now sshd' "$STATE/calls" || fail "sshd not started after answering y"
+grep -qx 'laptop-ssh' "$STATE/calls" || fail "laptop-ssh not run"
+expected="git add -- machines/newlaptop/ssh
+git commit -q -m machines/newlaptop: publish this laptop's SSH keys, so the other laptops let it in
+git push -q"
+[[ "$(grep '^git ' "$STATE/calls")" == "$expected" ]] || fail "this laptop's SSH keys not committed and pushed"
+: >"$STATE/calls"
+run '' "$T/laptop-ssh-again.out" --no-readiness || fail "re-run with laptop-ssh exited non-zero"
+grep -qx 'laptop-ssh' "$STATE/calls" || fail "re-run did not run laptop-ssh"
+if grep -qE '^git |enable --now' "$STATE/calls"; then fail "re-run published or started sshd again"; fi
+grep -qF "the dotfiles already have this laptop's SSH keys" "$T/laptop-ssh-again.out" || fail "re-run did not see the published keys"
+echo "PASS: publishes this laptop's SSH keys for the other laptops"
 
 # 10. The laptop already had an age key, but not the one .secrets.enc is for.
 # Step 2 leaves it alone; step 7 notices, and on y replaces it with dev's,
