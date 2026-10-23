@@ -64,7 +64,20 @@ stub kubectl '[[ -e "$STATE/cluster-up" ]] || { n=$(( $(cat "$STATE/kube-tries" 
 for t in curl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst; do
   stub "$t" 'exit 0'
 done
-export PATH="$BIN:/usr/bin:/bin"
+# The system's own commands, minus every tool the tests stand in for: a real
+# gh, kubectl or git on the machine (a CI runner has gh in /usr/bin) must not
+# be found once a stub is removed, or the script runs it for real.
+SYSBIN="$T/sysbin"
+mkdir -p "$SYSBIN"
+STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow "
+for dir in /usr/local/bin /usr/bin /bin; do
+  for f in "$dir"/*; do
+    name="${f##*/}"
+    [[ "$STUBBED" == *" $name "* || -e "$SYSBIN/$name" ]] && continue
+    ln -s "$f" "$SYSBIN/$name"
+  done
+done
+export PATH="$BIN:$SYSBIN"
 
 run() {
   local input="$1" out="$2"
