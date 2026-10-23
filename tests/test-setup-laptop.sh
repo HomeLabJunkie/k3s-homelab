@@ -12,7 +12,7 @@ trap 'rm -rf -- "$T"' EXIT
 
 export HOME="$T/home" SOURCE_HOME="$T/source-home" REPO="$T/work/k3s-homelab" STATE="$T/state"
 export WORK_DIR="$T/work" DOTFILES="$T/no-dotfiles" SETUP_REPO_DIR="$REPO" SETUP_ALLOW_ROOT=1
-BIN="$T/bin"
+export BIN="$T/bin"
 mkdir -p "$HOME/.ssh" "$SOURCE_HOME/.config/sops/age" "$SOURCE_HOME/.ssh" "$SOURCE_HOME/.kube" \
   "$REPO/scripts" "$STATE" "$BIN"
 
@@ -64,7 +64,20 @@ stub kubectl '[[ -e "$STATE/cluster-up" ]] || { n=$(( $(cat "$STATE/kube-tries" 
 for t in curl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst; do
   stub "$t" 'exit 0'
 done
-export PATH="$BIN:/usr/bin:/bin"
+# The system's own commands, minus every tool the tests stand in for: a real
+# gh, kubectl or git on the machine (a CI runner has gh in /usr/bin) must not
+# be found once a stub is removed, or the script runs it for real.
+SYSBIN="$T/sysbin"
+mkdir -p "$SYSBIN"
+STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow "
+for dir in /usr/local/bin /usr/bin /bin; do
+  for f in "$dir"/*; do
+    name="${f##*/}"
+    [[ "$STUBBED" == *" $name "* || -e "$SYSBIN/$name" ]] && continue
+    ln -s "$f" "$SYSBIN/$name"
+  done
+done
+export PATH="$BIN:$SYSBIN"
 
 run() {
   local input="$1" out="$2"
@@ -123,5 +136,39 @@ grep -qF 'Missing: ~/.kube/config' "$T/stop.out" || fail "did not name the missi
 # Copying the missing key again must not include the cluster hosts twice.
 [[ "$(grep -c '^Include config.k3s-homelab' "$HOME/.ssh/config")" == 1 ]] || fail "Include added twice"
 echo "PASS: stops cleanly when nobody answers"
+echo KUBECONFIG >"$HOME/.kube/config"
+
+# 4. No gh and no GitHub key, as on a brand-new laptop: offer to install gh
+# with pacman, then gh auth login.
+rm "$BIN/gh" "$STATE/github-key"
+: >"$STATE/calls"
+stub sudo '"$@"'
+stub pacman 'echo "pacman $*" >>"$STATE/calls"; printf "#!/usr/bin/env bash\ncase \"\$1 \$2\" in \"auth login\") touch \"\$STATE/github-key\"; echo gh-login >>\"\$STATE/calls\" ;; esac\n" >"$BIN/gh"; chmod +x "$BIN/gh"'
+run 'y\ny\n' "$T/gh.out" --no-readiness || fail "setup without gh exited non-zero"
+grep -qx 'pacman -S --needed github-cli' "$STATE/calls" || fail "gh not installed with pacman"
+grep -qx 'gh-login' "$STATE/calls" || fail "gh auth login not run after installing gh"
+if grep -q 'NEEDS YOU' "$T/gh.out"; then fail "waited although gh could be installed"; fi
+echo "PASS: installs gh when it is missing"
+
+# 5. A cluster tool is missing and there are no dotfiles: offer to clone
+# them, then run their bootstrap, which installs the tool.
+rm "$BIN/helm"
+: >"$STATE/calls"
+# The dotfiles clone gets a bootstrap.sh that "installs" helm; any other
+# git call goes to the git stub from above.
+mv "$BIN/git" "$BIN/git-base"
+stub git '
+if [[ "$1" == clone && "$3" == "$DOTFILES" ]]; then
+  mkdir -p "$3"; echo "clone $2" >>"$STATE/calls"
+  printf "#!/usr/bin/env bash\necho \"bootstrap \$*\" >>\"\$STATE/calls\"\nprintf \"#!/usr/bin/env bash\\\\nexit 0\\\\n\" >\"\$BIN/helm\"; chmod +x \"\$BIN/helm\"\n" >"$3/bootstrap.sh"
+  chmod +x "$3/bootstrap.sh"
+  exit 0
+fi
+exec "$BIN/git-base" "$@"'
+run 'y\ny\n' "$T/dotfiles.out" --no-readiness || fail "setup without dotfiles exited non-zero"
+grep -qx 'clone git@github.com:HomeLabJunkie/dotfiles.git' "$STATE/calls" || fail "dotfiles not cloned"
+grep -qx 'bootstrap --packages' "$STATE/calls" || fail "dotfiles bootstrap not run"
+if grep -q 'NEEDS YOU' "$T/dotfiles.out"; then fail "waited although the dotfiles install the tools"; fi
+echo "PASS: clones the dotfiles when tools are missing"
 
 echo 'PASS: laptop setup'

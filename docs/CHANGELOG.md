@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup installs gh and clones the dotfiles itself
+
+On a brand-new laptop `gh` is not installed yet, because it comes from the
+dotfiles, which are private and so need the GitHub access `gh` would set
+up. `scripts/setup-laptop.sh` now offers to install `github-cli` with
+pacman before `gh auth login`, and to clone the dotfiles once GitHub works
+when cluster tools are missing. The dotfiles' package list now includes
+`stow`, which their `bootstrap.sh` needs to link the configs.
+
 ## 2026-10-23: One script to set up a new laptop
 
 `scripts/setup-laptop.sh --from dev` runs the laptop setup end to end:
