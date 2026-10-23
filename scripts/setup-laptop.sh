@@ -267,7 +267,19 @@ fi
 
 # --- 5. ------------------------------------------------------------------
 step "Cluster tools"
-TOOLS=(kubectl helm argocd kubectx kubens cilium velero trivy k9s kubeconform gh sops age direnv jq yq argon2 envsubst)
+TOOLS=(kubectl helm argocd kubectx kubens velero trivy k9s kubeconform gh sops age direnv jq yq argon2 envsubst)
+# Handy but not needed by any script: the cluster's own setup installs the
+# Cilium CLI on the nodes. Packages name its command differently (cilium on
+# most, cilium-cli on some), so either name counts.
+OPTIONAL_TOOLS=("cilium|cilium-cli")
+have_any() {
+  local name names
+  IFS='|' read -ra names <<<"$1"
+  for name in "${names[@]}"; do
+    command -v "$name" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
 missing_tools() {
   local t missing=()
   for t in "${TOOLS[@]}"; do
@@ -331,6 +343,10 @@ need "install the cluster tools" \
 Open a new shell afterwards if a tool still is not found." \
   missing_tools
 ok "all cluster tools are installed"
+for t in "${OPTIONAL_TOOLS[@]}"; do
+  have_any "$t" ||
+    echo "NOTE: no ${t//|/ or } command; it is only for looking at Cilium by hand (cilium status), so carrying on"
+done
 
 # --- 6. ------------------------------------------------------------------
 step "Python environment and Ansible collections"

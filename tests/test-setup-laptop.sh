@@ -70,7 +70,7 @@ done
 # be found once a stub is removed, or the script runs it for real.
 SYSBIN="$T/sysbin"
 mkdir -p "$SYSBIN"
-STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl "
+STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl "
 for dir in /usr/local/bin /usr/bin /bin; do
   for f in "$dir"/*; do
     name="${f##*/}"
@@ -196,5 +196,15 @@ grep -qF 'the dotfiles already have machines/newlaptop/local-only.txt' "$T/dotfi
   fail "re-run did not see the existing local-only.txt"
 if grep -q '^git ' "$STATE/calls"; then fail "re-run committed again"; fi
 echo "PASS: gives a new laptop its own local-only.txt in the dotfiles"
+
+# 7. The Cilium CLI is missing (or named cilium-cli): a note, not a wait.
+rm "$BIN/cilium"
+run '' "$T/no-cilium.out" --no-readiness || fail "setup waited for the cilium CLI"
+grep -qF 'NOTE: no cilium or cilium-cli command' "$T/no-cilium.out" || fail "no note about the missing cilium CLI"
+if grep -q 'NEEDS YOU' "$T/no-cilium.out"; then fail "waited for an optional tool"; fi
+stub cilium-cli 'exit 0'
+run '' "$T/cilium-cli.out" --no-readiness || fail "setup failed with cilium-cli"
+if grep -q 'NOTE: no cilium' "$T/cilium-cli.out"; then fail "cilium-cli was not accepted"; fi
+echo "PASS: the cilium CLI is optional, under either name"
 
 echo 'PASS: laptop setup'
