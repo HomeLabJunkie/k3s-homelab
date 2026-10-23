@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup trusts the host keys dev trusts
+
+On the Vostro the readiness check's DR power-on waited for `k3s-dr` to
+answer and never saw it: the scripts log in with `BatchMode`, which refuses
+a host it has never seen, and the laptop had never seen `k3s-dr`, the
+nodes or `ubuntu-hp`. `scripts/setup-laptop.sh` copied `dev`'s SSH config
+but not its `known_hosts`. It now adds the host keys `dev` trusts to
+`~/.ssh/known_hosts`, keeping every line already there, and on a re-run
+fetches them without a password when `dev` lets the laptop in by key.
+
 ## 2026-10-23: Laptop setup lets the laptops log in to each other
 
 A new laptop could not SSH to `dev` or `omarchy-t480`: nothing put its key in

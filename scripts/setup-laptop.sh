@@ -35,7 +35,8 @@ Options:
 
 It copies from the other laptop, over one SSH connection (its password is
 asked once): the age key, the cluster SSH key and the hosts in ~/.ssh/config,
-the kubeconfig and the iLO login. It also adds this laptop's own SSH key
+the kubeconfig and the iLO login, and adds the host keys it trusts to
+~/.ssh/known_hosts. It also adds this laptop's own SSH key
 (~/.ssh/id_ed25519, created if missing) to the other laptop's authorized_keys,
 and publishes it in the dotfiles so every laptop lets it in. A file already
 on this laptop is never replaced. The GitHub login stays this laptop's own: the script offers to run
@@ -213,8 +214,36 @@ all_keys_present() {
   return 1
 }
 
+# The host keys $FROM already trusts: the six nodes, k3s-dr, ubuntu-hp and so
+# on. The scripts log in to them with BatchMode, which refuses a host it has
+# never seen instead of asking, so without these the deploy preflight, the
+# maintenance check and the DR power-on fail. Only lines this laptop does not
+# have yet are added; nothing it already trusts is changed.
+merge_known_hosts() {
+  local known="$HOME/.ssh/known_hosts" added
+  scp -q -o ControlPath="$SSH_CONTROL" "$@" "$FROM:.ssh/known_hosts" "$TMP/known_hosts" 2>/dev/null ||
+    return 1
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  touch "$known"
+  chmod 600 "$known"
+  added="$(grep -vxFf "$known" "$TMP/known_hosts" | grep -v '^[[:space:]]*\(#\|$\)' || true)"
+  if [[ -n "$added" ]]; then
+    printf '%s\n' "$added" >>"$known"
+    ok "trusted $(wc -l <<<"$added") host key(s) that $FROM already trusts, in ~/.ssh/known_hosts"
+  else
+    ok "~/.ssh/known_hosts already has the host keys $FROM trusts"
+  fi
+  rm -f "$TMP/known_hosts"
+}
+
 if all_keys_present >/dev/null; then
   ok "the keys are already in place"
+  # A laptop set up before this step existed: fetch without asking for a
+  # password, and skip quietly if $FROM does not let this laptop in by key.
+  if [[ "$COPY_KEYS" == true ]]; then
+    merge_known_hosts -o BatchMode=yes -o ConnectTimeout=6 || true
+  fi
 elif [[ "$COPY_KEYS" == true ]]; then
   need "let this laptop log in to $FROM over SSH" \
     "The script opens one SSH connection to $FROM and asks for its password if
@@ -230,6 +259,7 @@ with --from user@address, or allow password login on $FROM." \
       echo "WARNING: could not copy ~/$rel from $FROM"
   done
   copy_ssh_config || echo "WARNING: could not copy ~/.ssh/config from $FROM"
+  merge_known_hosts || echo "WARNING: could not copy the host keys $FROM trusts; ssh to each node and to k3s-dr once by hand"
 fi
 need "put the remaining keys in place" \
   "Copy them from $FROM or Bitwarden, never through chat, email or git:

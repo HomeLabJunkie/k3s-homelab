@@ -26,9 +26,12 @@ echo PUBLIC-KEY >"$SOURCE_HOME/.ssh/k3s_homelab_ed25519.pub"
 printf 'Host k3s-dr\n  HostName 192.0.2.127\n' >"$SOURCE_HOME/.ssh/config"
 echo KUBECONFIG >"$SOURCE_HOME/.kube/config"
 # No iLO file on the source: an optional copy.
+printf '# comment\ngithub.com ssh-ed25519 GITHUBKEY\nk3s-dr ssh-ed25519 DRKEY\n192.0.2.11 ssh-ed25519 NODEKEY\n' \
+  >"$SOURCE_HOME/.ssh/known_hosts"
 
-# This laptop's own SSH config, which must survive.
+# This laptop's own SSH config and a host it already trusts, which must survive.
 printf 'Host personal\n  HostName 192.0.2.1\n' >"$HOME/.ssh/config"
+printf 'personal ssh-ed25519 PERSONALKEY\ngithub.com ssh-ed25519 GITHUBKEY\n' >"$HOME/.ssh/known_hosts"
 
 # The repository's own scripts, as stubs that record their calls.
 for s in scripts/ensure-ansible-collections.sh scripts/prepare-env.sh workstation-readiness.sh; do
@@ -134,6 +137,11 @@ if [[ "$(grep -c 'NEEDS YOU' "$T/fresh.out")" != 1 ]] || ! grep -qF 'NEEDS YOU: 
   fail "expected exactly one wait, for the cluster"
 fi
 if grep -q '^workstation-readiness.sh' "$STATE/calls"; then fail "readiness ran after answering n"; fi
+[[ "$(cat "$HOME/.ssh/known_hosts")" == "personal ssh-ed25519 PERSONALKEY
+github.com ssh-ed25519 GITHUBKEY
+k3s-dr ssh-ed25519 DRKEY
+192.0.2.11 ssh-ed25519 NODEKEY" ]] || fail "dev's host keys not added to known_hosts exactly once, keeping this laptop's"
+grep -qF "trusted 2 host key(s) that dev already trusts" "$T/fresh.out" || fail "known_hosts merge not reported"
 echo "PASS: fresh laptop"
 
 # 2. Again: everything is in place, nothing is copied or cloned twice.
@@ -145,6 +153,8 @@ grep -qx 'RESULT: LAPTOP SET UP' "$T/rerun.out" || fail "re-run did not finish"
 if grep -qE '^(ssh-master|clone|gh-login|set-url)' "$STATE/calls"; then fail "re-run repeated a one-time step"; fi
 if grep -q 'NEEDS YOU' "$T/rerun.out"; then fail "re-run asked for something"; fi
 cmp -s "$HOME/.ssh/config" "$T/ssh-config-before" || fail "re-run changed ~/.ssh/config"
+grep -qF "known_hosts already has the host keys dev trusts" "$T/rerun.out" || fail "re-run did not check known_hosts"
+[[ "$(wc -l <"$HOME/.ssh/known_hosts")" == 4 ]] || fail "re-run added host keys twice"
 echo "PASS: re-run is a no-op"
 
 # 3. Nobody answers when a key is missing and dev does not have it: stop,
