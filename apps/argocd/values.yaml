@@ -8,6 +8,14 @@
 # argocd/values.yaml in the private configuration repository; without it the
 # chart's placeholder, argocd.example.com, is where logging out lands.
 
+# Pinned ahead of the chart for v3.5.6, whose images distrust the compromised
+# eMudhra CAs; chart 10.10.5 (and 10.11.0) ship v3.5.5. Remove this once a
+# chart bump brings v3.5.6 or later, or the pin would hold Argo CD back
+# (Renovate only updates the chart version).
+global:
+  image:
+    tag: v3.5.6
+
 configs:
   params:
     # Traefik terminates TLS (charts/routes), so the server speaks
