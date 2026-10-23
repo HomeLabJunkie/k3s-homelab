@@ -38,7 +38,12 @@ their SSH keys (`laptop-ssh`). After the private files arrive it checks that
 key, it shows which key the file needs and offers to replace this laptop's
 with `dev`'s, keeping the old one as `keys.txt.bak`. It never replaces a file already on
 the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
-`~/.ssh/config`. `--no-copy` waits for you to put the keys in place instead,
+`~/.ssh/config`, and the host keys `dev` trusts (the nodes, `k3s-dr`,
+`ubuntu-hp`) are added to `~/.ssh/known_hosts` without changing the lines
+already there. The scripts log in to those hosts with `BatchMode`, which
+refuses a host it has never seen, so without them the deploy preflight, the
+maintenance check and the DR power-on fail. On a laptop set up before, a
+re-run fetches them without a password if `dev` lets it in by key. `--no-copy` waits for you to put the keys in place instead,
 for when no other laptop is left (see
 [Set up a laptop from nothing](disaster-recovery.md#set-up-a-laptop-from-nothing)).
 
