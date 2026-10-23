@@ -173,7 +173,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Cluster | K3s (Kubernetes) | v1.36.5 |
 | Network | Cilium (+ Hubble) | 1.20.2 |
 | Service addresses | MetalLB | Layer 2 mode |
-| Web front door | Traefik | v3.7.15 (chart 41.7.1) |
+| Web front door | Traefik | v3.7.16 (chart 41.7.1) |
 | Certificates | cert-manager | v1.21.2 |
 | Outside access | Cloudflare Tunnel (cloudflared) | 2 copies |
 | Storage | Longhorn | 1.12.1 |
@@ -182,7 +182,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Logging | Loki + Alloy | chart 18.15.1 / 1.13.1 |
 | Security scanning | Trivy Operator | chart 0.37.0 |
 | Policy | Kyverno | chart 3.9.1 |
-| GitOps | Argo CD | chart 10.10.3 |
+| GitOps | Argo CD | v3.5.6 (chart 10.10.5) |
 | Second backup | Velero → Garage | chart 12.2.1 |
 
 ---

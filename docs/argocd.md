@@ -5,7 +5,7 @@
 How Argo CD runs this cluster. For the everyday tasks (adding an app,
 changing a setting or secret, upgrading, undoing) see [How to](how-to.md).
 
-Argo CD (chart `10.10.3`, Argo CD `v3.5.5`) runs in the `argocd` namespace.
+Argo CD (chart `10.10.5`, Argo CD `v3.5.6`) runs in the `argocd` namespace.
 It watches git and makes the cluster match it. Each thing it manages is an
 `Application`. It deploys everything except K3s, Cilium, kube-vip, MetalLB
 and Longhorn, which stay with Ansible and `deploy.sh`, and that includes its

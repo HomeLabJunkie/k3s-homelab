@@ -6,6 +6,34 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Images that distrust the compromised eMudhra CAs
+
+The private keys of eight eMudhra intermediate CAs were found to be
+recoverable ([incident](https://emudhra.we-have-a-problem.com/),
+CVE-2026-111943). Browsers block them already; programs that check
+certificates against their image's own CA bundle do not, until the image is
+rebuilt. The nodes' `ca-certificates` (20260816ubuntu0.26.04.1) are fixed,
+but on 2026-10-23 every running image still trusted the compromised chain.
+Three had fixed releases and move up:
+
+- Argo CD `v3.5.5` to `v3.5.6`, by pinning `global.image.tag` in
+  `apps/argocd/values.yaml`, because no chart ships it yet (10.11.0 still
+  has `v3.5.5`). Bug fixes and Go 1.26.10. Drop the pin when a chart bump
+  brings `v3.5.6` or later.
+- Traefik `v3.7.15` to `v3.7.16` (pin in `apps/traefik/values.yaml`; chart
+  41.7.1 stays). It also fixes
+  [GHSA-hrpp-p4fc-wwf8](https://github.com/traefik/traefik/security/advisories/GHSA-hrpp-p4fc-wwf8).
+  Its [migration note](https://doc.traefik.io/traefik/v3.7/migrate/v3/#v3716)
+  only changes what the API and dashboard show for Secret values in
+  middlewares (a reference instead of the value). Drop the pin when a chart
+  bump brings `v3.7.16` or later.
+- cloudflared `2026.10.0` to `2026.10.3`: Go and base image bumps, a
+  diagnostics endpoint and a fix for long messages being cut off.
+
+Each new image was checked by copying its CA bundle out and connecting to the
+incident site's no-CT test hosts with it. cert-manager, Authelia,
+Vaultwarden, Velero and the rest have no fixed release yet.
+
 ## 2026-10-23: Laptop setup does not wait for the Cilium CLI
 
 On the first real new laptop, `scripts/setup-laptop.sh` kept waiting at
