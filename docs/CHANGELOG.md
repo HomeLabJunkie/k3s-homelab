@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup leaves the laptops' SSH entries to the dotfiles
+
+Copying `dev`'s SSH hosts could also copy an entry `dev` has for itself or
+for another laptop. `~/.ssh/config.k3s-homelab` is read first, so that entry
+would win over the dotfiles' `config.laptops` and could send `ssh dev` to the
+wrong place. Setup now skips any host named after `dev`, this laptop, a
+laptop in the dotfiles' `machines/` or a `*.local` name, and keeps
+`config.k3s-homelab.bak` before adding to the file.
+
 ## 2026-10-23: Laptop setup copies every SSH host dev has
 
 The Vostro still could not power on the DR server: `ubuntu-hp` was not in its
