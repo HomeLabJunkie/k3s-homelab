@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup gives a new laptop its own dotfiles machine folder
+
+`dev` and `omarchy-t480` each have `machines/<hostname>/local-only.txt` in
+the dotfiles, naming the Hyprland and Omarchy files atmos rewrites with each
+laptop's settings. A new laptop had none, so the dotfiles' `bootstrap.sh`
+would have linked those files into the shared repository and atmos would
+then have edited every laptop's copy. `scripts/setup-laptop.sh` now offers
+to create the new laptop's file from `dev`'s before bootstrap runs, and
+commits and pushes it after bootstrap has linked the git config.
+
 ## 2026-10-23: Laptop setup installs gh and clones the dotfiles itself
 
 On a brand-new laptop `gh` is not installed yet, because it comes from the
