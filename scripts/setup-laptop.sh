@@ -34,9 +34,9 @@ Options:
   -h, --help        Show this help.
 
 It copies from the other laptop, over one SSH connection (its password is
-asked once): the age key, the cluster SSH key and the hosts in ~/.ssh/config,
-the kubeconfig and the iLO login, and adds the host keys it trusts to
-~/.ssh/known_hosts. It also adds this laptop's own SSH key
+asked once): the age key, the cluster SSH key, the kubeconfig and the iLO
+login; every host in its ~/.ssh/config that this laptop lacks, with the key
+that host logs in with; and the host keys it trusts, into ~/.ssh/known_hosts. It also adds this laptop's own SSH key
 (~/.ssh/id_ed25519, created if missing) to the other laptop's authorized_keys,
 and publishes it in the dotfiles so every laptop lets it in. A file already
 on this laptop is never replaced. The GitHub login stays this laptop's own: the script offers to run
@@ -153,10 +153,17 @@ connect_source() {
     -o ConnectTimeout=10 -fN "$FROM"
 }
 
+# Extra options for every copy from $FROM: BatchMode when there is no open
+# connection to share, so nothing asks for a password.
+SOURCE_SSH_OPTS=()
+fetch_from_source() {
+  scp -q -o ControlPath="$SSH_CONTROL" "${SOURCE_SSH_OPTS[@]}" "$FROM:$1" "$2" 2>/dev/null
+}
+
 copy_from_source() {
   local rel="$1" mode="$2" dest="$HOME/$1"
   [[ -e "$dest" ]] && { ok "~/$rel already here; left as it is"; return 0; }
-  scp -q -o ControlPath="$SSH_CONTROL" "$FROM:$rel" "$TMP/copy" 2>/dev/null || return 1
+  fetch_from_source "$rel" "$TMP/copy" || return 1
   mkdir -p "$(dirname "$dest")"
   chmod 700 "$(dirname "$dest")"
   install -m "$mode" "$TMP/copy" "$dest"
@@ -164,26 +171,113 @@ copy_from_source() {
   ok "copied ~/$rel from $FROM"
 }
 
-# The node, k3s-dr and ubuntu-hp entries. Kept in a file of their own and
-# included, so this laptop's own ~/.ssh/config is not overwritten.
-has_cluster_ssh_config() {
-  grep -qsE '^[[:space:]]*Host[[:space:]].*\bk3s-dr\b' "$HOME/.ssh/config" "$HOME/.ssh/config.k3s-homelab"
+# The hosts the scripts log in to by name; each must be defined in the SSH
+# config, as DNS does not know them.
+CLUSTER_HOSTS=(k3s-dr ubuntu-hp)
+LOCAL_SSH="$HOME/.ssh/config.k3s-homelab"
+
+# The host names this laptop's SSH config defines: ~/.ssh/config, the files
+# it includes and ~/.ssh/config.k3s-homelab.
+local_ssh_hosts() {
+  local conf="$HOME/.ssh/config" inc f files=()
+  [[ -f "$conf" ]] && files+=("$conf")
+  [[ -f "$LOCAL_SSH" ]] && files+=("$LOCAL_SSH")
+  (( ${#files[@]} > 0 )) || return 0
+  if [[ -f "$conf" ]]; then
+    while read -r inc; do
+      inc="${inc/#\~/$HOME}"
+      [[ "$inc" == /* ]] || inc="$HOME/.ssh/$inc"
+      # shellcheck disable=SC2086  # an Include may be a glob
+      for f in $inc; do [[ -f "$f" ]] && files+=("$f"); done
+    done < <(awk 'tolower($1) == "include" { for (i = 2; i <= NF; i++) print $i }' "$conf")
+  fi
+  awk 'tolower($1) == "host" { for (i = 2; i <= NF; i++) print $i }' "${files[@]}" | sort -u
 }
-copy_ssh_config() {
-  has_cluster_ssh_config && { ok "~/.ssh/config already has the cluster hosts"; return 0; }
-  scp -q -o ControlPath="$SSH_CONTROL" "$FROM:.ssh/config" "$TMP/ssh-config" 2>/dev/null || return 1
-  mkdir -p "$HOME/.ssh"
-  chmod 700 "$HOME/.ssh"
-  install -m 600 "$TMP/ssh-config" "$HOME/.ssh/config.k3s-homelab"
-  if [[ -f "$HOME/.ssh/config" ]]; then
-    # Include must come before any Host block to apply everywhere.
-    { echo "Include config.k3s-homelab"; echo; cat "$HOME/.ssh/config"; } >"$TMP/merged"
-    install -m 600 "$TMP/merged" "$HOME/.ssh/config"
+has_cluster_ssh_config() {
+  local hosts h
+  hosts="$(local_ssh_hosts)"
+  for h in "${CLUSTER_HOSTS[@]}"; do
+    grep -qxF "$h" <<<"$hosts" || return 1
+  done
+}
+
+# Include must come before any Host block to apply everywhere.
+include_local_ssh() {
+  local conf="$HOME/.ssh/config"
+  grep -qsxE '[[:space:]]*Include[[:space:]]+config\.k3s-homelab[[:space:]]*' "$conf" && return 0
+  if [[ -f "$conf" ]]; then
+    { echo "Include config.k3s-homelab"; echo; cat "$conf"; } >"$TMP/merged"
   else
     printf 'Include config.k3s-homelab\n' >"$TMP/merged"
-    install -m 600 "$TMP/merged" "$HOME/.ssh/config"
   fi
-  ok "added $FROM's SSH hosts as ~/.ssh/config.k3s-homelab (included from ~/.ssh/config)"
+  install -m 600 "$TMP/merged" "$conf"
+}
+
+# A key an SSH host logs in with, as a path under ~/.ssh, or nothing for a
+# path the script does not copy.
+identity_rel() {
+  local path="${1//\"/}"
+  case "$path" in
+    "~/"*) path="${path#\~/}" ;;
+    "%d/"*) path="${path#%d/}" ;;
+    *) return 0 ;;
+  esac
+  # ~/.ssh/id_* is each laptop's own key; another laptop's is never copied.
+  [[ "$path" =~ ^\.ssh/[A-Za-z0-9._-]+$ && "$path" != .ssh/id_* ]] && echo "$path"
+  return 0
+}
+
+# Every host $FROM reaches by name, so this laptop reaches it too: the six
+# nodes, k3s-dr, ubuntu-hp, the other machines. A host this laptop already
+# defines is left as it is; each other one is added to
+# ~/.ssh/config.k3s-homelab, with the key it logs in with. Wildcard blocks
+# (Host *) and Match blocks are $FROM's own defaults and are not copied.
+# It runs on every setup, so a host added on $FROM later arrives here too.
+merge_ssh_hosts() {
+  local block names name rel added=0 keys=0 local_hosts copy_it
+  fetch_from_source .ssh/config "$TMP/ssh-config" || return 1
+  rm -rf "$TMP/ssh-hosts"
+  mkdir -p "$HOME/.ssh" "$TMP/ssh-hosts"
+  chmod 700 "$HOME/.ssh"
+  awk -v dir="$TMP/ssh-hosts" '
+    /^[[:space:]]*(#|$)/ { next }
+    tolower($1) == "host" || tolower($1) == "match" { n++; keep = tolower($1) == "host" }
+    tolower($1) == "include" { next }
+    n && keep { print > sprintf("%s/%04d", dir, n) }
+  ' "$TMP/ssh-config"
+  local_hosts="$(local_ssh_hosts)"
+  for block in "$TMP/ssh-hosts"/*; do
+    [[ -f "$block" ]] || continue
+    read -r _ names <"$block"
+    [[ "$names" == *[*?!]* ]] && continue
+    copy_it=true
+    for name in $names; do
+      grep -qxF "$name" <<<"$local_hosts" && copy_it=false
+    done
+    if [[ "$copy_it" == true ]]; then
+      [[ -s "$LOCAL_SSH" ]] && echo >>"$LOCAL_SSH"
+      cat "$block" >>"$LOCAL_SSH"
+      chmod 600 "$LOCAL_SSH"
+      added=$((added + 1))
+    fi
+    while read -r rel; do
+      [[ -n "$rel" && ! -e "$HOME/$rel" ]] || continue
+      if copy_from_source "$rel" 600; then
+        keys=$((keys + 1))
+        copy_from_source "$rel.pub" 644 || true
+      else
+        echo "WARNING: could not copy ~/$rel, the key for $names, from $FROM"
+      fi
+    done < <(awk 'tolower($1) == "identityfile" { print $2 }' "$block" |
+      while read -r path; do identity_rel "$path"; done)
+  done
+  if (( added > 0 )); then
+    include_local_ssh
+    ok "added $added SSH host(s) from $FROM to ~/.ssh/config.k3s-homelab (included from ~/.ssh/config)"
+  else
+    ok "~/.ssh/config already has every host $FROM has"
+  fi
+  rm -rf "$TMP/ssh-config" "$TMP/ssh-hosts"
 }
 
 # This laptop's own key, added to $FROM's authorized_keys so it can log in
@@ -221,8 +315,7 @@ all_keys_present() {
 # have yet are added; nothing it already trusts is changed.
 merge_known_hosts() {
   local known="$HOME/.ssh/known_hosts" added
-  scp -q -o ControlPath="$SSH_CONTROL" "$@" "$FROM:.ssh/known_hosts" "$TMP/known_hosts" 2>/dev/null ||
-    return 1
+  fetch_from_source .ssh/known_hosts "$TMP/known_hosts" || return 1
   mkdir -p "$HOME/.ssh"
   chmod 700 "$HOME/.ssh"
   touch "$known"
@@ -242,7 +335,14 @@ if all_keys_present >/dev/null; then
   # A laptop set up before this step existed: fetch without asking for a
   # password, and skip quietly if $FROM does not let this laptop in by key.
   if [[ "$COPY_KEYS" == true ]]; then
-    merge_known_hosts -o BatchMode=yes -o ConnectTimeout=6 || true
+    SOURCE_SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=6)
+    if ssh "${SOURCE_SSH_OPTS[@]}" "$FROM" true </dev/null 2>/dev/null; then
+      merge_ssh_hosts || echo "WARNING: could not copy the SSH hosts from $FROM"
+      merge_known_hosts || echo "WARNING: could not copy the host keys $FROM trusts"
+    else
+      echo "NOTE: $FROM does not let this laptop in by key; its SSH hosts and host keys were not checked"
+    fi
+    SOURCE_SSH_OPTS=()
   fi
 elif [[ "$COPY_KEYS" == true ]]; then
   need "let this laptop log in to $FROM over SSH" \
@@ -258,14 +358,14 @@ with --from user@address, or allow password login on $FROM." \
       { [[ "$need_it" == optional ]] && echo "SKIP: $FROM has no ~/$rel"; } ||
       echo "WARNING: could not copy ~/$rel from $FROM"
   done
-  copy_ssh_config || echo "WARNING: could not copy ~/.ssh/config from $FROM"
+  merge_ssh_hosts || echo "WARNING: could not copy the SSH hosts in $FROM's ~/.ssh/config"
   merge_known_hosts || echo "WARNING: could not copy the host keys $FROM trusts; ssh to each node and to k3s-dr once by hand"
 fi
 need "put the remaining keys in place" \
   "Copy them from $FROM or Bitwarden, never through chat, email or git:
   ~/.config/sops/age/keys.txt  (Bitwarden: \"SOPS AGE KEY\"), mode 600
   ~/.ssh/k3s_homelab_ed25519, mode 600
-  ~/.ssh/config entries for the six nodes, k3s-dr and ubuntu-hp
+  ~/.ssh/config entries for the six nodes, k3s-dr and ubuntu-hp, with their keys
   ~/.kube/config, mode 600" \
   all_keys_present
 ok "age key, cluster SSH key, SSH hosts and kubeconfig are in place"

@@ -23,7 +23,34 @@ mkdir -p "$HOME/.ssh" "$SOURCE_HOME/.config/sops/age" "$SOURCE_HOME/.ssh" "$SOUR
 echo AGE-SECRET-KEY-TEST >"$SOURCE_HOME/.config/sops/age/keys.txt"
 echo PRIVATE-KEY >"$SOURCE_HOME/.ssh/k3s_homelab_ed25519"
 echo PUBLIC-KEY >"$SOURCE_HOME/.ssh/k3s_homelab_ed25519.pub"
-printf 'Host k3s-dr\n  HostName 192.0.2.127\n' >"$SOURCE_HOME/.ssh/config"
+# Its SSH config: hosts to copy with their keys, and its own defaults, a
+# host this laptop already defines and its personal key, which are not.
+cat >"$SOURCE_HOME/.ssh/config" <<'EOF'
+Host *
+  ServerAliveInterval 60
+Include config.laptops
+
+Host k3s-dr
+  HostName 192.0.2.127
+  IdentityFile ~/.ssh/k3s_homelab_ed25519
+# The DR server
+Host ubuntu-hp
+    HostName 192.0.2.250
+    User sysop
+    IdentityFile ~/.ssh/ubuntu_hp_ed25519
+    IdentitiesOnly yes
+Host personal
+  HostName 192.0.2.99
+Host gitbox
+  IdentityFile ~/.ssh/id_ed25519
+Match host other
+  User someone
+Host laptop-*
+  User me
+EOF
+echo HP-PRIVATE-KEY >"$SOURCE_HOME/.ssh/ubuntu_hp_ed25519"
+echo HP-PUBLIC-KEY >"$SOURCE_HOME/.ssh/ubuntu_hp_ed25519.pub"
+echo DEV-OWN-KEY >"$SOURCE_HOME/.ssh/id_ed25519"
 echo KUBECONFIG >"$SOURCE_HOME/.kube/config"
 # No iLO file on the source: an optional copy.
 printf '# comment\ngithub.com ssh-ed25519 GITHUBKEY\nk3s-dr ssh-ed25519 DRKEY\n192.0.2.11 ssh-ed25519 NODEKEY\n' \
@@ -123,7 +150,22 @@ grep -qx 'RESULT: LAPTOP SET UP' "$T/fresh.out" || fail "fresh setup did not fin
    "$(mode "$HOME/.kube/config")" == 600 && "$(mode "$HOME/.config/sops/age")" == 700 ]] || fail "wrong modes"
 [[ "$(head -1 "$HOME/.ssh/config")" == 'Include config.k3s-homelab' ]] || fail "Include not first in ~/.ssh/config"
 grep -qx 'Host personal' "$HOME/.ssh/config" || fail "this laptop's own SSH config was lost"
-grep -qx 'Host k3s-dr' "$HOME/.ssh/config.k3s-homelab" || fail "cluster hosts not copied"
+[[ "$(cat "$HOME/.ssh/config.k3s-homelab")" == "Host k3s-dr
+  HostName 192.0.2.127
+  IdentityFile ~/.ssh/k3s_homelab_ed25519
+
+Host ubuntu-hp
+    HostName 192.0.2.250
+    User sysop
+    IdentityFile ~/.ssh/ubuntu_hp_ed25519
+    IdentitiesOnly yes
+
+Host gitbox
+  IdentityFile ~/.ssh/id_ed25519" ]] || fail "SSH hosts not copied host by host"
+[[ "$(cat "$HOME/.ssh/ubuntu_hp_ed25519")" == HP-PRIVATE-KEY && "$(mode "$HOME/.ssh/ubuntu_hp_ed25519")" == 600 &&
+   "$(mode "$HOME/.ssh/ubuntu_hp_ed25519.pub")" == 644 ]] || fail "ubuntu-hp's key not copied"
+[[ "$(cat "$HOME/.ssh/id_ed25519")" != DEV-OWN-KEY ]] || fail "dev's own id_ed25519 was copied"
+grep -qF 'added 3 SSH host(s) from dev' "$T/fresh.out" || fail "SSH host merge not reported"
 grep -qF 'SKIP: dev has no ~/.config/ilo-ubuntu-hp' "$T/fresh.out" || fail "optional iLO file not reported"
 [[ "$(mode "$HOME/.ssh/id_ed25519")" == 600 ]] || fail "this laptop's own SSH key not created"
 cmp -s "$HOME/.ssh/id_ed25519.pub" "$STATE/source-authorized-keys" || fail "this laptop's key not added to dev's authorized_keys"
@@ -155,7 +197,33 @@ if grep -q 'NEEDS YOU' "$T/rerun.out"; then fail "re-run asked for something"; f
 cmp -s "$HOME/.ssh/config" "$T/ssh-config-before" || fail "re-run changed ~/.ssh/config"
 grep -qF "known_hosts already has the host keys dev trusts" "$T/rerun.out" || fail "re-run did not check known_hosts"
 [[ "$(wc -l <"$HOME/.ssh/known_hosts")" == 4 ]] || fail "re-run added host keys twice"
+grep -qF "already has every host dev has" "$T/rerun.out" || fail "re-run did not check dev's SSH hosts"
 echo "PASS: re-run is a no-op"
+
+# 2b. As on the Vostro: k3s-dr is defined but ubuntu-hp and its key are not.
+# Setup notices and adds just those.
+printf 'Host k3s-dr\n  HostName 192.0.2.127\n' >"$HOME/.ssh/config.k3s-homelab"
+rm "$HOME/.ssh/ubuntu_hp_ed25519" "$HOME/.ssh/ubuntu_hp_ed25519.pub"
+: >"$STATE/calls"
+run '' "$T/vostro.out" --no-readiness || fail "setup without ubuntu-hp exited non-zero"
+grep -qx 'Host ubuntu-hp' "$HOME/.ssh/config.k3s-homelab" || fail "ubuntu-hp not added"
+[[ "$(grep -c '^Host k3s-dr' "$HOME/.ssh/config.k3s-homelab")" == 1 ]] || fail "k3s-dr added twice"
+[[ -e "$HOME/.ssh/ubuntu_hp_ed25519" ]] || fail "ubuntu-hp's key not copied"
+if grep -q 'NEEDS YOU' "$T/vostro.out"; then fail "waited although dev has ubuntu-hp"; fi
+echo "PASS: adds the hosts a laptop is missing"
+
+# 2c. A host added on dev later reaches a set-up laptop on its next run,
+# without a password. dev's own id_ed25519 is never copied, even when this
+# laptop has none.
+printf 'Host newbox\n  HostName 192.0.2.5\n' >>"$SOURCE_HOME/.ssh/config"
+mv "$HOME/.ssh/id_ed25519" "$T/own-key"
+: >"$STATE/calls"
+run '' "$T/newbox.out" --no-readiness || fail "setup with a new host on dev exited non-zero"
+grep -qx 'Host newbox' "$HOME/.ssh/config.k3s-homelab" || fail "new host on dev not added"
+[[ ! -e "$HOME/.ssh/id_ed25519" ]] || fail "dev's own id_ed25519 was copied"
+mv "$T/own-key" "$HOME/.ssh/id_ed25519"
+if grep -q '^ssh-master' "$STATE/calls"; then fail "opened a password connection for a set-up laptop"; fi
+echo "PASS: a host added on dev later reaches the laptop"
 
 # 3. Nobody answers when a key is missing and dev does not have it: stop,
 # say where, exit non-zero.
