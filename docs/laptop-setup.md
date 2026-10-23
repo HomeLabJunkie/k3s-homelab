@@ -31,7 +31,9 @@ Before `bootstrap.sh` runs it offers to give the laptop its own
 `machines/<hostname>/local-only.txt` in the dotfiles, copied from `dev`'s, so
 the Hyprland and Omarchy files atmos rewrites per laptop are not linked into
 the shared repository; it commits and pushes that file once bootstrap has
-linked the git config. It never replaces a file already on
+linked the git config. It then turns on the dotfiles' `dotfiles-sync` timer
+and syncs once, which is what lets the other laptops log in to this one with
+their SSH keys (`laptop-ssh`). It never replaces a file already on
 the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
 `~/.ssh/config`. `--no-copy` waits for you to put the keys in place instead,
 for when no other laptop is left (see

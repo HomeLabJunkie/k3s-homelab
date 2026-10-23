@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: Laptop setup turns on the dotfiles-sync timer
+
+After the Vostro was set up, `ssh omarchy-vostro` from `dev` asked for a
+password: the dotfiles' `bootstrap.sh` links the `dotfiles-sync` timer but
+leaves it off, so the new laptop never ran `laptop-ssh` to trust the other
+laptops' keys. `scripts/setup-laptop.sh` now turns the timer on after
+bootstrap and runs one sync straight away.
+
 ## 2026-10-23: Images that distrust the compromised eMudhra CAs
 
 The private keys of eight eMudhra intermediate CAs were found to be

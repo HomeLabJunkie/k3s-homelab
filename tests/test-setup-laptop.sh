@@ -70,7 +70,7 @@ done
 # be found once a stub is removed, or the script runs it for real.
 SYSBIN="$T/sysbin"
 mkdir -p "$SYSBIN"
-STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl "
+STUBBED=" gh git ssh scp python3 curl kubectl helm argocd kubectx kubens cilium cilium-cli velero trivy k9s kubeconform sops age direnv jq yq argon2 envsubst pacman sudo yay stow hostnamectl systemctl "
 for dir in /usr/local/bin /usr/bin /bin; do
   for f in "$dir"/*; do
     name="${f##*/}"
@@ -80,6 +80,13 @@ for dir in /usr/local/bin /usr/bin /bin; do
 done
 export PATH="$BIN:$SYSBIN"
 stub hostnamectl 'echo newlaptop'
+# Records calls; the dotfiles-sync timer counts as enabled once enabled.
+stub systemctl '
+echo "systemctl $*" >>"$STATE/calls"
+case "$*" in
+  *"is-enabled"*dotfiles-sync.timer*) [[ -e "$STATE/sync-timer-on" ]] ;;
+  *"enable --now dotfiles-sync.timer"*) touch "$STATE/sync-timer-on" ;;
+esac'
 
 run() {
   local input="$1" out="$2"
@@ -164,6 +171,7 @@ if [[ "$1" == clone && "$3" == "$DOTFILES" ]]; then
   mkdir -p "$3"; echo "clone $2" >>"$STATE/calls"
   printf "#!/usr/bin/env bash\necho \"bootstrap \$*\" >>\"\$STATE/calls\"\nprintf \"#!/usr/bin/env bash\\\\nexit 0\\\\n\" >\"\$BIN/helm\"; chmod +x \"\$BIN/helm\"\n" >"$3/bootstrap.sh"
   chmod +x "$3/bootstrap.sh"
+  printf "mkdir -p \"\$HOME/.config/systemd/user\"; touch \"\$HOME/.config/systemd/user/dotfiles-sync.timer\"\n" >>"$3/bootstrap.sh"
   mkdir -p "$3/machines/dev" && printf ".config/hypr/monitors.lua\n.config/omarchy/shell.json\n" >"$3/machines/dev/local-only.txt"
   exit 0
 fi
@@ -190,6 +198,7 @@ bootstrap_at="$(grep -nF 'bootstrap.sh --packages now?' "$T/dotfiles.out" | cut 
 if [[ -z "$created_at" || -z "$bootstrap_at" ]] || (( created_at > bootstrap_at )); then
   fail "local-only.txt must exist before bootstrap.sh links anything"
 fi
+cp "$STATE/calls" "$STATE/calls.first"
 : >"$STATE/calls"
 run '' "$T/dotfiles-again.out" --no-readiness || fail "re-run with dotfiles exited non-zero"
 grep -qF 'the dotfiles already have machines/newlaptop/local-only.txt' "$T/dotfiles-again.out" ||
@@ -197,7 +206,18 @@ grep -qF 'the dotfiles already have machines/newlaptop/local-only.txt' "$T/dotfi
 if grep -q '^git ' "$STATE/calls"; then fail "re-run committed again"; fi
 echo "PASS: gives a new laptop its own local-only.txt in the dotfiles"
 
-# 7. The Cilium CLI is missing (or named cilium-cli): a note, not a wait.
+# 7. Bootstrap linked the dotfiles-sync timer; the first run turned it on and
+# synced once, the re-run left it alone.
+grep -qx 'systemctl --user enable --now dotfiles-sync.timer' "$STATE/calls.first" ||
+  fail "dotfiles-sync timer not turned on"
+grep -qx 'systemctl --user start dotfiles-sync.service' "$STATE/calls.first" ||
+  fail "no first sync after turning the timer on"
+grep -qF 'turned on the dotfiles-sync timer' "$T/dotfiles.out" || fail "timer not reported"
+if grep -q 'enable --now' "$STATE/calls"; then fail "re-run turned the timer on again"; fi
+grep -qF 'the dotfiles-sync timer is already on' "$T/dotfiles-again.out" || fail "re-run did not see the timer on"
+echo "PASS: turns on the dotfiles-sync timer"
+
+# 8. The Cilium CLI is missing (or named cilium-cli): a note, not a wait.
 rm "$BIN/cilium"
 run '' "$T/no-cilium.out" --no-readiness || fail "setup waited for the cilium CLI"
 grep -qF 'NOTE: no cilium or cilium-cli command' "$T/no-cilium.out" || fail "no note about the missing cilium CLI"
