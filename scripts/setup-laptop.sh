@@ -36,7 +36,10 @@ Options:
 It copies from the other laptop, over one SSH connection (its password is
 asked once): the age key, the cluster SSH key and the hosts in ~/.ssh/config,
 the kubeconfig and the iLO login, and adds the host keys it trusts to
-~/.ssh/known_hosts. A file already on this laptop is never replaced. The GitHub login stays this laptop's own: the script offers to run
+~/.ssh/known_hosts. It also adds this laptop's own SSH key
+(~/.ssh/id_ed25519, created if missing) to the other laptop's authorized_keys,
+and publishes it in the dotfiles so every laptop lets it in. A file already
+on this laptop is never replaced. The GitHub login stays this laptop's own: the script offers to run
 `gh auth login` for it.
 
 Environment overrides:
@@ -68,6 +71,7 @@ cleanup() {
   rm -rf -- "$TMP"
 }
 trap cleanup EXIT
+HOST="$(hostnamectl --static 2>/dev/null || uname -n)"
 
 STEP=0
 step() {
@@ -182,6 +186,22 @@ copy_ssh_config() {
   ok "added $FROM's SSH hosts as ~/.ssh/config.k3s-homelab (included from ~/.ssh/config)"
 }
 
+# This laptop's own key, added to $FROM's authorized_keys so it can log in
+# there from now on. The dotfiles hand it to the other laptops (laptop-ssh).
+ensure_laptop_key() {
+  [[ -f "$HOME/.ssh/id_ed25519.pub" ]] && return 0
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  ssh-keygen -q -t ed25519 -N "" -C "${USER:-$(id -un)}@$HOST" -f "$HOME/.ssh/id_ed25519" </dev/null || return 1
+  ok "created ~/.ssh/id_ed25519, this laptop's own SSH key"
+}
+authorize_on_source() {
+  # shellcheck disable=SC2016  # expanded on $FROM, not here
+  source_ssh "$FROM" 'umask 077; mkdir -p ~/.ssh; k=$(cat); grep -qxF "$k" ~/.ssh/authorized_keys 2>/dev/null || printf "%s\n" "$k" >>~/.ssh/authorized_keys' \
+    <"$HOME/.ssh/id_ed25519.pub" || return 1
+  ok "this laptop can now log in to $FROM with ~/.ssh/id_ed25519"
+}
+
 all_keys_present() {
   local entry rel missing=()
   for entry in "${KEY_FILES[@]}"; do
@@ -230,6 +250,8 @@ elif [[ "$COPY_KEYS" == true ]]; then
 it needs one. If $FROM cannot be reached by that name, run the script again
 with --from user@address, or allow password login on $FROM." \
     connect_source
+  { ensure_laptop_key && authorize_on_source; } ||
+    echo "WARNING: could not add this laptop's SSH key to $FROM's ~/.ssh/authorized_keys"
   for entry in "${KEY_FILES[@]}"; do
     read -r rel mode need_it <<<"$entry"
     copy_from_source "$rel" "$mode" ||
@@ -330,7 +352,6 @@ fi
 # atmos would then edit every laptop's copy. It must exist before bootstrap.sh
 # runs, so create it here, and publish it once bootstrap has linked the git
 # config that a commit needs.
-HOST="$(hostnamectl --static 2>/dev/null || uname -n)"
 MACHINE_DIR="machines/$HOST"
 NEW_MACHINE_DIR=false
 if [[ -d "$DOTFILES/machines" && ! -e "$DOTFILES/$MACHINE_DIR/local-only.txt" ]]; then
@@ -363,6 +384,30 @@ if [[ "$NEW_MACHINE_DIR" == true ]]; then
     ok "published $MACHINE_DIR/local-only.txt to the dotfiles repository"
   else
     echo "WARNING: could not publish $MACHINE_DIR/local-only.txt; run: dotfiles-sync push $MACHINE_DIR/local-only.txt"
+  fi
+fi
+
+# The laptops log in to each other with the public keys each one publishes in
+# the dotfiles' $MACHINE_DIR/ssh/. laptop-ssh publishes this laptop's and lets
+# the others' in; dotfiles-sync repeats it on every laptop every 15 minutes,
+# so they let this one in once its keys are pushed.
+LAPTOP_SSH="$DOTFILES/shell/.local/bin/laptop-ssh"
+if [[ -x "$LAPTOP_SSH" ]]; then
+  if ! systemctl is-enabled --quiet sshd 2>/dev/null &&
+     yes_no "sshd is off, so the other laptops cannot log in to this one. Enable and start it now?"; then
+    sudo systemctl enable --now sshd || echo "WARNING: could not start sshd"
+  fi
+  "$LAPTOP_SSH" || echo "WARNING: laptop-ssh failed; run it again: $LAPTOP_SSH"
+  if [[ -n "$(git -C "$DOTFILES" status --porcelain -- "$MACHINE_DIR/ssh" 2>/dev/null)" ]]; then
+    if git -C "$DOTFILES" add -- "$MACHINE_DIR/ssh" &&
+       git -C "$DOTFILES" commit -q -m "$MACHINE_DIR: publish this laptop's SSH keys, so the other laptops let it in" &&
+       git -C "$DOTFILES" push -q; then
+      ok "published $MACHINE_DIR/ssh; the other laptops let this one in within 15 minutes"
+    else
+      echo "WARNING: could not publish $MACHINE_DIR/ssh; run: dotfiles-sync push"
+    fi
+  else
+    ok "the dotfiles already have this laptop's SSH keys"
   fi
 fi
 

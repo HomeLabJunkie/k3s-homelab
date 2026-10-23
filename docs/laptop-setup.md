@@ -31,12 +31,19 @@ Before `bootstrap.sh` runs it offers to give the laptop its own
 `machines/<hostname>/local-only.txt` in the dotfiles, copied from `dev`'s, so
 the Hyprland and Omarchy files atmos rewrites per laptop are not linked into
 the shared repository; it commits and pushes that file once bootstrap has
-linked the git config. It then turns on the dotfiles' `dotfiles-sync` timer
-and syncs once, which is what lets the other laptops log in to this one with
-their SSH keys (`laptop-ssh`). After the private files arrive it checks that
-`sops` can decrypt `.secrets.enc`; if the laptop already had a different age
-key, it shows which key the file needs and offers to replace this laptop's
-with `dev`'s, keeping the old one as `keys.txt.bak`. It never replaces a file already on
+linked the git config. Over its SSH connection to `dev` it adds the laptop's
+own SSH key (`~/.ssh/id_ed25519`, created if missing) to `dev`'s
+`authorized_keys`. After `bootstrap.sh` it offers to start `sshd`, then runs
+the dotfiles' `laptop-ssh`, which publishes the laptop's public keys as
+`machines/<hostname>/ssh/` and lets the other laptops' keys in; it pushes that
+folder, and within 15 minutes every laptop's `dotfiles-sync` lets this one in,
+so `ssh dev`, `ssh omarchy-t480` and so on work in both directions (see the
+dotfiles README, "SSH between laptops"). It then turns on this laptop's own
+`dotfiles-sync` timer and syncs once, so it keeps doing the same. After the
+private files arrive it checks that `sops` can decrypt `.secrets.enc`; if the
+laptop already had a different age key, it shows which key the file needs and
+offers to replace this laptop's with `dev`'s, keeping the old one as
+`keys.txt.bak`. It never replaces a file already on
 the laptop: `dev`'s SSH hosts go in `~/.ssh/config.k3s-homelab`, included from
 `~/.ssh/config`, and the host keys `dev` trusts (the nodes, `k3s-dr`,
 `ubuntu-hp`) are added to `~/.ssh/known_hosts` without changing the lines
