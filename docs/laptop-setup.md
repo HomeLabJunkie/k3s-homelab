@@ -44,14 +44,17 @@ private files arrive it checks that `sops` can decrypt `.secrets.enc`; if the
 laptop already had a different age key, it shows which key the file needs and
 offers to replace this laptop's with `dev`'s, keeping the old one as
 `keys.txt.bak`. It never replaces a file already on
-the laptop. Every host in `dev`'s `~/.ssh/config` that this laptop does not
-define yet goes in `~/.ssh/config.k3s-homelab`, included from `~/.ssh/config`,
-with the key it logs in with (such as `~/.ssh/ubuntu_hp_ed25519`), so the
-laptop can `ssh` to every machine `dev` can. `dev`'s `Host *` and `Match`
-defaults, its own `~/.ssh/id_*` key and its entries for the laptops (`dev`,
-this laptop, any `*.local` name or laptop in the dotfiles' `machines/`) are
-not copied: the laptops come from the dotfiles' `config.laptops`. Before
-adding a host it keeps the file as it was in `config.k3s-homelab.bak`. The host keys `dev` trusts (the nodes, `k3s-dr`,
+the laptop, except one: `dev`'s SSH config is the source of truth for the
+machines, so `~/.ssh/config.k3s-homelab` is rewritten on every run to hold
+exactly the hosts in `dev`'s `~/.ssh/config`, with the keys they log in with
+(such as `~/.ssh/ubuntu_hp_ed25519`). It is included at the top of
+`~/.ssh/config`, so it wins over an older entry for the same host there; the
+previous file is kept as `config.k3s-homelab.bak`. To change a machine's
+address, change it on `dev` and re-run the setup on each laptop. `dev`'s
+`Host *` and `Match` defaults, its `github.com` entry, its own `~/.ssh/id_*`
+key and its entries for the laptops (`dev`, this laptop, any `*.local` name or
+laptop in the dotfiles' `machines/`) are not copied: the laptops come from the
+dotfiles' `config.laptops`. The host keys `dev` trusts (the nodes, `k3s-dr`,
 `ubuntu-hp`) are added to `~/.ssh/known_hosts` without changing the lines
 already there. The scripts log in to those hosts with `BatchMode`, which
 refuses a host it has never seen, so without them the deploy preflight, the

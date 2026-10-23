@@ -6,6 +6,20 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-23: dev's SSH config is the source of truth; DR power-on starts the VM
+
+The Vostro's readiness check hung at "Waiting for k3s-dr to answer on SSH"
+with the server already on: `ssh k3s-dr` gave "No route to host" for
+`192.168.1.126`, and the script hid that and waited 10 minutes.
+
+- `scripts/setup-laptop.sh` rewrites `~/.ssh/config.k3s-homelab` on every run
+  to match `dev`'s hosts, instead of skipping hosts the laptop already had,
+  and moves its `Include` above any `Host` line. An old address on a laptop is
+  replaced; the previous file is kept as `config.k3s-homelab.bak`.
+- `recovery/dr-host-power.sh on` starts the DR host's VM when the server is
+  already on (`DR_VM_NAME`, or every stopped autostart VM), prints ssh's
+  error after a minute, and shows it again on timeout.
+
 ## 2026-10-23: Laptop setup leaves the laptops' SSH entries to the dotfiles
 
 Copying `dev`'s SSH hosts could also copy an entry `dev` has for itself or

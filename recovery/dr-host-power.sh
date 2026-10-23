@@ -19,12 +19,14 @@ fi
 DR_HOST="${DR_HOST:-k3s-dr}"
 DR_HYPERVISOR_HOST="${DR_HYPERVISOR_HOST:-}"
 DR_ILO_HOST="${DR_ILO_HOST:-}"
+DR_VM_NAME="${DR_VM_NAME:-}"
 DR_ILO_CREDENTIALS="${DR_ILO_CREDENTIALS:-$HOME/.config/ilo-ubuntu-hp}"
 SECRETS_FILE="${SECRETS_FILE:-$ROOT_DIR/.secrets.enc}"
 ILO_USERNAME=""
 ILO_PASSWORD=""
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-600}"
 SHUTDOWN_TIMEOUT_SECONDS="${SHUTDOWN_TIMEOUT_SECONDS:-300}"
+WAIT_INTERVAL_SECONDS="${WAIT_INTERVAL_SECONDS:-10}"
 SSH_OPTIONS=(-o BatchMode=yes -o ConnectTimeout=6)
 
 usage() {
@@ -43,6 +45,9 @@ Settings, from config/cluster.env or the environment:
   DR_HYPERVISOR_HOST    SSH alias of the server that runs it. Needs
                         passwordless sudo there.
   DR_ILO_HOST           Address of the server's iLO.
+  DR_VM_NAME            The DR host's VM on that server, started by "on"
+                        when the server is already on. Without it, "on"
+                        starts the server's stopped autostart VMs.
   DR_ILO_CREDENTIALS    File with the iLO username on line 1 and the
                         password on line 2, mode 0600.
                         Default: ~/.config/ilo-ubuntu-hp
@@ -61,6 +66,7 @@ require_settings() {
   [[ -n "$DR_ILO_HOST" ]] || fail "DR_ILO_HOST is not set"
   [[ -n "$DR_HYPERVISOR_HOST" ]] || fail "DR_HYPERVISOR_HOST is not set"
   [[ "$DR_ILO_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || fail "unsafe DR_ILO_HOST value"
+  [[ -z "$DR_VM_NAME" || "$DR_VM_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "unsafe DR_VM_NAME value"
   if [[ -e "$DR_ILO_CREDENTIALS" ]]; then
     [[ -r "$DR_ILO_CREDENTIALS" ]] || fail "iLO credentials file is not readable: $DR_ILO_CREDENTIALS"
     [[ "$(stat -c %a "$DR_ILO_CREDENTIALS")" == 600 ]] ||
@@ -109,6 +115,31 @@ dr_host_answers() {
   ssh "${SSH_OPTIONS[@]}" "$DR_HOST" true >/dev/null 2>&1
 }
 
+# What ssh says when the DR host does not answer, such as "No route to host".
+dr_host_error() {
+  ssh "${SSH_OPTIONS[@]}" "$DR_HOST" true 2>&1 >/dev/null | tail -n 1
+}
+
+# A server that was already on may have the DR host's VM stopped: start it,
+# or every stopped autostart VM, as a boot would.
+start_dr_vm() {
+  # shellcheck disable=SC2029  # the checked VM name is meant to expand here
+  ssh "${SSH_OPTIONS[@]}" "$DR_HYPERVISOR_HOST" "sudo -n bash -s -- $DR_VM_NAME" <<'REMOTE'
+set -Eeuo pipefail
+if (( $# == 1 )); then
+  domains=("$1")
+else
+  mapfile -t domains < <(virsh list --name --inactive --autostart | sed '/^$/d')
+fi
+for domain in "${domains[@]}"; do
+  if [[ "$(virsh domstate "$domain")" != running ]]; then
+    echo "==> Starting VM $domain..."
+    virsh start "$domain" >/dev/null
+  fi
+done
+REMOTE
+}
+
 wait_for() {
   local description="$1" timeout="$2"
   shift 2
@@ -136,6 +167,10 @@ cmd_status() {
 cmd_on() {
   if [[ "$(power_state)" == On ]]; then
     echo "Server is already on."
+    if ! dr_host_answers; then
+      echo "$DR_HOST does not answer: $(dr_host_error)"
+      start_dr_vm || echo "WARNING: could not start the DR host's VM on $DR_HYPERVISOR_HOST"
+    fi
   else
     echo "==> Powering the server on..."
     [[ "$(ilo -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
@@ -144,7 +179,18 @@ cmd_on() {
       fail "the iLO refused the power-on request"
   fi
   echo "==> Waiting for $DR_HOST to answer on SSH..."
-  wait_for "$DR_HOST" "$BOOT_TIMEOUT_SECONDS" dr_host_answers
+  local waited=0
+  until dr_host_answers; do
+    if (( waited >= BOOT_TIMEOUT_SECONDS )); then
+      echo "ssh $DR_HOST: $(dr_host_error)" >&2
+      echo "Check its address with: ssh -G $DR_HOST | grep '^hostname'" >&2
+      fail "timed out after ${BOOT_TIMEOUT_SECONDS}s waiting for $DR_HOST"
+    fi
+    # Say why once, so a wrong address or key does not look like a slow boot.
+    (( waited == 60 )) && echo "    still waiting; ssh says: $(dr_host_error)"
+    sleep "$WAIT_INTERVAL_SECONDS"
+    waited=$((waited + WAIT_INTERVAL_SECONDS))
+  done
   echo "DR host is up."
 }
 
