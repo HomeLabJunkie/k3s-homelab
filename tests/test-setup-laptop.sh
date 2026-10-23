@@ -43,6 +43,10 @@ Host personal
   HostName 192.0.2.99
 Host gitbox
   IdentityFile ~/.ssh/id_ed25519
+Host dev
+  HostName localhost
+Host omarchy-t480 omarchy-t480.local
+  IdentityFile ~/.ssh/t480_ed25519
 Match host other
   User someone
 Host laptop-*
@@ -51,6 +55,7 @@ EOF
 echo HP-PRIVATE-KEY >"$SOURCE_HOME/.ssh/ubuntu_hp_ed25519"
 echo HP-PUBLIC-KEY >"$SOURCE_HOME/.ssh/ubuntu_hp_ed25519.pub"
 echo DEV-OWN-KEY >"$SOURCE_HOME/.ssh/id_ed25519"
+echo T480-KEY >"$SOURCE_HOME/.ssh/t480_ed25519"
 echo KUBECONFIG >"$SOURCE_HOME/.kube/config"
 # No iLO file on the source: an optional copy.
 printf '# comment\ngithub.com ssh-ed25519 GITHUBKEY\nk3s-dr ssh-ed25519 DRKEY\n192.0.2.11 ssh-ed25519 NODEKEY\n' \
@@ -165,6 +170,7 @@ Host gitbox
 [[ "$(cat "$HOME/.ssh/ubuntu_hp_ed25519")" == HP-PRIVATE-KEY && "$(mode "$HOME/.ssh/ubuntu_hp_ed25519")" == 600 &&
    "$(mode "$HOME/.ssh/ubuntu_hp_ed25519.pub")" == 644 ]] || fail "ubuntu-hp's key not copied"
 [[ "$(cat "$HOME/.ssh/id_ed25519")" != DEV-OWN-KEY ]] || fail "dev's own id_ed25519 was copied"
+[[ ! -e "$HOME/.ssh/t480_ed25519" ]] || fail "a laptop's entry or key was copied from dev"
 grep -qF 'added 3 SSH host(s) from dev' "$T/fresh.out" || fail "SSH host merge not reported"
 grep -qF 'SKIP: dev has no ~/.config/ilo-ubuntu-hp' "$T/fresh.out" || fail "optional iLO file not reported"
 [[ "$(mode "$HOME/.ssh/id_ed25519")" == 600 ]] || fail "this laptop's own SSH key not created"
@@ -207,6 +213,8 @@ rm "$HOME/.ssh/ubuntu_hp_ed25519" "$HOME/.ssh/ubuntu_hp_ed25519.pub"
 : >"$STATE/calls"
 run '' "$T/vostro.out" --no-readiness || fail "setup without ubuntu-hp exited non-zero"
 grep -qx 'Host ubuntu-hp' "$HOME/.ssh/config.k3s-homelab" || fail "ubuntu-hp not added"
+[[ "$(cat "$HOME/.ssh/config.k3s-homelab.bak")" == "Host k3s-dr
+  HostName 192.0.2.127" ]] || fail "config.k3s-homelab not backed up before adding to it"
 [[ "$(grep -c '^Host k3s-dr' "$HOME/.ssh/config.k3s-homelab")" == 1 ]] || fail "k3s-dr added twice"
 [[ -e "$HOME/.ssh/ubuntu_hp_ed25519" ]] || fail "ubuntu-hp's key not copied"
 if grep -q 'NEEDS YOU' "$T/vostro.out"; then fail "waited although dev has ubuntu-hp"; fi

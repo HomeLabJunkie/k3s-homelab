@@ -48,7 +48,10 @@ the laptop. Every host in `dev`'s `~/.ssh/config` that this laptop does not
 define yet goes in `~/.ssh/config.k3s-homelab`, included from `~/.ssh/config`,
 with the key it logs in with (such as `~/.ssh/ubuntu_hp_ed25519`), so the
 laptop can `ssh` to every machine `dev` can. `dev`'s `Host *` and `Match`
-defaults and its own `~/.ssh/id_*` key are not copied. The host keys `dev` trusts (the nodes, `k3s-dr`,
+defaults, its own `~/.ssh/id_*` key and its entries for the laptops (`dev`,
+this laptop, any `*.local` name or laptop in the dotfiles' `machines/`) are
+not copied: the laptops come from the dotfiles' `config.laptops`. Before
+adding a host it keeps the file as it was in `config.k3s-homelab.bak`. The host keys `dev` trusts (the nodes, `k3s-dr`,
 `ubuntu-hp`) are added to `~/.ssh/known_hosts` without changing the lines
 already there. The scripts log in to those hosts with `BatchMode`, which
 refuses a host it has never seen, so without them the deploy preflight, the

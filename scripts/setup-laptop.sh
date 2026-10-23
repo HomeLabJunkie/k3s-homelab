@@ -230,11 +230,25 @@ identity_rel() {
 # Every host $FROM reaches by name, so this laptop reaches it too: the six
 # nodes, k3s-dr, ubuntu-hp, the other machines. A host this laptop already
 # defines is left as it is; each other one is added to
-# ~/.ssh/config.k3s-homelab, with the key it logs in with. Wildcard blocks
-# (Host *) and Match blocks are $FROM's own defaults and are not copied.
+# ~/.ssh/config.k3s-homelab, with the key it logs in with, after keeping the
+# file as it was in config.k3s-homelab.bak. Wildcard blocks (Host *) and
+# Match blocks are $FROM's own defaults, and the laptops' entries belong to
+# the dotfiles; neither is copied.
 # It runs on every setup, so a host added on $FROM later arrives here too.
+# The laptops: $FROM, this one and each one in the dotfiles' machines/. Their
+# entries come from the dotfiles' config.laptops; a copy of $FROM's would be
+# read first and win over it.
+laptop_names() {
+  local d
+  printf '%s\n' "${FROM##*@}" "$HOST"
+  for d in "$DOTFILES"/machines/*/; do
+    [[ -d "$d" ]] && basename "$d"
+  done
+  return 0
+}
+
 merge_ssh_hosts() {
-  local block names name rel added=0 keys=0 local_hosts copy_it
+  local block names name rel added=0 keys=0 local_hosts laptops copy_it
   fetch_from_source .ssh/config "$TMP/ssh-config" || return 1
   rm -rf "$TMP/ssh-hosts"
   mkdir -p "$HOME/.ssh" "$TMP/ssh-hosts"
@@ -246,15 +260,21 @@ merge_ssh_hosts() {
     n && keep { print > sprintf("%s/%04d", dir, n) }
   ' "$TMP/ssh-config"
   local_hosts="$(local_ssh_hosts)"
+  laptops="$(laptop_names)"
   for block in "$TMP/ssh-hosts"/*; do
     [[ -f "$block" ]] || continue
     read -r _ names <"$block"
     [[ "$names" == *[*?!]* ]] && continue
     copy_it=true
     for name in $names; do
+      if [[ "$name" == *.local ]] || grep -qxF "$name" <<<"$laptops"; then
+        continue 2
+      fi
       grep -qxF "$name" <<<"$local_hosts" && copy_it=false
     done
     if [[ "$copy_it" == true ]]; then
+      # One backup per run, of the file as it was before this run added to it.
+      (( added == 0 )) && [[ -s "$LOCAL_SSH" ]] && cp -p "$LOCAL_SSH" "$LOCAL_SSH.bak"
       [[ -s "$LOCAL_SSH" ]] && echo >>"$LOCAL_SSH"
       cat "$block" >>"$LOCAL_SSH"
       chmod 600 "$LOCAL_SSH"
