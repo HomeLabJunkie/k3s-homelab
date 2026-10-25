@@ -45,7 +45,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: trilium
-          image: triliumnext/trilium:v0.106.0
+          image: triliumnext/trilium:v0.106.1
           imagePullPolicy: IfNotPresent
           # The image's own start script runs as root to chown the data and
           # then switches to the node user. Starting the server directly as
