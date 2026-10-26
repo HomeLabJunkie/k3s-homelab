@@ -13,7 +13,7 @@ spec:
     # The chart, at a pinned version...
     - repoURL: https://kyverno.github.io/kyverno/
       chart: kyverno-policies
-      targetRevision: 3.9.1
+      targetRevision: 3.9.2
       helm:
         releaseName: kyverno-policies
         valueFiles:
