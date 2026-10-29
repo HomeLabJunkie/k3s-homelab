@@ -6,6 +6,12 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-29: Monitoring volumes keep two Longhorn replicas
+
+Prometheus, Loki and Alertmanager now run two replicas instead of three, set
+on the Longhorn volumes (see [Platform](platform.md#longhorn-storage)). Their
+data can be rebuilt, and each node reboot then has less to rebuild.
+
 ## 2026-10-29: Longhorn's system backup no longer snapshots every volume
 
 `system-backup-nightly` ran with `volume-backup-policy: if-not-present`, which

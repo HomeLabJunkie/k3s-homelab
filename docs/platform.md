@@ -225,6 +225,17 @@ The deployment process:
 
 Persistent application data is intentionally stored on Longhorn so it can be protected through Longhorn backup and restored independently during DR.
 
+Volumes get three replicas, except the monitoring data that can be rebuilt
+from scratch: Prometheus, Loki and Alertmanager run two (set 2026-10-29 by
+patching each Longhorn volume, since their StatefulSets' storage class cannot
+change in place). Fewer replicas means less to rebuild after each node reboot.
+A recreated volume comes back with three; set it again with:
+
+```bash
+kubectl -n longhorn-system patch volumes.longhorn.io <pvc-...> --type merge \
+  -p '{"spec":{"numberOfReplicas":2}}'
+```
+
 ## Argo CD
 
 Argo CD deploys everything except K3s, Cilium, kube-vip, MetalLB and
