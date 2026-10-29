@@ -178,7 +178,7 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'timed out'):
                 os_update.wait_health(records(), 0)
 
-    def storage_health(self, *volume_states):
+    def storage_health(self, *volume_states, engines=()):
         nodes = [node('worker1'), node('worker2'), node('master1', True)]
         pods = [dict(node(n), spec={'nodeName': n}) for n in ('worker1', 'worker2', 'master1')]
         for pod in pods:
@@ -187,13 +187,39 @@ class UpdateTests(unittest.TestCase):
                    for i, (s, r) in enumerate(volume_states)]
         empty = json.dumps({'items': []})
         responses = ['ok', json.dumps({'items': nodes}), json.dumps({'items': pods}),
-                     json.dumps({'items': [pods[-1]]}), json.dumps({'items': volumes}), empty, empty]
+                     json.dumps({'items': [pods[-1]]}), json.dumps({'items': volumes})]
+        if any(not os_update.longhorn_volume_ok(v) for v in volumes):
+            responses.append(json.dumps({'items': list(engines)}))
+        responses += [empty, empty]
         with patch.object(os_update, 'kube', side_effect=responses):
             os_update.health(records())
 
     def test_degraded_longhorn_blocks_progress(self):
         with self.assertRaisesRegex(RuntimeError, 'Longhorn'):
             self.storage_health(('attached', 'degraded'))
+
+    def test_degraded_longhorn_shows_rebuild_progress(self):
+        engine = {'spec': {'volumeName': 'vol0'}, 'status': {'rebuildStatus': {
+            'tcp://a': {'progress': 40, 'state': 'in_progress'}, 'tcp://b': {'progress': 70, 'isRebuilding': True}}}}
+        with self.assertRaisesRegex(RuntimeError, r'vol0 \(attached/degraded, rebuilding 40%\)'):
+            self.storage_health(('attached', 'degraded'), engines=[engine])
+
+    def test_health_wait_prints_on_change_or_each_minute(self):
+        clock = [0]
+        errors = [RuntimeError('vol0 (attached/degraded, rebuilding 10%)'),
+                  RuntimeError('vol0 (attached/degraded, rebuilding 30%)')]
+        errors += [RuntimeError('cilium is not healthy')] * 7 + [None]
+        with patch.object(os_update, 'health', side_effect=errors), \
+             patch.object(os_update.time, 'monotonic', side_effect=lambda: clock[0]), \
+             patch.object(os_update.time, 'sleep', side_effect=lambda s: clock.__setitem__(0, clock[0] + s)), \
+             patch('builtins.print') as printed:
+            os_update.wait_health(records(), 3600)
+        lines = [c.args[0] for c in printed.call_args_list]
+        self.assertEqual(len(lines), 4, lines)
+        self.assertIn('(0m00s): vol0', lines[0])
+        self.assertIn('(0m20s): cilium', lines[1])
+        self.assertIn('(1m20s): cilium', lines[2])
+        self.assertIn('Recovered after 1m30s', lines[3])
 
     def test_detached_longhorn_volume_does_not_block(self):
         self.storage_health(('attached', 'healthy'), ('detached', 'unknown'))
