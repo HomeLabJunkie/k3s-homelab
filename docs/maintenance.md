@@ -152,6 +152,9 @@ package), reboots only if `/var/run/reboot-required` exists, waits for K3s,
 the nodes, Cilium and kube-vip, uncordons it, and waits for Longhorn and the
 system controllers before the next node. Each recovery wait allows an hour
 (`--health-timeout SECONDS`); the reboot allows 15 minutes.
+While it waits it prints the clock time, how long the wait has taken and the
+reason, once a minute or when the reason changes, with each rebuilding Longhorn
+volume's progress; it prints `Recovered after ...` when the wait ends.
 
 It stays within the current release: no distribution upgrade and no K3s
 version change. On Ubuntu it reports whether a new release is available

@@ -83,6 +83,22 @@ def longhorn_volume_ok(volume):
             (state == 'detached' and robustness != 'faulted'))
 
 
+def rebuild_progress(names):
+    # Lowest rebuild percentage per volume; progress only, so errors are ignored.
+    try:
+        engines = json.loads(kube('-n', 'longhorn-system', 'get', 'engines.longhorn.io', '-o', 'json'))['items']
+    except (RuntimeError, ValueError, KeyError):
+        return {}
+    result = {}
+    for engine in engines:
+        name = engine.get('spec', {}).get('volumeName')
+        progress = [s.get('progress', 0) for s in (engine.get('status', {}).get('rebuildStatus') or {}).values()
+                    if s.get('isRebuilding') or s.get('state') == 'in_progress']
+        if name in names and progress:
+            result[name] = min(progress)
+    return result
+
+
 def health(records, storage=True):
     if kube('get', '--raw=/readyz') != 'ok':
         raise RuntimeError('Kubernetes API /readyz is not ok')
@@ -102,9 +118,12 @@ def health(records, storage=True):
                 raise RuntimeError(f'{selector} is not healthy on {name}')
     if storage:
         volumes = json.loads(kube('-n', 'longhorn-system', 'get', 'volumes.longhorn.io', '-o', 'json'))['items']
-        bad = [f"{v['metadata']['name']} ({v.get('status', {}).get('state')}/{v.get('status', {}).get('robustness')})"
-               for v in volumes if not longhorn_volume_ok(v)]
+        bad = [v for v in volumes if not longhorn_volume_ok(v)]
         if bad:
+            progress = rebuild_progress({v['metadata']['name'] for v in bad})
+            bad = [f"{v['metadata']['name']} ({v.get('status', {}).get('state')}/{v.get('status', {}).get('robustness')}"
+                   f"{f', rebuilding {progress[n]}%' if (n := v['metadata']['name']) in progress else ''})"
+                   for v in bad]
             raise RuntimeError(f'Longhorn volumes unhealthy, faulted, or transitioning: {", ".join(bad)}')
         for namespace in ('kube-system', 'longhorn-system'):
             controllers = json.loads(kube('-n', namespace, 'get', 'deployments,daemonsets,statefulsets', '-o', 'json'))['items']
@@ -116,16 +135,30 @@ def health(records, storage=True):
                     raise RuntimeError(f'{namespace}/{obj["metadata"]["name"]} has not recovered')
 
 
+def elapsed(seconds):
+    return f'{int(seconds) // 60}m{int(seconds) % 60:02d}s'
+
+
 def wait_health(records, timeout, storage=True):
-    deadline = time.monotonic() + timeout
+    # Checks every 10 seconds but prints only when the reason changes or once a
+    # minute, with the clock time and how long this wait has taken.
+    start = time.monotonic()
+    deadline = start + timeout
+    last_reason, last_print = None, None
     while True:
         try:
             health(records, storage)
+            if last_reason is not None:
+                print(f'{time.strftime("%H:%M:%S")} Recovered after {elapsed(time.monotonic() - start)}', flush=True)
             return
         except (RuntimeError, ValueError, KeyError) as exc:
-            if time.monotonic() >= deadline:
+            now = time.monotonic()
+            if now >= deadline:
                 raise RuntimeError(f'Health check timed out: {exc}') from exc
-            print(f'Waiting for recovery: {exc}', flush=True)
+            reason = re.sub(r', rebuilding \d+%', '', str(exc))
+            if reason != last_reason or now - last_print >= 60:
+                print(f'{time.strftime("%H:%M:%S")} Waiting for recovery ({elapsed(now - start)}): {exc}', flush=True)
+                last_reason, last_print = reason, now
             time.sleep(min(10, max(0, deadline - time.monotonic())))
 
 
