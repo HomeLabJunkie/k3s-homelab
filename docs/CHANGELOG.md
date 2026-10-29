@@ -6,6 +6,17 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-10-29: Longhorn's system backup no longer snapshots every volume
+
+`system-backup-nightly` ran with `volume-backup-policy: if-not-present`, which
+took a `system-backup-*` snapshot and backup of every volume each night.
+Nothing deleted those snapshots: by 2026-10-29 each volume had 23-73 of them,
+603 GB per replica on the 50 GB Prometheus volume, and they slowed replica
+rebuilds after node reboots (about 65 of the 100 minutes of that day's
+rolling OS update). The job now uses `disabled` and saves Longhorn's settings
+only; `backup-nightly` still backs up every volume. The old snapshots were
+deleted by hand; their backups on the NAS were left alone.
+
 ## 2026-10-23: dev's SSH config is the source of truth; DR power-on starts the VM
 
 The Vostro's readiness check hung at "Waiting for k3s-dr to answer on SSH"
