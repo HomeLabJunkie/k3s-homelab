@@ -36,5 +36,8 @@ spec:
   task: system-backup
   retain: 7
   concurrency: 1
+  # Settings only. if-not-present also snapshotted and backed up every volume
+  # each night, and nothing ever deleted those snapshots (603 GB on the
+  # Prometheus volume by 2026-10-29). backup-nightly already backs up volumes.
   parameters:
-    volume-backup-policy: if-not-present
+    volume-backup-policy: disabled

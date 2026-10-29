@@ -17,7 +17,8 @@ Three independent layers. A complete recovery point needs all three fresh.
 | **Cluster recovery bundle** | This repository with `.secrets.enc` and `config/cluster.env`, an etcd snapshot, and an export of the cluster's state and Longhorn's records | NAS, NFS export `CLUSTER_BACKUP_EXPORT`, `cluster/<laptop>/<time>`, newest at `cluster/latest` | 04:30 Chicago daily, 14 kept |
 
 Longhorn also takes a local snapshot of every volume every six hours (12
-kept) and a nightly system backup of its own settings (7 kept). Applications
+kept) and a nightly system backup of its own settings (7 kept; it takes no
+volume snapshots or backups, `volume-backup-policy: disabled`). Applications
 themselves are not backed up: Argo CD redeploys them from git.
 
 Longhorn's nightly job covers every volume in its `default` group, which a
