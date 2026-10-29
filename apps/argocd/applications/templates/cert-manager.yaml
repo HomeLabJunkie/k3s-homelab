@@ -13,7 +13,7 @@ spec:
     # The chart, at a pinned version...
     - repoURL: https://charts.jetstack.io
       chart: cert-manager
-      targetRevision: v1.21.2
+      targetRevision: v1.21.3
       helm:
         releaseName: cert-manager
         valueFiles:
