@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-01: Vaultwarden 1.37.5
+
+Vaultwarden `1.37.4` to `1.37.5`
+([release notes](https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.5)):
+security release for two Medium advisories (website icons, emergency access),
+bundled web vault 2026.10.1, and stricter startup validation of numeric and
+cron settings. None of the newly validated options are set here, so the
+defaults apply. The standalone unraid and deployrr instances were upgraded the
+same day.
+
 ## 2026-11-01: cloudflared 2026.10.7
 
 cloudflared `2026.10.3` to `2026.10.7`
