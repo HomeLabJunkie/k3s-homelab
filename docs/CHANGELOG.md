@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-01: cloudflared 2026.10.7
+
+cloudflared `2026.10.3` to `2026.10.7`
+([release notes](https://github.com/cloudflare/cloudflared/blob/master/RELEASE_NOTES)):
+dependency bumps for three advisories (go-jose, go-chi, and debug endpoints on
+the metrics server now allowlisted), autoupdate disabled in container images,
+and a fix for an HTTP/2 concurrent-stream regression from Go 1.27.
+
 ## 2026-10-29: Monitoring volumes keep two Longhorn replicas
 
 Prometheus, Loki and Alertmanager now run two replicas instead of three, set
