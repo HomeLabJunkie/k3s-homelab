@@ -210,10 +210,13 @@ recovery/restore.sh --plan vaultwarden     # shows the latest backup
 ```
 
 **Not through Argo CD:** Longhorn's version is in `deploy.sh` and held at
-1.12.1 until 1.13.1. K3s and Cilium are upgraded with Ansible; see
+1.12.1 until 1.13.1. K3s is upgraded with Ansible; see
 [Maintenance](maintenance.md). Renovate opens a pull request, labelled
-`k3s`, when K3s has a new release. Merging it only changes `k3s_version`;
-run `./maintain-cluster.sh --apply` afterwards to roll it out.
+`k3s`, when K3s has a new 1.36 release (1.37 waits for Cilium 1.21).
+Merging it only changes `k3s_version`; run `./maintain-cluster.sh --apply`
+afterwards to roll it out. Cilium pull requests, labelled `cilium`, only
+change `cilium_tag`; upgrade Cilium with `helm upgrade` as in
+[Observability](observability.md).
 
 ## Undo a bad change
 

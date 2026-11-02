@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-02: K3s held at 1.36; Renovate watches Cilium
+
+K3s 1.37 is not offered yet: Cilium 1.20 is tested with Kubernetes 1.33 to
+1.36, and 1.37 support arrives in Cilium 1.21 (pre-release). Longhorn 1.12.1
+(minimum Kubernetes 1.25) and kube-vip v1.2.4 are not blockers. Renovate's K3s
+rule now allows only 1.36.x, so patch releases still arrive. Renovate also
+watches `cilium_tag` (labelled `cilium`); merging only records the version and
+the upgrade stays a `helm upgrade --reuse-values` by hand. Upgrade Cilium to
+1.21 first, then lift the K3s cap.
+
 ## 2026-11-02: Argo CD chart 10.11.6, image pin removed
 
 argo-cd chart `10.10.5` to `10.11.6`. Chart 10.11.1 and later ship Argo CD
