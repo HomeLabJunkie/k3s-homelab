@@ -34,7 +34,7 @@ spec:
       initContainers:
       # First checkout, so nginx never starts with an empty directory
       - name: git-sync-init
-        image: registry.k8s.io/git-sync/git-sync:v4.7.1
+        image: registry.k8s.io/git-sync/git-sync:v4.8.0
         args:
         - --repo=git@github.com:HomeLabJunkie/jeffriffle.com.git
         - --ref=deploy
@@ -44,6 +44,9 @@ spec:
         - --ssh-key-file=/etc/git-secret/ssh
         - --ssh-known-hosts-file=/etc/git-known-hosts/known_hosts
         - --one-time
+        # The /git emptyDir belongs to root (group 65533 via fsGroup), so git
+        # 2.47 in git-sync v4.8.0 calls it "dubious ownership" and stops.
+        - --git-config=safe.directory:/git
         volumeMounts: &gitsync-mounts
         - name: git
           mountPath: /git
@@ -69,7 +72,7 @@ spec:
             memory: 128Mi
       # Native sidecar: keeps /git/current in step with the deploy branch
       - name: git-sync
-        image: registry.k8s.io/git-sync/git-sync:v4.7.1
+        image: registry.k8s.io/git-sync/git-sync:v4.8.0
         restartPolicy: Always
         args:
         - --repo=git@github.com:HomeLabJunkie/jeffriffle.com.git
@@ -80,6 +83,7 @@ spec:
         - --ssh-key-file=/etc/git-secret/ssh
         - --ssh-known-hosts-file=/etc/git-known-hosts/known_hosts
         - --period=60s
+        - --git-config=safe.directory:/git
         volumeMounts: *gitsync-mounts
         securityContext: *restricted
         resources: *gitsync-resources
