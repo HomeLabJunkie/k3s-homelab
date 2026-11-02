@@ -6,6 +6,34 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-02: Renovate covers pinned images and K3s
+
+Renovate now also opens pull requests for the images pinned in this
+repository's own charts (Vaultwarden, Trilium, Authelia, cloudflared, the
+website's git-sync and nginx), the Velero, Velero AWS plugin and KSOPS images,
+and K3s (`k3s_version` in the inventory). Image pull requests are labelled
+`image` and K3s ones `k3s`; a K3s pull request still needs
+`./maintain-cluster.sh --apply` after merging. Before this, a release such as
+Vaultwarden 1.37.5 was only noticed by hand.
+
+## 2026-11-01: Vaultwarden 1.37.5
+
+Vaultwarden `1.37.4` to `1.37.5`
+([release notes](https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.5)):
+security release for two Medium advisories (website icons, emergency access),
+bundled web vault 2026.10.1, and stricter startup validation of numeric and
+cron settings. None of the newly validated options are set here, so the
+defaults apply. The standalone unraid and deployrr instances were upgraded the
+same day.
+
+## 2026-11-01: cloudflared 2026.10.7
+
+cloudflared `2026.10.3` to `2026.10.7`
+([release notes](https://github.com/cloudflare/cloudflared/blob/master/RELEASE_NOTES)):
+dependency bumps for three advisories (go-jose, go-chi, and debug endpoints on
+the metrics server now allowlisted), autoupdate disabled in container images,
+and a fix for an HTTP/2 concurrent-stream regression from Go 1.27.
+
 ## 2026-10-29: Monitoring volumes keep two Longhorn replicas
 
 Prometheus, Loki and Alertmanager now run two replicas instead of three, set

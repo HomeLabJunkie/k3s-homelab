@@ -200,8 +200,10 @@ then merge; merging is the upgrade. To upgrade by hand, change
 `targetRevision` in the Application file.
 
 **Images in this repository's own charts** (Trilium, Vaultwarden, Authelia,
-cloudflared, the website): nothing watches these. Change the tag in the
-chart's template and merge. Back up first for an app that holds data:
+cloudflared, the website) and the Velero and KSOPS images in Helm values:
+Renovate opens a pull request for these too, labelled `image`. Merging
+deploys the new image. To upgrade by hand, change the tag in the chart's
+template. Back up first for an app that holds data:
 
 ```bash
 recovery/restore.sh --plan vaultwarden     # shows the latest backup
@@ -209,7 +211,9 @@ recovery/restore.sh --plan vaultwarden     # shows the latest backup
 
 **Not through Argo CD:** Longhorn's version is in `deploy.sh` and held at
 1.12.1 until 1.13.1. K3s and Cilium are upgraded with Ansible; see
-[Maintenance](maintenance.md).
+[Maintenance](maintenance.md). Renovate opens a pull request, labelled
+`k3s`, when K3s has a new release. Merging it only changes `k3s_version`;
+run `./maintain-cluster.sh --apply` afterwards to roll it out.
 
 ## Undo a bad change
 
