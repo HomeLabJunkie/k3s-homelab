@@ -3,7 +3,7 @@
   "description": [
     "Opens a pull request when a chart that Argo CD deploys, an image pinned by hand in this repository, or K3s has a newer version.",
     "Dependabot already covers pip, GitHub Actions and Docker files.",
-    "Nothing merges by itself. Longhorn is not here: deploy.sh installs it and its version is held on purpose. The Traefik and Argo CD image pins in apps/*/values.yaml are not here either: they are temporary and come out when the chart catches up."
+    "Nothing merges by itself. Longhorn is not here: deploy.sh installs it and its version is held on purpose. The Traefik image pin in apps/traefik/values.yaml is not here either: it is temporary and comes out when the chart catches up."
   ],
   "enabledManagers": ["custom.regex"],
   "schedule": ["before 6am on monday"],

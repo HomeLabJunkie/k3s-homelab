@@ -6,6 +6,14 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-02: Argo CD chart 10.11.6, image pin removed
+
+argo-cd chart `10.10.5` to `10.11.6`. Chart 10.11.1 and later ship Argo CD
+v3.5.6, so the `global.image.tag` pin in `apps/argocd/values.yaml` (added for
+v3.5.6's eMudhra CA distrust) is gone and the chart sets the version again.
+Argo CD itself stays at v3.5.6; the chart also brings Dex v2.46.1, Redis
+exporter v1.96.0 and ssh.bitbucket.org in the default known hosts.
+
 ## 2026-11-02: Renovate covers pinned images and K3s
 
 Renovate now also opens pull requests for the images pinned in this
