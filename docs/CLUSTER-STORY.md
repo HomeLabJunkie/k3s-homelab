@@ -179,7 +179,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Storage | Longhorn | 1.12.1 |
 | Management | Headlamp | 0.45.0 |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) | chart 92.3.1 |
-| Logging | Loki + Alloy | chart 18.15.1 / 1.15.0 |
+| Logging | Loki + Alloy | chart 18.17.1 / 1.15.0 |
 | Security scanning | Trivy Operator | chart 0.37.0 |
 | Policy | Kyverno | chart 3.9.1 |
 | GitOps | Argo CD | v3.5.6 (chart 10.10.5) |
