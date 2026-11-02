@@ -5,7 +5,7 @@
 How Argo CD runs this cluster. For the everyday tasks (adding an app,
 changing a setting or secret, upgrading, undoing) see [How to](how-to.md).
 
-Argo CD (chart `10.10.5`, Argo CD `v3.5.6`) runs in the `argocd` namespace.
+Argo CD (chart `10.11.6`, Argo CD `v3.5.6`) runs in the `argocd` namespace.
 It watches git and makes the cluster match it. Each thing it manages is an
 `Application`. It deploys everything except K3s, Cilium, kube-vip, MetalLB
 and Longhorn, which stay with Ansible and `deploy.sh`, and that includes its
@@ -134,8 +134,8 @@ Argo CD deploys, see
 request when a chart named in an Application file, the snapshot controller's
 image, an image pinned in this repository's own charts or in the Velero and
 Argo CD values (labelled `image`), or K3s (labelled `k3s`) has a newer
-version. The Traefik and Argo CD image pins are left out because they come
-out once the chart catches up. A K3s pull request only changes `k3s_version`;
+version. The Traefik image pin is left out because it comes out once the
+chart catches up. A K3s pull request only changes `k3s_version`;
 `./maintain-cluster.sh --apply` does the upgrade (see
 [Maintenance](maintenance.md)). It checks charts on Monday mornings and
 pinned images and K3s every morning, opens at most five pull requests at a

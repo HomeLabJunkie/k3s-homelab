@@ -182,7 +182,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | Logging | Loki + Alloy | chart 18.17.1 / 1.15.0 |
 | Security scanning | Trivy Operator | chart 0.38.1 |
 | Policy | Kyverno | chart 3.9.2 |
-| GitOps | Argo CD | v3.5.6 (chart 10.10.5) |
+| GitOps | Argo CD | v3.5.6 (chart 10.11.6) |
 | Second backup | Velero → Garage | chart 12.2.1 |
 
 ---
