@@ -15,7 +15,7 @@ spec:
     # The chart, at a pinned version...
     - repoURL: https://kubernetes-sigs.github.io/headlamp/
       chart: headlamp
-      targetRevision: 0.45.0
+      targetRevision: 0.46.0
       helm:
         releaseName: headlamp
         valueFiles:
