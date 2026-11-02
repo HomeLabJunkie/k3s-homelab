@@ -6,6 +6,16 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-02: Renovate covers pinned images and K3s
+
+Renovate now also opens pull requests for the images pinned in this
+repository's own charts (Vaultwarden, Trilium, Authelia, cloudflared, the
+website's git-sync and nginx), the Velero, Velero AWS plugin and KSOPS images,
+and K3s (`k3s_version` in the inventory). Image pull requests are labelled
+`image` and K3s ones `k3s`; a K3s pull request still needs
+`./maintain-cluster.sh --apply` after merging. Before this, a release such as
+Vaultwarden 1.37.5 was only noticed by hand.
+
 ## 2026-11-01: Vaultwarden 1.37.5
 
 Vaultwarden `1.37.4` to `1.37.5`

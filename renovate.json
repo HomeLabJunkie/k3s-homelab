@@ -1,9 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
-    "Opens a pull request when a chart that Argo CD deploys has a newer version.",
-    "Only the Argo CD Application files are read: Dependabot already covers pip, GitHub Actions and Docker.",
-    "Nothing merges by itself. Longhorn is not here: deploy.sh installs it and its version is held on purpose."
+    "Opens a pull request when a chart that Argo CD deploys, an image pinned by hand in this repository, or K3s has a newer version.",
+    "Dependabot already covers pip, GitHub Actions and Docker files.",
+    "Nothing merges by itself. Longhorn is not here: deploy.sh installs it and its version is held on purpose. The Traefik and Argo CD image pins in apps/*/values.yaml are not here either: they are temporary and come out when the chart catches up."
   ],
   "enabledManagers": ["custom.regex"],
   "schedule": ["before 6am on monday"],
@@ -30,18 +30,77 @@
         "repoURL: https://github\\.com/(?<depName>kubernetes-csi/external-snapshotter)\\.git\\n\\s+targetRevision: (?<currentValue>v\\S+)"
       ],
       "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "Images pinned in this repository's own charts and in Helm values (image: repo:tag)",
+      "managerFilePatterns": [
+        "/^charts/[^/]+/templates/.+\\.yaml$/",
+        "/^apps/(argocd|velero)/values\\.yaml$/"
+      ],
+      "matchStrings": [
+        "image: (?<depName>[a-z0-9][a-z0-9./_-]+):(?<currentValue>[A-Za-z0-9][A-Za-z0-9._-]*)\\s"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Velero server image: repository and tag on consecutive lines",
+      "managerFilePatterns": ["/^apps/velero/values\\.yaml$/"],
+      "matchStrings": ["repository: (?<depName>\\S+)\\n\\s+tag: (?<currentValue>\\S+)"],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "K3s version the Ansible playbook installs",
+      "managerFilePatterns": ["/^inventory/k3s-ansible/group_vars/all\\.yml$/"],
+      "matchStrings": ["k3s_version: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
     }
   ],
   "packageRules": [
     {
       "description": "Kyverno and its policies chart are released together",
-      "matchPackageNames": ["kyverno", "kyverno-policies"],
+      "matchPackageNames": [
+        "kyverno",
+        "kyverno-policies"
+      ],
       "groupName": "kyverno"
     },
     {
       "description": "Major versions get their own pull request and a label",
       "matchUpdateTypes": ["major"],
       "addLabels": ["major"]
+    },
+    {
+      "description": "Images in this repository's own charts: merging deploys the new image. Back up apps that hold data first.",
+      "matchFileNames": ["charts/**"],
+      "addLabels": ["image"],
+      "prBodyNotes": [
+        "Merging deploys this image through Argo CD. For Vaultwarden or Trilium, check the latest backup first: recovery/restore.sh --plan <app>."
+      ]
+    },
+    {
+      "description": "Velero images: the plugin must be tested after every change",
+      "matchPackageNames": [
+        "docker.io/velero/velero",
+        "docker.io/velero/velero-plugin-for-aws"
+      ],
+      "allowedVersions": "!/^v1\\.14\\.2$/",
+      "prBodyNotes": [
+        "Run scripts/test-velero-backup.sh after this deploys. Never velero-plugin-for-aws v1.14.2 (velero-io/velero#9951)."
+      ]
+    },
+    {
+      "description": "K3s: merging only changes the version; maintain-cluster.sh does the upgrade, one minor version at a time",
+      "matchPackageNames": ["k3s-io/k3s"],
+      "addLabels": ["k3s"],
+      "separateMinorPatch": true,
+      "prBodyNotes": [
+        "Merging does not upgrade the cluster. Read the K3s release notes, merge, then run ./maintain-cluster.sh (check mode) and ./maintain-cluster.sh --apply to roll it out one node at a time (docs/maintenance.md). Upgrade one minor version at a time."
+      ]
     }
   ]
 }
