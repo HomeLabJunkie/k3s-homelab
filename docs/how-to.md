@@ -201,9 +201,9 @@ then merge; merging is the upgrade. To upgrade by hand, change
 
 **Images in this repository's own charts** (Trilium, Vaultwarden, Authelia,
 cloudflared, the website) and the Velero and KSOPS images in Helm values:
-Renovate opens a pull request for these too, labelled `image`. Merging
-deploys the new image. To upgrade by hand, change the tag in the chart's
-template. Back up first for an app that holds data:
+Renovate checks these every morning and opens a pull request, labelled
+`image`. Merging deploys the new image. To upgrade by hand, change the tag
+in the chart's template. Back up first for an app that holds data:
 
 ```bash
 recovery/restore.sh --plan vaultwarden     # shows the latest backup

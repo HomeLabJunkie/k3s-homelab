@@ -62,6 +62,11 @@
   ],
   "packageRules": [
     {
+      "description": "Pinned images and K3s are checked daily, so security releases are not held for a week; charts stay on Monday",
+      "matchFileNames": ["charts/**", "apps/argocd/values.yaml", "apps/velero/values.yaml", "inventory/k3s-ansible/group_vars/all.yml"],
+      "schedule": ["before 6am"]
+    },
+    {
       "description": "Kyverno and its policies chart are released together",
       "matchPackageNames": [
         "kyverno",
