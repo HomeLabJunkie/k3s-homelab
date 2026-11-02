@@ -127,7 +127,7 @@
       "addLabels": ["cilium"],
       "separateMinorPatch": true,
       "prBodyNotes": [
-        "Merging does not upgrade Cilium. Read the release notes, then run `helm upgrade cilium cilium --repo https://helm.cilium.io --version <new version without v> -n kube-system --reuse-values` (never `cilium upgrade`: it would move the API port to 6443; see docs/observability.md), watch the agents roll, and merge. Before a K3s minor upgrade, Cilium must list that Kubernetes version as supported."
+        "Merging does not upgrade Cilium. Read the release notes, then run `helm upgrade cilium cilium --repo https://helm.cilium.io --version <new version without v> -n kube-system --reset-then-reuse-values` (never `--reuse-values`, which keeps the old images on Helm 4; never `cilium upgrade`: it would move the API port to 6443; see docs/observability.md), watch the agents roll, and merge. Before a K3s minor upgrade, Cilium must list that Kubernetes version as supported."
       ]
     }
   ]
