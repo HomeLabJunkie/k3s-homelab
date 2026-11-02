@@ -6,6 +6,26 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-02: Cilium 1.20.4
+
+Cilium `1.20.2` to `1.20.4`
+([1.20.3](https://github.com/cilium/cilium/releases/tag/v1.20.3),
+[1.20.4](https://github.com/cilium/cilium/releases/tag/v1.20.4)): 1.20.4 is a
+security release built with Go 1.26.10, which no longer trusts the
+compromised eMudhra intermediate CAs; 1.20.3 and 1.20.4 also fix three agent
+panics. With this cluster's values the rendered chart differs only in image
+tags: agent, operator and Hubble Relay `v1.20.4`, Envoy `v1.39.5`.
+
+The first `helm upgrade --reuse-values` (revision 15) relabelled the release
+1.20.4 but kept the 1.20.2 images: Helm 4 carries the previous chart's
+default image tags and digests along with the user values. Revision 16, with
+`--reset-then-reuse-values`, deployed the new images; the same 15 user values
+remained. Afterwards every agent reported `OK` on 1.20.4 with 6/6 nodes
+reachable, all six nodes stayed Ready, a pod reached an in-cluster service
+and the internet, and the public hostnames returned the same status codes as
+before. `cilium_tag` now matches, and `docs/observability.md` and the Cilium
+Renovate note use `--reset-then-reuse-values`.
+
 ## 2026-11-02: K3s held at 1.36; Renovate watches Cilium
 
 K3s 1.37 is not offered yet: Cilium 1.20 is tested with Kubernetes 1.33 to

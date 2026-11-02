@@ -29,13 +29,19 @@ metrics are their traffic view. The Cilium agents serve metrics on port 9962
 of each node, scraped by the `cilium-agent` PodMonitor. A new cluster gets
 this from `cilium_agent_metrics` in the inventory's `group_vars/all.yml`. On a
 running cluster `deploy.sh` does not touch Cilium, so a changed Cilium
-setting is applied with Helm, keeping the other values, and the agents
-restart two nodes at a time:
+setting, or a Cilium upgrade, is applied with Helm, keeping the other values,
+and the agents restart two nodes at a time:
 
 ```bash
-helm upgrade cilium cilium --repo https://helm.cilium.io --version 1.20.2 \
-  -n kube-system --reuse-values --set prometheus.enabled=true
+helm upgrade cilium cilium --repo https://helm.cilium.io --version 1.20.4 \
+  -n kube-system --reset-then-reuse-values --set prometheus.enabled=true
 ```
+
+Use `--reset-then-reuse-values`, not `--reuse-values`. With Helm 4,
+`--reuse-values` also keeps the previous chart's default image tags and
+digests, so a version upgrade deploys the old images under the new chart
+label. Afterwards, `helm -n kube-system get manifest cilium | grep image:`
+should show the new version.
 
 Do not use `cilium upgrade` without `k8sServiceHost` and `k8sServicePort`: it
 takes them from the kubeconfig and would change the port from 6444 to 6443,

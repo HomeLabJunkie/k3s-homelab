@@ -171,7 +171,7 @@ Updating a cluster safely means never taking down more than one computer at a ti
 | --- | --- | --- |
 | Operating system | Ubuntu Linux | 26.04.1 LTS |
 | Cluster | K3s (Kubernetes) | v1.36.5 |
-| Network | Cilium (+ Hubble) | 1.20.2 |
+| Network | Cilium (+ Hubble) | 1.20.4 |
 | Service addresses | MetalLB | Layer 2 mode |
 | Web front door | Traefik | v3.7.16 (chart 41.7.1) |
 | Certificates | cert-manager | v1.21.2 |
