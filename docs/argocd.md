@@ -131,18 +131,19 @@ Argo CD deploys, see
 ## Chart updates
 
 [Renovate](https://docs.renovatebot.com/) (`renovate.json`) opens a pull
-request when a chart named in an Application file, the snapshot
-controller's image, an image pinned in this repository's own charts or in
-the Velero and Argo CD values (labelled `image`), or K3s (labelled `k3s`) has
-a newer version. The Traefik and Argo CD image pins are left out because they
-come out once the chart catches up. A K3s pull request only changes
-`k3s_version`; `./maintain-cluster.sh --apply` does the upgrade (see
-[Maintenance](maintenance.md)). It checks on Monday mornings, opens
-at most five pull requests at a time, keeps Kyverno and its policies chart
-together, labels major versions `major`, and never merges by itself.
-Merging one is the upgrade, so read the chart's release notes first.
-Dependabot covers pip, GitHub Actions and Docker. Longhorn is not covered;
-its version is in `deploy.sh` and held on purpose.
+request when a chart named in an Application file, the snapshot controller's
+image, an image pinned in this repository's own charts or in the Velero and
+Argo CD values (labelled `image`), or K3s (labelled `k3s`) has a newer
+version. The Traefik and Argo CD image pins are left out because they come
+out once the chart catches up. A K3s pull request only changes `k3s_version`;
+`./maintain-cluster.sh --apply` does the upgrade (see
+[Maintenance](maintenance.md)). It checks charts on Monday mornings and
+pinned images and K3s every morning, opens at most five pull requests at a
+time, keeps Kyverno and its policies chart together, labels major versions
+`major`, and never merges by itself. Merging one is the upgrade, so read the
+chart's release notes first. Dependabot covers pip, GitHub Actions and
+Docker. Longhorn is not covered; its version is in `deploy.sh` and held on
+purpose.
 
 Renovate works only while its GitHub app (github.com/apps/renovate) has
 access to the repository and "Silent mode" is off for it in Mend's portal

@@ -14,7 +14,8 @@ website's git-sync and nginx), the Velero, Velero AWS plugin and KSOPS images,
 and K3s (`k3s_version` in the inventory). Image pull requests are labelled
 `image` and K3s ones `k3s`; a K3s pull request still needs
 `./maintain-cluster.sh --apply` after merging. Before this, a release such as
-Vaultwarden 1.37.5 was only noticed by hand.
+Vaultwarden 1.37.5 was only noticed by hand. Pinned images and K3s are checked every
+morning; charts stay on Monday mornings.
 
 ## 2026-11-01: Vaultwarden 1.37.5
 
