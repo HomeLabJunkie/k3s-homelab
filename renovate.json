@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
-    "Opens a pull request when a chart that Argo CD deploys, an image pinned by hand in this repository, or K3s has a newer version.",
+    "Opens a pull request when a chart that Argo CD deploys, an image pinned by hand in this repository, K3s or Cilium has a newer version.",
     "Dependabot already covers pip, GitHub Actions and Docker files.",
     "Nothing merges by itself. Longhorn is not here: deploy.sh installs it and its version is held on purpose. The Traefik image pin in apps/traefik/values.yaml is not here either: it is temporary and comes out when the chart catches up."
   ],
@@ -58,12 +58,25 @@
       "depNameTemplate": "k3s-io/k3s",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Cilium version recorded in the Ansible variables (rolled out by hand with helm upgrade)",
+      "managerFilePatterns": ["/^inventory/k3s-ansible/group_vars/all\\.yml$/"],
+      "matchStrings": ["cilium_tag: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "cilium/cilium",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
     {
       "description": "Pinned images and K3s are checked daily, so security releases are not held for a week; charts stay on Monday",
-      "matchFileNames": ["charts/**", "apps/argocd/values.yaml", "apps/velero/values.yaml", "inventory/k3s-ansible/group_vars/all.yml"],
+      "matchFileNames": [
+        "charts/**",
+        "apps/argocd/values.yaml",
+        "apps/velero/values.yaml",
+        "inventory/k3s-ansible/group_vars/all.yml"
+      ],
       "schedule": ["before 6am"]
     },
     {
@@ -99,12 +112,22 @@
       ]
     },
     {
-      "description": "K3s: merging only changes the version; maintain-cluster.sh does the upgrade, one minor version at a time",
+      "description": "K3s: merging only changes the version; maintain-cluster.sh does the upgrade, one minor version at a time. Held at 1.36 until Cilium supports 1.37 (Cilium 1.20 is tested with Kubernetes 1.33-1.36; 1.37 support comes in Cilium 1.21). Upgrade Cilium first, then lift this.",
       "matchPackageNames": ["k3s-io/k3s"],
       "addLabels": ["k3s"],
       "separateMinorPatch": true,
       "prBodyNotes": [
         "Merging does not upgrade the cluster. Read the K3s release notes, merge, then run ./maintain-cluster.sh (check mode) and ./maintain-cluster.sh --apply to roll it out one node at a time (docs/maintenance.md). Upgrade one minor version at a time."
+      ],
+      "allowedVersions": "/^v1\\.36\\./"
+    },
+    {
+      "description": "Cilium: merging only records the version; the upgrade is a helm upgrade by hand (docs/observability.md). Upgrade Cilium before K3s.",
+      "matchPackageNames": ["cilium/cilium"],
+      "addLabels": ["cilium"],
+      "separateMinorPatch": true,
+      "prBodyNotes": [
+        "Merging does not upgrade Cilium. Read the release notes, then run `helm upgrade cilium cilium --repo https://helm.cilium.io --version <new version without v> -n kube-system --reuse-values` (never `cilium upgrade`: it would move the API port to 6443; see docs/observability.md), watch the agents roll, and merge. Before a K3s minor upgrade, Cilium must list that Kubernetes version as supported."
       ]
     }
   ]

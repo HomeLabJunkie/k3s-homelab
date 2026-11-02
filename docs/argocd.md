@@ -137,13 +137,16 @@ Argo CD values (labelled `image`), or K3s (labelled `k3s`) has a newer
 version. The Traefik image pin is left out because it comes out once the
 chart catches up. A K3s pull request only changes `k3s_version`;
 `./maintain-cluster.sh --apply` does the upgrade (see
-[Maintenance](maintenance.md)). It checks charts on Monday mornings and
-pinned images and K3s every morning, opens at most five pull requests at a
-time, keeps Kyverno and its policies chart together, labels major versions
-`major`, and never merges by itself. Merging one is the upgrade, so read the
-chart's release notes first. Dependabot covers pip, GitHub Actions and
-Docker. Longhorn is not covered; its version is in `deploy.sh` and held on
-purpose.
+[Maintenance](maintenance.md)). K3s is held at 1.36 until Cilium supports
+Kubernetes 1.37 (Cilium 1.21); remove `allowedVersions` from the K3s rule
+then. Cilium pull requests (labelled `cilium`) only change `cilium_tag`; the
+upgrade is a `helm upgrade` by hand (see [Observability](observability.md)),
+and Cilium goes before K3s. It checks charts on Monday mornings and pinned
+images and K3s every morning, opens at most five pull requests at a time,
+keeps Kyverno and its policies chart together, labels major versions `major`,
+and never merges by itself. Merging one is the upgrade, so read the chart's
+release notes first. Dependabot covers pip, GitHub Actions and Docker.
+Longhorn is not covered; its version is in `deploy.sh` and held on purpose.
 
 Renovate works only while its GitHub app (github.com/apps/renovate) has
 access to the repository and "Silent mode" is off for it in Mend's portal
