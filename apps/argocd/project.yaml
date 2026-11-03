@@ -23,6 +23,7 @@ spec:
     - https://grafana.github.io/helm-charts
     - https://argoproj.github.io/argo-helm
     - https://kubernetes-sigs.github.io/headlamp/
+    - https://github.com/argoproj/argocd-example-apps.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
