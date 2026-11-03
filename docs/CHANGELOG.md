@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-02: Quieter Alertmanager email
+
+`InfoInhibitor` was emailed several times a day: the rendered Alertmanager
+configuration replaces the chart's, and only routed `Watchdog` to the null
+receiver. It now routes both there, adds the chart's default inhibit rules
+(critical mutes warning and info, warning mutes info, `InfoInhibitor` mutes
+info in its namespace), and raises `repeat_interval` from 4h to 12h.
+Validated with `amtool check-config`.
+
 ## 2026-11-02: Cilium 1.20.4
 
 Cilium `1.20.2` to `1.20.4`
