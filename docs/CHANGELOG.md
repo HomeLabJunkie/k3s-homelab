@@ -6,13 +6,6 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
-## 2026-11-03: Sock Shop demo
-
-Added the `sock-shop` application: Argo CD's example microservices store,
-from `argoproj/argocd-example-apps` at a pinned commit, without its
-ingress-nginx Ingress. That repository is now an allowed source in the
-`homelab` project. See [Applications](applications.md#sock-shop).
-
 ## 2026-11-02: Quieter Alertmanager email
 
 `InfoInhibitor` was emailed several times a day: the rendered Alertmanager
