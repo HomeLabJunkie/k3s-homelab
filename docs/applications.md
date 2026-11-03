@@ -23,6 +23,22 @@ Restarting a workload, deleting a pod and cordoning a node are not undone.
 The hostname needs a public route on the Cloudflare tunnel, set in the
 Cloudflare dashboard; without one it works only on the LAN.
 
+## Sock Shop
+
+Sock Shop is a demo web store of 14 small services (front end, catalogue,
+carts, orders, payment, shipping, users, their databases and RabbitMQ), from
+Argo CD's example applications. The `sock-shop` application builds it with
+Kustomize straight from `argoproj/argocd-example-apps` at a pinned commit,
+into the `sock-shop` namespace. Its upstream Ingress is for ingress-nginx and
+is left out, so it has no route; open the store with
+
+```bash
+kubectl -n sock-shop port-forward svc/front-end 8079:80
+```
+
+and browse to `http://localhost:8079`. The databases live inside their pods
+with no volumes, so a restart empties them; that is upstream's design.
+
 ## Trilium
 
 Trilium is deployed by Argo CD from the `charts/trilium` chart, with
