@@ -137,7 +137,17 @@ Alertmanager routes warning and critical alerts through the SMTP credentials
 already stored in `.secrets.enc`. The configuration is rendered at deployment
 time, so SMTP passwords are never written to tracked files. The always-firing
 `Watchdog` alert is intentionally suppressed until an external dead-man
-receiver is configured.
+receiver is configured; so is `InfoInhibitor`, which only exists to mute
+info-severity alerts. The configuration replaces the chart's own, so
+`scripts/render-alertmanager-config.sh` carries the chart's inhibit rules:
+critical mutes warning and info, warning mutes info, for the same alert in
+the same namespace. Alerts are grouped by name and namespace and a
+still-firing group is re-sent every 12 hours.
+
+Before planned node maintenance, silence that node's alerts in Alertmanager
+for the expected outage; draining and powering off a worker otherwise sends
+about 25 emails (NodeDown, TargetDown, KubePodNotReady and the DaemonSet
+alerts for every per-node pod).
 
 The workstation DR monitor uses the same credentials through
 `monitoring/dr-notify.sh`. Run `./monitoring/dr-notify.sh --check` to validate

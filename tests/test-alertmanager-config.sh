@@ -19,6 +19,13 @@ assert config["global"]["smtp_auth_username"] == "smtp-user@example.test"
 assert config["global"]["smtp_auth_password"] == "test-password"
 assert config["route"]["receiver"] == "smtp-email"
 assert config["route"]["routes"][0]["receiver"] == "null"
+assert config["route"]["routes"][0]["matchers"] == ['alertname=~"Watchdog|InfoInhibitor"']
+assert config["route"]["repeat_interval"] == "12h"
+assert any(
+    r.get("source_matchers") == ['alertname="InfoInhibitor"']
+    and r["target_matchers"] == ['severity="info"']
+    for r in config["inhibit_rules"]
+)
 assert config["receivers"][1]["email_configs"][0]["to"] == "alerts@example.test"
 assert config["receivers"][1]["email_configs"][0]["send_resolved"] is True
 PY_TEST

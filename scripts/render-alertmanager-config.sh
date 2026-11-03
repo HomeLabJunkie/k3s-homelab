@@ -39,11 +39,13 @@ config = {
         "group_by": ["alertname", "namespace"],
         "group_wait": "30s",
         "group_interval": "5m",
-        "repeat_interval": "4h",
+        "repeat_interval": "12h",
         "routes": [
+            # Meta-alerts that exist only to drive other machinery: Watchdog
+            # proves the pipeline works, InfoInhibitor mutes info alerts.
             {
                 "receiver": "null",
-                "matchers": ['alertname="Watchdog"'],
+                "matchers": ['alertname=~"Watchdog|InfoInhibitor"'],
             }
         ],
     },
@@ -59,12 +61,26 @@ config = {
             ],
         },
     ],
+    # The kube-prometheus-stack defaults, which this configuration replaces.
     "inhibit_rules": [
         {
             "source_matchers": ['severity="critical"'],
-            "target_matchers": ['severity="warning"'],
-            "equal": ["alertname", "namespace"],
-        }
+            "target_matchers": ['severity=~"warning|info"'],
+            "equal": ["namespace", "alertname"],
+        },
+        {
+            "source_matchers": ['severity="warning"'],
+            "target_matchers": ['severity="info"'],
+            "equal": ["namespace", "alertname"],
+        },
+        {
+            "source_matchers": ['alertname="InfoInhibitor"'],
+            "target_matchers": ['severity="info"'],
+            "equal": ["namespace"],
+        },
+        {
+            "target_matchers": ['alertname="InfoInhibitor"'],
+        },
     ],
 }
 
