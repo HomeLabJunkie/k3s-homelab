@@ -85,7 +85,8 @@ In that repo, the text lives in content files that can be edited online at
 the site onto the `deploy` branch. Each pod runs
 [git-sync](https://github.com/kubernetes/git-sync) as a sidecar. It checks
 `deploy` every 60 seconds with a read-only deploy key, so edits go live without
-a rollout. nginx (unprivileged, read-only root filesystem) serves the checkout. The
+a rollout. It allows 10 failed checks in a row before it exits, so a short
+GitHub outage does not restart it or take the pods out of service. nginx (unprivileged, read-only root filesystem) serves the checkout. The
 pod sets `runAsNonRoot`, so no container in it can start as root. nginx waits
 10 seconds before it stops (`preStop`), which gives Traefik time to stop
 sending to the pod, so a rollout does not fail requests.

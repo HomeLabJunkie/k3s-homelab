@@ -83,6 +83,11 @@ spec:
         - --ssh-key-file=/etc/git-secret/ssh
         - --ssh-known-hosts-file=/etc/git-known-hosts/known_hosts
         - --period=60s
+        # Ride out a GitHub outage: retry for 10 minutes before exiting, while
+        # nginx keeps serving the last checkout. The default exits on the
+        # first failed fetch, which restarts the sidecar and marks the pod not
+        # ready (2026-11-04: about 22 restarts per pod during a GitHub incident).
+        - --max-failures=10
         - --git-config=safe.directory:/git
         volumeMounts: *gitsync-mounts
         securityContext: *restricted

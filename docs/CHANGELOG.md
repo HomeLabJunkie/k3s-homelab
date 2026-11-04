@@ -6,6 +6,15 @@ Dated notes on upgrades, configuration changes and validated recovery results,
 newest first. The other documents describe how things work today; this file
 records what changed and when. Merged pull requests hold the full detail.
 
+## 2026-11-04: git-sync rides out GitHub outages
+
+During a GitHub incident with Git operations (09:49 to 11:50 UTC), GitHub
+refused the website's fetches with `Permission denied (publickey)`. git-sync
+exits on its first failed fetch by default, so each website pod's sidecar
+restarted about 22 times and the pods kept going not ready, which sent 17 alert
+emails. git-sync now runs with `--max-failures=10`: it retries for about 10
+minutes while nginx serves the last checkout.
+
 ## 2026-11-02: Quieter Alertmanager email
 
 `InfoInhibitor` was emailed several times a day: the rendered Alertmanager
